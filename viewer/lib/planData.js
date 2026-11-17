@@ -1,4 +1,5 @@
-// planData.js - a loaded road plan and its cached analyses, finished grade, report views, and drawings
+// planData.js - a loaded road plan, its source map image, and its cached analyses, finished grade, report views, and
+// drawings
 
 import {analyzeOption, planTopo} from './model.js';
 import {finishedRows, reportViews} from './view3d.js';
@@ -13,10 +14,20 @@ export class PlanData {
         this.plan = plan;
         this.file = file;
         this.topo = planTopo(plan);
+
+        // The source map image's URL - or, if the plan has an image that couldn't be found, its name
+        this.imageURL = null;
+        this.imageMissing = null;
         this.analysisCache = [];
         this.rowsCache = [];
         this.viewsCache = new Map();
         this.drawingCache = new Map();
+    }
+
+
+    // Get the option index of an option argument - it's limited to the plan's options
+    optionIndex(option) {
+        return Math.max(0, Math.min(this.plan.options.length - 1, option));
     }
 
 
@@ -54,7 +65,7 @@ export class PlanData {
         let views = this.viewsCache.get(key);
         if (views === undefined) {
             const halfWidth = this.plan.options[ixOption].section.width * 0.5;
-            views = reportViews(this.topo, this.rows(ixOption), this.analysis(ixOption), halfWidth, width, false);
+            views = reportViews(this.topo, this.rows(ixOption), this.analysis(ixOption), halfWidth, width);
             this.viewsCache.set(key, views);
         }
         return views;

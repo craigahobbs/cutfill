@@ -305,6 +305,24 @@ test('buildReport, a narrow road has road segment views', () => {
 });
 
 
+test('buildReport, a missing map image', () => {
+    // A local plan's map image that wasn't opened with it - the plan's description has a horizontal rule, like the footer's
+    const planValue = simplePlan();
+    planValue.description = ['The site.', '', '---', '', 'The notes.'];
+    const data = planData(planValue, 'local:simple.json');
+    assert.deepEqual([data.imageURL, data.imageMissing], [null, null]);
+    assert.ok(!report(data, {'vFile': 'local:simple.json'}).html.includes('Source Map'));
+    data.imageMissing = 'maps/topo & "roads".png';
+    const lines = report(data, {'vFile': 'local:simple.json'}).html.split('\n');
+    assert.deepEqual(lines.slice(1, 4), ['<p>The site.</p>', '<hr>', '<p>The notes.</p>']);
+    assert.deepEqual(lines.slice(-4, -1), [
+        '<h3 id="source-map">Source Map</h3>',
+        '<p>Open the map image ("maps/topo &amp; &quot;roads&quot;.png") with the road plan to show it here.</p>',
+        '<hr>'
+    ]);
+});
+
+
 test('buildReport, canvas 3D views', () => {
     const planValue = fixturePlan();
     planValue.options[0].section.width = 1;
@@ -334,12 +352,12 @@ test('buildReport, canvas 3D views', () => {
     const faceted = views[0].render({...smoothLimitsCanvas, 'points': 2000});
     assert.deepEqual([faceted.width, faceted.height, faceted.smooth, faceted.step, faceted.pointLimited], [976, 666, 1, 1, true]);
     assert.equal(faceted.label, '3D view of the Direct road plan option');
-    assert.equal(opsToSvg(faceted.elements), svgViews[0].slice(svgViews[0].indexOf('>') + 1, -'</svg>'.length));
+    assert.equal(opsToSvg(faceted.ops), svgViews[0].slice(svgViews[0].indexOf('>') + 1, -'</svg>'.length));
 
     // Two cells per side of each of the overview's 1200 grid cells
     const smooth = views[0].render({...smoothLimitsCanvas, 'points': 6000});
     assert.deepEqual([smooth.smooth, smooth.step, smooth.pointLimited], [2, 1, true]);
-    assert.equal(smooth.elements.filter((op) => op.t === 0).length, 4 * 1200);
+    assert.equal(smooth.ops.filter((op) => op.t === 0).length, 4 * 1200);
 
     // The drawings are cached by their point limits
     assert.equal(views[0].render({...smoothLimitsCanvas, 'points': 2000}), faceted);

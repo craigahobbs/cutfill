@@ -779,8 +779,8 @@ test('analyzeOption, existing road curves', () => {
 });
 
 
-// A 21-point alignment spans two stream crossing chunks - a stream away from the road crosses no chunk, and the
-// crossing warnings are in feature order
+// A 21-point alignment spans two chunks of segments - a stream away from the road crosses no chunk, and the crossing
+// warnings are in feature order
 test('analyzeOption, stream crossings', () => {
     const plan = planSimple();
     const alignment = [];
@@ -808,6 +808,21 @@ test('analyzeOption, stream crossings', () => {
         'The Late Creek crossing at 0+037 has no culvert or bridge',
         'The Early Creek crossing at 0+005 has no culvert or bridge'
     ]);
+
+    // A long stream's segments are in chunks, too - an 18-segment stream runs beside the road (its first chunk of 16
+    // segments, which no road segment touches), then turns to cross it (its second chunk)
+    const streamPoints = [];
+    for (let x = 0; x <= 32; x += 2) {
+        streamPoints.push({x, 'y': 30});
+    }
+    streamPoints.push({'x': 33, 'y': 25}, {'x': 33, 'y': 15});
+    delete plan.options[0].structures;
+    plan.topography.features = [{'type': 'stream', 'name': 'Long Creek', 'points': streamPoints}];
+    assert.deepEqual(crossingWarnings(analyze(plan)), ['The Long Creek crossing at 0+033 has no culvert or bridge']);
+
+    // The stream reversed crosses at the same station
+    streamPoints.reverse();
+    assert.deepEqual(crossingWarnings(analyze(plan)), ['The Long Creek crossing at 0+033 has no culvert or bridge']);
 });
 
 

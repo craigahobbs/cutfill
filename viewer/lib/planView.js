@@ -1,8 +1,8 @@
 // planView.js - the plan view and profile view drawings
 
 import {
-    cellContours, colors, contourInterval, contourLevel, labelX, minRoadPx, niceStep, rgb, roadColor, roadFeatureColor, samplePoints,
-    svgOpen, svgPolygon, svgPolyline, svgStyle, svgText
+    cellContours, colors, contourInterval, contourLevel, labelHalfWidth, labelX, minRoadPx, niceStep, planMarkers, rgb, roadColor,
+    roadFeatureColor, roadSides, samplePoints, streamColor, svgOpen, svgPolygon, svgPolyline, svgStyle, svgText
 } from './draw.js';
 import {centerlineAt, planCriteria, sampleAt} from './model.js';
 import {fixedTrim, station as formatStation, number, px, unitLabel} from './format.js';
@@ -74,7 +74,7 @@ export function planView(plan, topo, analyses, ixOption, width, outlines) {
             sumY += pyValue;
         }
         if (type === 'stream') {
-            elements.push(svgPolyline(coords, '#2a6fdb', 2.5));
+            elements.push(svgPolyline(coords, streamColor, 2.5));
         } else if (type === 'road') {
             elements.push(svgPolyline(coords, 'white', 3.5));
             elements.push(svgPolyline(coords, roadFeatureColor, 1.5));
@@ -121,15 +121,16 @@ export function planView(plan, topo, analyses, ixOption, width, outlines) {
         }
         if (ixSample > 0) {
             const prev = samples[ixSample - 1];
-            for (const [sideName, ixDay, ixEdge] of [['left', 0, 1], ['right', 3, 2]]) {
+            for (const [sideName, ixDay, ixEdge] of roadSides) {
                 const {kind} = sample[sideName];
                 const kindPrev = prev[sideName].kind;
                 if (kind === 'wall' || kindPrev === 'wall') {
                     elements.push(svgPolyline([
                         prevCoords[ixEdge * 2], prevCoords[ixEdge * 2 + 1], coords[ixEdge * 2], coords[ixEdge * 2 + 1]
                     ], '#333333', 3));
-                } else if (kind === 'cut' || kind === 'fill') {
-                    const color = rgb(colors[kind]);
+                } else if (kind !== 'none' || kindPrev !== 'none') {
+                    // A slope that ends at this sample tapers to the road's edge, in the previous sample's color
+                    const color = rgb(colors[kind !== 'none' ? kind : kindPrev]);
                     elements.push(svgPolygon([
                         prevCoords[ixEdge * 2], prevCoords[ixEdge * 2 + 1],
                         prevCoords[ixDay * 2], prevCoords[ixDay * 2 + 1],
@@ -170,7 +171,7 @@ export function planView(plan, topo, analyses, ixOption, width, outlines) {
             elements.push(svgPolyline([
                 pad + pointLeft[0] * scale, pad + (topoHeight - pointLeft[1]) * scale,
                 pad + pointRight[0] * scale, pad + (topoHeight - pointRight[1]) * scale
-            ], '#2a6fdb', 3));
+            ], streamColor, 3));
         }
     }
 
@@ -186,11 +187,10 @@ export function planView(plan, topo, analyses, ixOption, width, outlines) {
     }
 
     // Start and end markers
-    for (const [point, defaultLabel, color] of [[plan.start, 'Start', '#1a8f3c'], [plan.end, 'End', '#c0392b']]) {
+    for (const [point, label, color] of planMarkers(plan)) {
         const pxValue = pad + point.x * scale;
         const pyValue = pad + (topoHeight - point.y) * scale;
         elements.push(`<circle cx="${px(pxValue)}" cy="${px(pyValue)}" r="6" fill="${color}" stroke="white" stroke-width="2"/>`);
-        const label = point.label ?? defaultLabel;
         elements.push(svgText(label, labelX(label, 13, pxValue, width), pyValue - 14, 13, 'middle', color, true));
     }
 
@@ -333,7 +333,7 @@ export function profileView(plan, option, analysis, width, height) {
         } else if (type === 'culvert') {
             const sample = sampleAt(samples, stationValue);
             const pyValue = bottom - (sample.ground - minZ) * yScale;
-            elements.push(`<circle cx="${px(px1)}" cy="${px(pyValue)}" r="5" fill="white" stroke="#2a6fdb" stroke-width="2.5"/>`);
+            elements.push(`<circle cx="${px(px1)}" cy="${px(pyValue)}" r="5" fill="white" stroke="${streamColor}" stroke-width="2.5"/>`);
         } else {
             let color = '#2a8f8f';
             if (type === 'retainingWall') {
@@ -353,7 +353,7 @@ export function profileView(plan, option, analysis, width, height) {
             } else if (type === 'existingRoad') {
                 label = 'Existing road';
             }
-            const halfLabel = label.length * 10 * 0.32;
+            const halfLabel = labelHalfWidth(label, 10);
             const labelXValue = (px1 + px2) * 0.5;
             if (labelRight === null || labelXValue - halfLabel > labelRight + 4) {
                 elements.push(svgText(label, labelXValue, bottom - 16, 10, 'middle', color, true));

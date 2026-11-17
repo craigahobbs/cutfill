@@ -28,20 +28,16 @@ include Makefile.base
 # The local web server port
 PORT ?= 8080
 
-# The road plans for the canvas check
-PLANS ?= ../example/example.json
-
 
 clean:
 	rm -rf Makefile.base jsdoc.json eslint.config.js
 
 
 help:
-	@echo '            [app|check|run]'
+	@echo '            [app|run]'
 	@echo ''
 	@echo '  make run [FILE=<plan.json>]    View a road plan in the browser'
 	@echo '  make app                       Stage the application (build/app/)'
-	@echo '  make check [PLANS="..."]       Check the canvas 3D drawings against the SVG drawing'
 
 
 # Stage the application - the page, its stylesheet, its source modules, and the schema-markdown package's (the page's
@@ -66,10 +62,3 @@ else
 	@test -f "$(FILE)" || (echo 'error: "$(FILE)" does not exist' && exit 1)
 	node tools/serve.js build/app $(PORT) --open --plan "$(abspath $(FILE))"
 endif
-
-
-# Check the canvas 3D drawings' operations (the explorer's and the report's) against the SVG drawing
-.PHONY: check
-check:
-	node tools/checkCanvas.js $(PLANS)
-

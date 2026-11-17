@@ -28,7 +28,7 @@ function exploreBrowser(testContext, {cellCost = '1', search = '', hash = explor
 function paintCalls(width, height, points) {
     const data = new PlanData(validatePlan(fixturePlan()).plan, 'plans/fixture.json');
     const globals = {'vFile': 'plans/fixture.json', 'vExplore': true};
-    const drawing = new Explorer(data, globals, argsParse(globals)).render(width, height, true, {...smoothLimitsCanvas, points});
+    const drawing = new Explorer(data, globals, argsParse(globals)).render(width, height, {...smoothLimitsCanvas, points});
     const calls = [['getContext', '2d'], ['setTransform', 1, 0, 0, 1, 0, 0], ['fillStyle', '#f4f1ea'], ['fillRect', 0, 0, width, height]];
     paintOps(fakeContext(calls), drawing.ops);
     return calls;

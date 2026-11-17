@@ -29,11 +29,11 @@ test('the drawing operations', () => {
     );
     assert.deepEqual(
         opPolygon(coords, 'red', 'black', 2),
-        {'t': 1, 'c': coords, 'f': 'red', 's': 'black', 'w': 2, 'title': null, 'd': null}
+        {'t': 1, 'c': coords, 'f': 'red', 's': 'black', 'w': 2, 'title': null}
     );
     assert.deepEqual(
-        opPolygon(coords, 'red', 'black', 2, 'The title', '4 2'),
-        {'t': 1, 'c': coords, 'f': 'red', 's': 'black', 'w': 2, 'title': 'The title', 'd': '4 2'}
+        opPolygon(coords, 'red', 'black', 2, 'The title'),
+        {'t': 1, 'c': coords, 'f': 'red', 's': 'black', 'w': 2, 'title': 'The title'}
     );
     assert.deepEqual(opPolyline(coords, 'blue', 3), {'t': 2, 'c': coords, 's': 'blue', 'w': 3, 'd': null});
     assert.deepEqual(opPolyline(coords, 'blue', 3, '6 3'), {'t': 2, 'c': coords, 's': 'blue', 'w': 3, 'd': '6 3'});
@@ -94,9 +94,9 @@ test('paintOps paints polygons and polylines', () => {
     const triangle = [0, 0, 10, 0, 5, 8];
     const calls = paintCalls([
         opPolygon(triangle, 'red', 'black', 2, 'The title'),
-        opPolygon(triangle, 'none', 'black', 2, null, '4 2.5'),
+        opPolygon(triangle, 'red', 'black', 2),
         opPolyline([0, 0, 10, 10, 20, 0], 'blue', 3),
-        opPolyline([0, 5, 20, 5], 'blue', 3, '6 3')
+        opPolyline([0, 5, 20, 5], 'blue', 3, '4 2.5')
     ]);
     assert.deepEqual(calls, [
         ...resetCalls,
@@ -106,17 +106,17 @@ test('paintOps paints polygons and polylines', () => {
         ['fillStyle', 'red'], ['fill'],
         ['strokeStyle', 'black'], ['lineWidth', 2], ['lineCap', 'butt'], ['lineJoin', 'miter'], ['stroke'],
 
-        // An unfilled, dashed polygon - the dash is reset
+        // A polygon of the same colors - only its path is drawn
         ['beginPath'], ['moveTo', 0, 0], ['lineTo', 10, 0], ['lineTo', 5, 8], ['closePath'],
-        ['setLineDash', [4, 2.5]], ['stroke'], ['setLineDash', []],
+        ['fill'], ['stroke'],
 
         // A polyline - open, with round caps and joins
         ['beginPath'], ['moveTo', 0, 0], ['lineTo', 10, 10], ['lineTo', 20, 0],
         ['strokeStyle', 'blue'], ['lineWidth', 3], ['lineCap', 'round'], ['lineJoin', 'round'], ['stroke'],
 
-        // A dashed polyline
+        // A dashed polyline - the dash is reset
         ['beginPath'], ['moveTo', 0, 5], ['lineTo', 20, 5],
-        ['setLineDash', [6, 3]], ['stroke'], ['setLineDash', []]
+        ['setLineDash', [4, 2.5]], ['stroke'], ['setLineDash', []]
     ]);
 });
 
@@ -170,21 +170,20 @@ test('paintOps paints circles and rectangles', () => {
 
 
 test('hitTitle', () => {
-    // A terrain cell (at an offset of its coordinate array), under a titled road polygon, under an unfilled outline, a
+    // A terrain cell (at an offset of its coordinate array), under a titled road polygon, under an untitled polygon, a
     // line, a label, a marker, and a panel
     const cellCoords = [100, 100, 110, 100, 110, 110, 100, 110, 0, 0, 40, 0, 40, 40, 0, 40];
     const ops = [
         opTerrainCell(cellCoords, 8, '#abc', null, null),
         opPolygon([10, 10, 30, 10, 30, 30, 10, 30], 'gray', 'black', 1, 'Station 1+00'),
         opPolygon([15, 15, 25, 15, 25, 25, 15, 25], 'gray', 'black', 1),
-        opPolygon([0, 0, 60, 0, 60, 60, 0, 60], 'none', 'black', 1, 'The outline'),
         opPolyline([0, 20, 60, 20], 'blue', 3),
         opText('Label', 20, 20, 12, 'middle', '#222', false),
         opCircle(20, 20, 30, 'white', 'black'),
         opRect(0, 0, 60, 60, 4, 'white', 0.75)
     ];
 
-    // The titled polygon - only filled shapes are hit
+    // The titled polygon - only terrain cells and polygons are hit
     assert.equal(hitTitle(ops, 12, 12), 'Station 1+00');
     assert.equal(hitTitle(ops, 28, 20), 'Station 1+00');
 
@@ -195,8 +194,8 @@ test('hitTitle', () => {
     assert.equal(hitTitle(ops, 5, 5), null);
     assert.equal(hitTitle(ops, 105, 105), null);
 
-    // Only the unfilled outline, and nothing at all
-    assert.equal(hitTitle(ops, 50, 50), null);
+    // Only the line, the marker, and the panel - and nothing at all
+    assert.equal(hitTitle(ops, 50, 20), null);
     assert.equal(hitTitle(ops, 200, 200), null);
     assert.equal(hitTitle([], 5, 5), null);
 
@@ -232,16 +231,15 @@ test('opsToSvg', () => {
             `<path d="M2 9L8 9" fill="none" stroke="${contourColor}" stroke-width="1.2" stroke-linecap="round"/>`
     );
 
-    // Polygons - plain, titled, and dashed
+    // Polygons - plain and titled
     const triangle = [0, 0, 10, 0, 5, 8.25];
     assert.equal(
         opsToSvg([opPolygon(triangle, 'red', 'black', 2)]),
         '<polygon points="0,0 10,0 5,8.3" fill="red" stroke="black" stroke-width="2"/>'
     );
     assert.equal(
-        opsToSvg([opPolygon(triangle, 'none', 'black', 2, 'Cut & fill', '4 2')]),
-        '<polygon points="0,0 10,0 5,8.3" fill="none" stroke="black" stroke-width="2" stroke-dasharray="4 2">' +
-            '<title>Cut &amp; fill</title></polygon>'
+        opsToSvg([opPolygon(triangle, 'red', 'black', 2, 'Cut & fill')]),
+        '<polygon points="0,0 10,0 5,8.3" fill="red" stroke="black" stroke-width="2"><title>Cut &amp; fill</title></polygon>'
     );
 
     // Polylines - plain and dashed

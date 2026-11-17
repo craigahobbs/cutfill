@@ -32,7 +32,7 @@ make site                         # stage the web site (build/gh-pages/): README
 ```
 
 Run `make` in `viewer/` or `plan/` for a subproject's own targets (e.g.
-`make -C viewer test TEST=name`, `make -C viewer check`, `make -C plan lint`).
+`make -C viewer test TEST=name`, `make -C plan lint`).
 
 ## Conventions
 

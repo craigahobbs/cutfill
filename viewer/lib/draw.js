@@ -25,6 +25,17 @@ export const roadColor = '#d6246e';
 export const roadFeatureColor = '#6e675f';
 
 
+// The color of a stream's line, and a culvert's
+export const streamColor = '#2a6fdb';
+
+
+// Get a plan's start and end point markers - [point, label, color] arrays
+export function planMarkers(plan) {
+    const {start, end} = plan;
+    return [[start, start.label ?? 'Start', '#1a8f3c'], [end, end.label ?? 'End', '#c0392b']];
+}
+
+
 // The minimum drawn road width, in pixels - narrower roads are also drawn as a highlighted centerline
 export const minRoadPx = 4;
 
@@ -206,17 +217,24 @@ export function svgText(text, x, y, size, anchor, fill, bold) {
 }
 
 
-// Compute a centered label's x coordinate that keeps it within a drawing's width - the label's width is estimated from its
-// length and font size
+// Estimate half of a label's width from its length and font size
+export function labelHalfWidth(label, fontSize) {
+    return label.length * fontSize * 0.32;
+}
+
+
+// Compute a centered label's x coordinate that keeps it within a drawing's width
 export function labelX(label, fontSize, x, width) {
-    const halfLabel = label.length * fontSize * 0.32;
+    const halfLabel = labelHalfWidth(label, fontSize);
     return Math.max(halfLabel + 4, Math.min(width - halfLabel - 4, x));
 }
 
 
-// The SVG drawing style
-export const svgStyle = 'background: #f4f1ea; border: 1px solid #ccc; display: block; max-width: 100%; height: auto; ' +
-    'break-inside: avoid; margin: 0.75em 0 1.5em 0;';
+// The drawings' style (the SVG drawings' and the canvas drawings') - the report's, and the full-window 3D explorer's,
+// which has no margins
+const drawingStyle = 'background: #f4f1ea; border: 1px solid #ccc; display: block; max-width: 100%; height: auto; break-inside: avoid;';
+export const svgStyle = `${drawingStyle} margin: 0.75em 0 1.5em 0;`;
+export const exploreStyle = `${drawingStyle} margin: 0;`;
 
 
 // Create an SVG drawing's opening tag
@@ -224,6 +242,11 @@ export function svgOpen(width, height, label, style = svgStyle, extraAttr = '') 
     return `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" ` +
         `aria-label="${escapeHtml(label)}" style="${style}"${extraAttr}>`;
 }
+
+
+// The sides of the road - [side name, daylight point index, edge point index] arrays of a sample's "left" and "right"
+// sides and their points (samplePoints)
+export const roadSides = [['left', 0, 1], ['right', 3, 2]];
 
 
 // Get a road sample's points: [left daylight, left edge, right edge, right daylight] as [x, y, z] arrays

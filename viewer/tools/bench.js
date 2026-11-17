@@ -4,7 +4,7 @@
 // usage: node tools/bench.js <url> <condition expression> [--runs <n>] [--chrome <path>] [--console] [--window <w,h>]
 //
 // "--console" prints the page's console messages of the last run. "--key <code>" times a key press (e.g. "ArrowLeft") after
-// the condition - until the 3D view is replaced and painted.
+// the condition - until the 3D explorer's next frame is drawn and painted.
 
 import {mkdtempSync, rmSync} from 'node:fs';
 import {join} from 'node:path';
@@ -13,7 +13,7 @@ import {spawn} from 'node:child_process';
 import {tmpdir} from 'node:os';
 
 
-const keyCodes = {'ArrowLeft': 37, 'ArrowUp': 38, 'ArrowRight': 39, 'ArrowDown': 40, 'KeyQ': 81, 'KeyG': 71};
+const keyCodes = {'ArrowLeft': 37, 'ArrowUp': 38, 'ArrowRight': 39, 'ArrowDown': 40, 'KeyQ': 81};
 const defaultChrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 
 
@@ -104,7 +104,6 @@ async function main(argv) {
         for (let ixRun = 0; ixRun <= runs; ixRun++) {
             await send('Page.navigate', {'url': 'about:blank'});
             await sleep(200);
-            if (process.env.BENCH_DEBUG) { process.stderr.write(`run ${ixRun}\n`); }
             messages.length = 0;
             const loaded = waitLoad();
             await send('Page.navigate', {url});
@@ -127,7 +126,6 @@ async function main(argv) {
                 if (response.result?.result?.type === 'number') {
                     result = response.result.result.value;
                 } else {
-                    if (process.env.BENCH_DEBUG) { process.stderr.write(`${JSON.stringify(response).slice(0, 300)}\n`); }
                     await sleep(50);
                 }
             }
@@ -136,17 +134,14 @@ async function main(argv) {
             if (ixKey !== -1) {
                 const code = argv[ixKey + 1];
                 const start = await send('Runtime.evaluate', {'expression': `(() => {
-                    window.benchOld = document.querySelector('svg[aria-label^="3D"]');
-                    window.benchFrame = document.querySelector('canvas')?.dataset.frame;
+                    window.benchFrame = document.querySelector('canvas').dataset.frame;
                     return performance.now();
                 })()`, 'returnByValue': true});
                 await send('Input.dispatchKeyEvent', {'type': 'rawKeyDown', code, 'key': code, 'windowsVirtualKeyCode': keyCodes[code]});
                 await send('Input.dispatchKeyEvent', {'type': 'keyUp', code, 'key': code, 'windowsVirtualKeyCode': keyCodes[code]});
                 const end = await send('Runtime.evaluate', {'expression': `new Promise((resolve) => {
                     const check = () => {
-                        const svg = document.querySelector('svg[aria-label^="3D"]');
-                        const frame = document.querySelector('canvas')?.dataset.frame;
-                        if ((svg !== null && svg !== window.benchOld) || (frame !== undefined && frame !== window.benchFrame)) {
+                        if (document.querySelector('canvas').dataset.frame !== window.benchFrame) {
                             requestAnimationFrame(() => setTimeout(() => resolve(performance.now()), 0));
                         } else {
                             setTimeout(check, 2);

@@ -66,7 +66,7 @@ function main(argv) {
     if (options.explore) {
         globals.vExplore = true;
         const explorer = new Explorer(data, globals, argsParse(globals));
-        html = `<div style="display: none;"></div>${explorer.render(parseInt(options.width, 10), parseInt(options.height, 10))}`;
+        html = `<div style="display: none;"></div>${explorer.renderSvg(parseInt(options.width, 10), parseInt(options.height, 10))}`;
     } else {
         ({html} = buildReport(data, globals, args, parseInt(options.width, 10)));
     }

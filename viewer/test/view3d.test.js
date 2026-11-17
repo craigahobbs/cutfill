@@ -35,14 +35,17 @@ function scene(planValue, ixOption = 0) {
 }
 
 
-// Create a scene's 3D drawing for view arguments
-function draw({plan, topo, rows, ixOption, analysis}, viewArgs, width = 400, maxHeight = 300, canvas = false, limits = undefined) {
-    return view3DParts(plan, topo, rows, ixOption, analysis, projection(topo, viewArgs, width, maxHeight), canvas, limits);
+// Create a scene's 3D drawing for view arguments - with its "elements", each of its operations' SVG markup. The last
+// seven are the start and end markers (a pole and a label each) and the compass (a circle, a pointer, and a label).
+function draw({plan, topo, rows, ixOption, analysis}, viewArgs, width = 400, maxHeight = 300, limits = undefined) {
+    const drawing = view3DParts(plan, topo, rows, ixOption, analysis, projection(topo, viewArgs, width, maxHeight), limits);
+    return {...drawing, 'elements': drawing.ops.map((op) => opsToSvg([op]))};
 }
 
 
-// Count an SVG 3D drawing's depth-sorted elements - the terrain cells and their minor and index contour paths, the road's
-// quadrilaterals (those with titles are its surface), the lines by stroke color and width, and the station labels
+// Count a 3D drawing's depth-sorted elements - the terrain cells and their minor and index contour paths, the road's
+// quadrilaterals (those with titles are its surface), the lines by stroke color and width, and the station labels (a
+// circle and its text)
 function elementCounts(elements) {
     const counts = {'cells': 0, 'minor': 0, 'index': 0, 'quads': 0, 'titles': 0, 'lines': {}, 'labels': []};
     for (const element of elements) {
@@ -51,12 +54,12 @@ function elementCounts(elements) {
             counts.cells += 1;
             counts.minor += countOf(element, 'stroke-width="0.5"');
             counts.index += countOf(element, 'stroke-width="1.2"');
-        } else if (element.startsWith('<circle')) {
-            counts.labels.push(element.slice(element.indexOf('>', element.indexOf('<text')) + 1, element.lastIndexOf('<')));
+        } else if (element.startsWith('<text')) {
+            counts.labels.push(element.slice(element.indexOf('>') + 1, element.lastIndexOf('<')));
         } else if (line !== null) {
             const key = `${line[1]} ${line[2]}`;
             counts.lines[key] = (counts.lines[key] ?? 0) + 1;
-        } else {
+        } else if (!element.startsWith('<circle')) {
             counts.quads += 1;
             counts.titles += countOf(element, '<title>');
         }
@@ -66,9 +69,9 @@ function elementCounts(elements) {
 
 
 // Get the report views of a plan option, with their stations rounded
-function planReportViews(planValue, ixOption = 0, width = 976, smooth = false) {
+function planReportViews(planValue, ixOption = 0, width = 976) {
     const {topo, rows, analysis, halfWidth} = scene(planValue, ixOption);
-    return reportViews(topo, rows, analysis, halfWidth, width, smooth).map((reportView) => (
+    return reportViews(topo, rows, analysis, halfWidth, width).map((reportView) => (
         {...reportView, 'station': Math.round(reportView.station), 'endStation': Math.round(reportView.endStation)}
     ));
 }
@@ -234,10 +237,10 @@ test('view3DParts and view3D', () => {
     );
 
     // 16 terrain cells (each with its minor and index contours), 12 road intervals of surface and two side slopes, and a
-    // station label (20 m), depth-sorted, then two markers and the compass
+    // station label (20 m - a circle and its text), depth-sorted, then two markers and the compass
     const {elements} = parts;
-    assert.equal(elements.length, 16 + 12 * 3 + 1 + 4 + 1);
-    assert.deepEqual(elementCounts(elements.slice(0, -5)), {
+    assert.equal(elements.length, 16 + 12 * 3 + 2 + 4 + 3);
+    assert.deepEqual(elementCounts(elements.slice(0, -7)), {
         'cells': 16, 'minor': 16, 'index': 16, 'quads': 36, 'titles': 12, 'lines': {}, 'labels': ['0+020']
     });
 
@@ -267,21 +270,21 @@ test('view3DParts and view3D', () => {
     ));
 
     // The station label
-    assert.equal(
-        elements.find((element) => element.startsWith('<circle')),
-        '<circle cx="200" cy="184.9" r="3" fill="#222" stroke="white"/><text x="206" y="175.9" font-size="11" ' +
-            `${textAttr.replace('middle', 'start')} fill="#222" ${textStroke}>0+020</text>`
-    );
+    const ixLabel = elements.findIndex((element) => element.startsWith('<circle'));
+    assert.deepEqual(elements.slice(ixLabel, ixLabel + 2), [
+        '<circle cx="200" cy="184.9" r="3" fill="#222" stroke="white"/>',
+        `<text x="206" y="175.9" font-size="11" ${textAttr.replace('middle', 'start')} fill="#222" ${textStroke}>0+020</text>`
+    ]);
 
     // The start and end markers and their default labels, then the compass - north is up and to the left
-    assert.deepEqual(elements.slice(-5), [
+    assert.deepEqual(elements.slice(-7), [
         `<polyline points="105.3,216.3 105.3,146.4" fill="none" stroke="#1a8f3c" stroke-width="2.5" ${lineAttr}/>`,
         `<text x="105.3" y="137.4" font-size="13" ${textAttr} fill="#1a8f3c" ${textStroke} font-weight="bold">Start</text>`,
         `<polyline points="294.7,153.6 294.7,83.7" fill="none" stroke="#c0392b" stroke-width="2.5" ${lineAttr}/>`,
         `<text x="294.7" y="74.7" font-size="13" ${textAttr} fill="#c0392b" ${textStroke} font-weight="bold">End</text>`,
-        '<circle cx="364" cy="36" r="22" fill="white" fill-opacity="0.8" stroke="#888"/>' +
-            '<polygon points="351.2,23.3 368.2,31.7 359.8,40.3" fill="#c0392b" stroke="#c0392b" stroke-width="1"/>' +
-            `<text x="372.5" y="44.5" font-size="11" ${textAttr} fill="#333" ${textStroke} font-weight="bold">N</text>`
+        '<circle cx="364" cy="36" r="22" fill="white" fill-opacity="0.8" stroke="#888"/>',
+        '<polygon points="351.2,23.3 368.2,31.7 359.8,40.3" fill="#c0392b" stroke="#c0392b" stroke-width="1"/>',
+        `<text x="372.5" y="44.5" font-size="11" ${textAttr} fill="#333" ${textStroke} font-weight="bold">N</text>`
     ]);
 
     // The 3D view's markup is its drawing's elements
@@ -296,8 +299,8 @@ test('view3DParts and view3D', () => {
 
 
 test('view3DParts, a top view', () => {
-    const {elements} = draw(scene(simplePlan()), {'azimuth': 0, 'tilt': 90, 'exaggeration': 1}, 100, 100);
-    assert.equal(elements.length, 58);
+    const {elements, ops} = draw(scene(simplePlan()), {'azimuth': 0, 'tilt': 90, 'exaggeration': 1}, 100, 100);
+    assert.equal(elements.length, 16 + 36 + 2 + 7);
 
     // The elements are sorted by depth, farthest (lowest) first - the terrain cells from the south row to the north row. Cells
     // of equal depth keep their order, west to east.
@@ -318,27 +321,26 @@ test('view3DParts, a top view', () => {
     );
 
     // The marker poles are vertical, so they're points - and the compass points up
-    assert.deepEqual(elements.slice(-5).map((element) => element.slice(0, element.indexOf(' fill='))), [
+    assert.deepEqual(elements.slice(-7, -2).map((element) => element.slice(0, element.indexOf(' fill='))), [
         '<polyline points="25.1,50 25.1,50"',
         `<text x="25.1" y="41" font-size="13" ${textAttr}`,
         '<polyline points="74.9,50 74.9,50"',
         `<text x="74.9" y="41" font-size="13" ${textAttr}`,
         '<circle cx="64" cy="36" r="22"'
     ]);
-    assert.ok(elements[57].includes('<polygon points="64,18 70,36 58,36" fill="#c0392b" stroke="#c0392b" stroke-width="1"/>'));
-    const north = `<text x="64" y="48" font-size="11" ${textAttr} fill="#333" ${textStroke} font-weight="bold">N</text>`;
-    assert.ok(elements[57].endsWith(north));
+    assert.deepEqual(elements.slice(-2), [
+        '<polygon points="64,18 70,36 58,36" fill="#c0392b" stroke="#c0392b" stroke-width="1"/>',
+        `<text x="64" y="48" font-size="11" ${textAttr} fill="#333" ${textStroke} font-weight="bold">N</text>`
+    ]);
 
-    // The canvas drawing's markers and compass
-    const canvas = draw(scene(simplePlan()), {'azimuth': 0, 'tilt': 90, 'exaggeration': 1}, 100, 100, true);
-    assert.equal(canvas.elements.length, 16 + 36 + 2 + 7);
-    assert.deepEqual(canvas.elements.slice(-3), [
+    // The markers' and the compass's drawing operations
+    assert.deepEqual(ops.slice(-3), [
         {'t': 4, 'x': 64, 'y': 36, 'r': 22, 'f': 'white', 's': '#888', 'w': null, 'o': 0.8},
-        {'t': 1, 'c': [64, 18, 70, 36, 58, 36], 'f': '#c0392b', 's': '#c0392b', 'w': 1, 'title': null, 'd': null},
+        {'t': 1, 'c': [64, 18, 70, 36, 58, 36], 'f': '#c0392b', 's': '#c0392b', 'w': 1, 'title': null},
         {'t': 3, 'text': 'N', 'x': 64, 'y': 48, 'size': 11, 'anchor': 'middle', 'f': '#333', 'bold': true}
     ]);
     assert.deepEqual(
-        canvas.elements.slice(-7, -3).map((op) => [op.t, op.text ?? op.s, op.x ?? Array.from(op.c, Math.round)]),
+        ops.slice(-7, -3).map((op) => [op.t, op.text ?? op.s, op.x ?? Array.from(op.c, Math.round)]),
         [
             [2, '#1a8f3c', [25, 50, 25, 50]], [3, 'Start', 25.110272542658173],
             [2, '#c0392b', [75, 50, 75, 50]], [3, 'End', 74.88972745734182]
@@ -353,13 +355,13 @@ test('view3DParts, a zoomed view', () => {
     const zoomArgs = {...baseArgs, 'zoom': 4, 'x': 30, 'y': 10};
     const {elements, height} = draw(scene(simplePlan()), zoomArgs);
     assert.equal(height, 300);
-    assert.equal(elements.length, 8 + 12 + 1 + 4 + 1);
-    assert.deepEqual(elementCounts(elements.slice(0, -5)), {
+    assert.equal(elements.length, 8 + 12 + 2 + 4 + 3);
+    assert.deepEqual(elementCounts(elements.slice(0, -7)), {
         'cells': 8, 'minor': 8, 'index': 8, 'quads': 12, 'titles': 6, 'lines': {}, 'labels': ['0+030']
     });
 
     // The marker poles are the same height on screen as the unzoomed view's
-    const poleHeights = [-5, -3].map((ixElement) => {
+    const poleHeights = [-7, -5].map((ixElement) => {
         const [, y1, , y2] = elements.at(ixElement).match(/points="([^"]*)"/)[1].split(/[, ]/);
         return Math.round(y1 - y2);
     });
@@ -372,12 +374,12 @@ test('view3DParts, a zoomed view', () => {
         {'type': 'stream', 'name': 'Near Creek', 'points': [{'x': 30, 'y': 0}, {'x': 30, 'y': 20}]}
     ];
     const streams = scene(planValue);
-    assert.deepEqual(elementCounts(draw(streams, zoomArgs).elements.slice(0, -5)), {
+    assert.deepEqual(elementCounts(draw(streams, zoomArgs).elements.slice(0, -7)), {
         'cells': 8, 'minor': 8, 'index': 8, 'quads': 12, 'titles': 6, 'lines': {'#2a6fdb 2.5': 4}, 'labels': ['0+030']
     });
 
     // The unzoomed view draws both streams - in steps of half a terrain cell
-    assert.deepEqual(elementCounts(draw(streams, baseArgs).elements.slice(0, -5)).lines, {'#2a6fdb 2.5': 3 + 4});
+    assert.deepEqual(elementCounts(draw(streams, baseArgs).elements.slice(0, -7)).lines, {'#2a6fdb 2.5': 3 + 4});
 
     // A road and a trail are lines, too - a rock outcrop and an exclusion area are dashed outlines
     planValue.topography.features = [
@@ -387,7 +389,7 @@ test('view3DParts, a zoomed view', () => {
         {'type': 'exclusion', 'points': [{'x': 10, 'y': 30}, {'x': 20, 'y': 30}, {'x': 20, 'y': 20}]}
     ];
     const {elements: featureElements} = draw(scene(planValue), baseArgs);
-    assert.deepEqual(elementCounts(featureElements.slice(0, -5)).lines, {
+    assert.deepEqual(elementCounts(featureElements.slice(0, -7)).lines, {
         '#6e675f 1.5': 4, '#6e675f 1': 4, '#555555 1': 2 + 2 + 3, 'rgba(208,49,45,0.55) 1': 2 + 2 + 3
     });
     const dashed = (stroke) => featureElements.filter((element) => element.includes(`stroke="${stroke}"`)).
@@ -406,8 +408,8 @@ test('view3DParts, a narrow road', () => {
 
     // The narrow road is also drawn as a highlighted centerline - a halo and a line for each of the 12 road intervals
     const {elements} = draw(narrow, baseArgs);
-    assert.equal(elements.length, 16 + 12 * 3 + 12 * 2 + 1 + 4 + 1);
-    assert.deepEqual(elementCounts(elements.slice(0, -5)), {
+    assert.equal(elements.length, 16 + 12 * 3 + 12 * 2 + 2 + 4 + 3);
+    assert.deepEqual(elementCounts(elements.slice(0, -7)), {
         'cells': 16, 'minor': 16, 'index': 16, 'quads': 36, 'titles': 12, 'lines': {'white 6': 12, '#d6246e 3': 12}, 'labels': ['0+020']
     });
 
@@ -425,9 +427,9 @@ test('view3DParts, a narrow road', () => {
 
     // Zoomed in until the road is at least 4 pixels wide, it has no centerline - a zoomed view has only the centerline of the
     // intervals within it (those of its two station labels' samples)
-    assert.deepEqual(elementCounts(draw(narrow, {...baseArgs, 'zoom': 8}, 1200, 900).elements.slice(0, -5)).lines, {});
+    assert.deepEqual(elementCounts(draw(narrow, {...baseArgs, 'zoom': 8}, 1200, 900).elements.slice(0, -7)).lines, {});
     assert.deepEqual(
-        elementCounts(draw(narrow, {...baseArgs, 'zoom': 4, 'x': 30, 'y': 10}).elements.slice(0, -5)).lines,
+        elementCounts(draw(narrow, {...baseArgs, 'zoom': 4, 'x': 30, 'y': 10}).elements.slice(0, -7)).lines,
         {'white 6': 3, '#d6246e 3': 3}
     );
 });
@@ -436,12 +438,12 @@ test('view3DParts, a narrow road', () => {
 test('view3DParts, features and structures', () => {
     const complex = scene(complexPlan());
     const {elements} = draw(complex, baseArgs);
-    assert.equal(elements.length, 220);
+    assert.equal(elements.length, 223);
 
     // The 64 terrain cells' contours - an index contour crosses three of every eight rows of cells. The streams are solid lines
     // (the first begins beyond the topography), and the rock outcrop's and exclusion area's outlines are dashed. Each culvert is
     // a line across the road - the culvert beyond the end of the road is at its end
-    assert.deepEqual(elementCounts(elements.slice(0, -5)), {
+    assert.deepEqual(elementCounts(elements.slice(0, -7)), {
         'cells': 64,
         'minor': 63,
         'index': 36,
@@ -456,7 +458,7 @@ test('view3DParts, features and structures', () => {
 
     // The road's quadrilaterals - 26 intervals of surface (one is the bridge's deck), the bridge's two sides, seven wall
     // intervals, and the side slopes (there are none outside the topography)
-    const quads = elements.slice(0, -5).filter((element) => element.startsWith('<polygon') && !element.includes('stroke-width="0.6"'));
+    const quads = elements.slice(0, -7).filter((element) => element.startsWith('<polygon') && !element.includes('stroke-width="0.6"'));
     const fills = quads.map((element) => element.match(/ fill="([^"]*)"/)[1]);
     assert.equal(fills.filter((fill) => fill === 'rgb(128,128,126)').length, 7);
     assert.equal(fills.filter((fill) => fill === 'rgb(96,83,70)').length, 2);
@@ -471,7 +473,7 @@ test('view3DParts, features and structures', () => {
     // The start point is beyond the topography, so its marker pole is at the lowest elevation - with the start point's label
     const [startX, startY] = project(projection(complex.topo, baseArgs, 400, 300), -15, 20, 100);
     assert.deepEqual([Math.round(startX * 10) / 10, Math.round(startY * 10) / 10], [137.5, 274.7]);
-    assert.deepEqual(elements.slice(-5, -1), [
+    assert.deepEqual(elements.slice(-7, -3), [
         `<polyline points="137.5,274.7 137.5,241.2" fill="none" stroke="#1a8f3c" stroke-width="2.5" ${lineAttr}/>`,
         `<text x="137.5" y="232.2" font-size="13" ${textAttr} fill="#1a8f3c" ${textStroke} font-weight="bold">Road</text>`,
         `<polyline points="233.7,100.9 233.7,67.5" fill="none" stroke="#c0392b" stroke-width="2.5" ${lineAttr}/>`,
@@ -481,7 +483,7 @@ test('view3DParts, features and structures', () => {
     // The option without structures has no culverts, walls, or bridge
     const other = draw(scene(complexPlan(), 1), baseArgs);
     assert.equal(other.label, '3D view of the Alt road plan option');
-    const otherCounts = elementCounts(other.elements.slice(0, -5));
+    const otherCounts = elementCounts(other.elements.slice(0, -7));
     assert.deepEqual(otherCounts.lines, {'#2a6fdb 2.5': 48, '#555555 1': 12, 'rgba(208,49,45,0.55) 1': 12});
     assert.deepEqual([otherCounts.quads, otherCounts.titles], [71, 21]);
     assert.ok(!other.elements.some((element) => element.includes('fill="rgb(128,128,126)"')));
@@ -490,7 +492,7 @@ test('view3DParts, features and structures', () => {
 
 test('view3DParts, a bridge and an existing road', () => {
     const {elements} = draw(scene(fixturePlan(), 1), baseArgs, 976, 732);
-    const counts = elementCounts(elements.slice(0, -5));
+    const counts = elementCounts(elements.slice(0, -7));
 
     // The road's 140 intervals of surface, the bridge's 26 intervals of two sides, and the side slopes of the 114 other
     // intervals - less the existing road's 29 intervals, which have none
@@ -527,16 +529,16 @@ test('view3DParts, a view with nothing in it', () => {
     const bridge = draw(scene(fixturePlan(), 1), farArgs, 976, 732);
     assert.deepEqual(
         bridge.elements.map((element) => element.slice(0, element.indexOf(' '))),
-        ['<polyline', '<text', '<polyline', '<text', '<circle']
+        ['<polyline', '<text', '<polyline', '<text', '<circle', '<polygon', '<text']
     );
     assert.deepEqual([bridge.height, bridge.smooth, bridge.step, bridge.pointLimited], [732, 1, 1, false]);
     const culvert = draw(scene(fixturePlan(), 0), farArgs, 976, 732);
-    assert.equal(culvert.elements.length, 6);
+    assert.equal(culvert.elements.length, 8);
     assert.ok(culvert.elements[0].endsWith(` fill="none" stroke="#2a6fdb" stroke-width="4" ${lineAttr}/>`));
 
-    // The canvas drawing, too - its terrain isn't limited
-    const canvas = draw(scene(fixturePlan(), 1), {...farArgs, 'smooth': true}, 976, 732, true, smoothLimitsCanvas);
-    assert.deepEqual(canvas.elements.map((op) => op.t), [2, 3, 2, 3, 4, 1, 3]);
+    // With the canvas terrain limits, too - the terrain isn't limited
+    const canvas = draw(scene(fixturePlan(), 1), {...farArgs, 'smooth': true}, 976, 732, smoothLimitsCanvas);
+    assert.deepEqual(canvas.ops.map((op) => op.t), [2, 3, 2, 3, 4, 1, 3]);
     assert.deepEqual([canvas.smooth, canvas.step, canvas.pointLimited], [1, 1, false]);
 });
 
@@ -554,21 +556,19 @@ test('view3DParts, the terrain grid step', () => {
     });
     const topArgs = {'azimuth': 0, 'tilt': 90, 'exaggeration': 1};
 
-    // The SVG drawing has at most 240 terrain cells per side, so its cells span two grid cells
+    // With the SVG terrain limits, the drawing has at most 240 terrain cells per side, so its cells span two grid cells
     const svg = draw(long, topArgs, 1000, 400);
     assert.deepEqual([svg.step, svg.smooth, svg.pointLimited], [2, 1, false]);
-    assert.equal(elementCounts(svg.elements.slice(0, -5)).cells, 125);
+    assert.equal(elementCounts(svg.elements.slice(0, -7)).cells, 125);
 
-    // The canvas drawing's terrain is every grid cell, if its point limit allows
-    const cellCount = (drawing) => drawing.elements.filter((op) => op.t === 0).length;
-    let canvas = draw(long, {...topArgs, 'smooth': true}, 1000, 400, true, smoothLimitsCanvas);
+    // With the canvas terrain limits, the terrain is every grid cell, if the point limit allows
+    const cellCount = (drawing) => drawing.ops.filter((op) => op.t === 0).length;
+    let canvas = draw(long, {...topArgs, 'smooth': true}, 1000, 400, smoothLimitsCanvas);
     assert.deepEqual([canvas.step, canvas.smooth, canvas.pointLimited, cellCount(canvas)], [1, 1, false, 498]);
-    canvas = draw(long, {...topArgs, 'smooth': true}, 1000, 400, true, {...smoothLimitsCanvas, 'points': 300});
+    canvas = draw(long, {...topArgs, 'smooth': true}, 1000, 400, {...smoothLimitsCanvas, 'points': 300});
     assert.deepEqual([canvas.step, canvas.smooth, canvas.pointLimited, cellCount(canvas)], [2, 1, true, 125]);
-    canvas = draw(long, {...topArgs, 'smooth': true}, 1000, 400, true, {...smoothLimitsCanvas, 'points': 100});
+    canvas = draw(long, {...topArgs, 'smooth': true}, 1000, 400, {...smoothLimitsCanvas, 'points': 100});
     assert.deepEqual([canvas.step, canvas.smooth, canvas.pointLimited, cellCount(canvas)], [3, 1, true, 83]);
-    const svgLimited = draw(long, topArgs, 1000, 400, false, {...smoothLimitsCanvas, 'points': 100});
-    assert.equal(opsToSvg(canvas.elements), svgLimited.elements.join(''));
 });
 
 
@@ -576,48 +576,50 @@ test('view3DParts, minor contours and smooth terrain', () => {
     const fixture = scene(fixturePlan());
 
     // The minor contours are drawn only where the grid cells are at least 6 pixels
-    let counts = elementCounts(draw(fixture, baseArgs, 976, 732).elements.slice(0, -5));
+    let counts = elementCounts(draw(fixture, baseArgs, 976, 732).elements.slice(0, -7));
     assert.deepEqual([counts.cells, counts.minor, counts.index], [1200, 488, 120]);
-    counts = elementCounts(draw(fixture, baseArgs, 300, 225).elements.slice(0, -5));
+    counts = elementCounts(draw(fixture, baseArgs, 300, 225).elements.slice(0, -7));
     assert.deepEqual([counts.cells, counts.minor, counts.index], [1200, 0, 120]);
 
-    // A smooth SVG view divides each grid cell into cells of at least 12 pixels - at most four per side (a zoomed view draws
-    // only the cells within it)
+    // With the SVG terrain limits, a smooth view divides each grid cell into cells of at least 12 pixels - at most four
+    // per side (a zoomed view draws only the cells within it)
     const smoothArgs = {...baseArgs, 'smooth': true};
     let drawing = draw(fixture, smoothArgs, 976, 732);
     assert.deepEqual([drawing.smooth, drawing.step, drawing.pointLimited], [2, 1, false]);
-    assert.equal(elementCounts(drawing.elements.slice(0, -5)).cells, 4 * 1200);
+    assert.equal(elementCounts(drawing.elements.slice(0, -7)).cells, 4 * 1200);
     drawing = draw(fixture, {...smoothArgs, 'zoom': 8}, 976, 732);
     assert.deepEqual([drawing.smooth, drawing.step, drawing.pointLimited], [4, 1, false]);
-    assert.equal(elementCounts(drawing.elements.slice(0, -5)).cells, 759);
+    assert.equal(elementCounts(drawing.elements.slice(0, -7)).cells, 759);
 
-    // A smooth canvas view's cells are at least 3 pixels (the grid cells are 19 pixels) - at most eight per side
-    drawing = draw(fixture, smoothArgs, 976, 732, true, smoothLimitsCanvas);
+    // With the canvas terrain limits, a smooth view's cells are at least 3 pixels (the grid cells are 19 pixels) - at
+    // most eight per side
+    drawing = draw(fixture, smoothArgs, 976, 732, smoothLimitsCanvas);
     assert.deepEqual([drawing.smooth, drawing.step, drawing.pointLimited], [7, 1, false]);
-    assert.equal(drawing.elements.filter((op) => op.t === 0).length, 49 * 1200);
-    drawing = draw(fixture, {...smoothArgs, 'zoom': 2}, 976, 732, true, smoothLimitsCanvas);
+    assert.equal(drawing.ops.filter((op) => op.t === 0).length, 49 * 1200);
+    drawing = draw(fixture, {...smoothArgs, 'zoom': 2}, 976, 732, smoothLimitsCanvas);
     assert.deepEqual([drawing.smooth, drawing.step, drawing.pointLimited], [8, 1, false]);
 
-    // Grid cells under 8 pixels aren't smoothed in a canvas view - their facets are too small to see
-    drawing = draw(fixture, smoothArgs, 300, 225, true, smoothLimitsCanvas);
+    // Grid cells under 8 pixels aren't smoothed with the canvas terrain limits - their facets are too small to see
+    drawing = draw(fixture, smoothArgs, 300, 225, smoothLimitsCanvas);
     assert.deepEqual([drawing.smooth, drawing.step, drawing.pointLimited], [1, 1, false]);
-    assert.equal(drawing.elements.filter((op) => op.t === 0).length, 1200);
+    assert.equal(drawing.ops.filter((op) => op.t === 0).length, 1200);
 
     // The point limit limits the smoothing
-    const faceted = draw(fixture, baseArgs, 976, 732, true, smoothLimitsCanvas);
-    const smooth = draw(fixture, smoothArgs, 976, 732, true, {...smoothLimitsCanvas, 'points': 6000});
+    const faceted = draw(fixture, baseArgs, 976, 732, smoothLimitsCanvas);
+    const smooth = draw(fixture, smoothArgs, 976, 732, {...smoothLimitsCanvas, 'points': 6000});
     assert.deepEqual([faceted.smooth, faceted.step, faceted.pointLimited], [1, 1, false]);
     assert.deepEqual([smooth.smooth, smooth.step, smooth.pointLimited], [2, 1, true]);
 
-    // An SVG view's point limit doesn't set its grid step - a limit under its grid points leaves the grid as it is
-    const limited = draw(fixture, smoothArgs, 976, 732, false, {'sideCells': 240, 'points': 1000, 'facetPx': 0, 'cellPx': 12, 'count': 4});
+    // With a limit per side, the point limit doesn't set the grid step - a limit under the grid points leaves the grid as
+    // it is
+    const limited = draw(fixture, smoothArgs, 976, 732, {'sideCells': 240, 'points': 1000, 'facetPx': 0, 'cellPx': 12, 'count': 4});
     assert.deepEqual([limited.smooth, limited.step, limited.pointLimited], [1, 1, true]);
-    assert.equal(elementCounts(limited.elements.slice(0, -5)).cells, 1200);
+    assert.equal(elementCounts(limited.elements.slice(0, -7)).cells, 1200);
 
     // The smooth terrain passes through the grid's points - every faceted cell corner is a smooth cell corner
     const corners = (drawing2) => {
         const points = new Set();
-        for (const op of drawing2.elements.filter((element) => element.t === 0)) {
+        for (const op of drawing2.ops.filter((element) => element.t === 0)) {
             for (let ix = 0; ix < 8; ix += 2) {
                 points.add(`${op.c[op.o + ix].toFixed(6)},${op.c[op.o + ix + 1].toFixed(6)}`);
             }
@@ -632,38 +634,12 @@ test('view3DParts, minor contours and smooth terrain', () => {
 });
 
 
-test('view3DParts, the canvas drawing is the SVG drawing', () => {
-    const views = [
-        baseArgs,
-        {...baseArgs, 'zoom': 4, 'x': 30, 'y': 20, 'azimuth': 200, 'tilt': 45},
-        {...baseArgs, 'zoom': 8, 'smooth': true},
-        {'azimuth': 0, 'tilt': 90, 'exaggeration': 1, 'smooth': true},
-        {'azimuth': 300, 'tilt': 10, 'exaggeration': 3, 'zoom': 16, 'fill': true}
-    ];
-    const narrowPlan = complexPlan();
-    narrowPlan.options[1].section.width = 0.2;
-    for (const drawScene of [scene(complexPlan()), scene(narrowPlan, 1)]) {
-        for (const viewArgs of views) {
-            for (const limits of [undefined, smoothLimitsCanvas, {...smoothLimitsCanvas, 'points': 50}]) {
-                const svg = draw(drawScene, viewArgs, 400, 300, false, limits);
-                const canvas = draw(drawScene, viewArgs, 400, 300, true, limits);
-                assert.equal(opsToSvg(canvas.elements), svg.elements.join(''));
-                assert.deepEqual(
-                    [canvas.width, canvas.height, canvas.label, canvas.smooth, canvas.step, canvas.pointLimited],
-                    [svg.width, svg.height, svg.label, svg.smooth, svg.step, svg.pointLimited]
-                );
-            }
-        }
-    }
-});
-
-
 test('reportViews', () => {
     // The simple plan's road is wide enough to see in its overview - the only view. The road runs east across a plane rising
     // north, so the overview looks north (upslope), at the lowest tilt
     let views = planReportViews(simplePlan());
     assert.deepEqual(views.map((reportView) => ({...reportView, 'view': null})), [{
-        'args': {'azimuth': 0, 'tilt': 55, 'exaggeration': 1.5, 'zoom': 1.32, 'x': 20, 'y': 20, 'z': 102, 'smooth': false},
+        'args': {'azimuth': 0, 'tilt': 55, 'exaggeration': 1.5, 'zoom': 1.32, 'x': 20, 'y': 20, 'z': 102},
         'view': null,
         'station': 0,
         'endStation': 40,
@@ -672,9 +648,8 @@ test('reportViews', () => {
     assert.deepEqual([views[0].view.width, views[0].view.height, views[0].view.zoom, views[0].view.smooth], [976, 675, 1.32, false]);
 
     // The view's width is the report's, and its maximum height is three-quarters of it
-    views = planReportViews(simplePlan(), 0, 400, true);
-    assert.deepEqual([views[0].view.width, views[0].view.height, views[0].view.fullHeight, views[0].view.smooth], [400, 286, 300, true]);
-    assert.equal(views[0].args.smooth, true);
+    views = planReportViews(simplePlan(), 0, 400);
+    assert.deepEqual([views[0].view.width, views[0].view.height, views[0].view.fullHeight], [400, 286, 300]);
 
     // A narrow road adds views of equal road segments, from the start to the end, in the overview's orientation - each
     // zoomed in on its segment

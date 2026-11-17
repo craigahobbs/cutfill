@@ -38,7 +38,7 @@ function paintCalls(drawing, ratio = 1) {
         ['fillStyle', '#f4f1ea'],
         ['fillRect', 0, 0, drawing.width, drawing.height]
     ];
-    paintOps(fakeContext(calls), drawing.elements);
+    paintOps(fakeContext(calls), drawing.ops);
     return calls;
 }
 

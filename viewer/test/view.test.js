@@ -53,7 +53,7 @@ test('buildReport', () => {
     // The overview's 14.7 pixel grid cells are divided into 5 x 5 cells (at least 3 pixels) - all 40 x 30 grid cells
     assert.equal(drawing.step, 1);
     assert.equal(drawing.smooth, 5);
-    assert.equal(drawing.elements.filter((op) => op.t === 0).length, 5 * 5 * 1200);
+    assert.equal(drawing.ops.filter((op) => op.t === 0).length, 5 * 5 * 1200);
 
     // A small point limit coarsens the grid step
     const coarse = canvasReport.views[0].render({...smoothLimitsCanvas, 'points': 300});
@@ -62,13 +62,13 @@ test('buildReport', () => {
 });
 
 
-test('the explorer canvas drawing matches its SVG drawing', () => {
+test('the explorer SVG drawing is its drawing operations, with the report link', () => {
     const data = fixtureData();
     for (const globals of [{}, {'vZoom': 4, 'vX': 200, 'vY': 150, 'vAzimuth': 120}, {'vZoom': 8, 'vOption': 1}]) {
         const explorer = new Explorer(data, globals, argsParse(globals));
-        const svg = explorer.render(800, 600);
+        const svg = explorer.renderSvg(800, 600);
         const svgElements = svg.slice(svg.indexOf('>') + 1, -'</svg>'.length).replace(/<a href="[^"]*">.*?<\/a>/, '');
-        assert.equal(opsToSvg(explorer.render(800, 600, true).ops), svgElements);
+        assert.equal(opsToSvg(explorer.render(800, 600).ops), svgElements);
     }
 });
 
@@ -77,7 +77,7 @@ test('the explorer keys', () => {
     const data = fixtureData();
     const globals = {'vFile': 'plans/fixture.json', 'vExplore': true};
     const explorer = new Explorer(data, globals, argsParse(globals));
-    explorer.render(800, 600, true);
+    explorer.render(800, 600);
     const key = (code, keyValue = '', shiftKey = false) => (
         explorer.keyDown({code, 'key': keyValue, shiftKey, 'ctrlKey': false, 'metaKey': false, 'altKey': false})
     );

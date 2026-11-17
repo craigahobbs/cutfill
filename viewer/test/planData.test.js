@@ -21,6 +21,14 @@ test('PlanData', () => {
     assert.equal(data.file, 'plans/simple.json');
     assert.deepEqual(data.topo, planTopo(plan));
     assert.deepEqual([data.topo.nRows, data.topo.nCols, data.topo.minZ, data.topo.maxZ], [5, 5, 100, 104]);
+
+    // The plan has no source map image until it's given one
+    assert.deepEqual([data.imageURL, data.imageMissing], [null, null]);
+
+    // An option argument is limited to the plan's option (it has one)
+    assert.deepEqual([-1, 0, 1, 5].map((option) => data.optionIndex(option)), [0, 0, 0, 0]);
+    const complex = new PlanData(validatePlan(planComplex()).plan, 'complex.json');
+    assert.deepEqual([-1, 0, 1, 5].map((option) => complex.optionIndex(option)), [0, 0, 1, 1]);
 });
 
 
@@ -72,17 +80,17 @@ test('PlanData reportViews', () => {
     const views = data.reportViews(0, 800);
     assert.equal(views.length, 1);
     assert.deepEqual(
-        [views[0].station, views[0].endStation, views[0].leftToRight, views[0].view.width, views[0].args.smooth],
+        [views[0].station, views[0].endStation, views[0].leftToRight, views[0].view.width, views[0].view.smooth],
         [0, 40, true, 800, false]
     );
-    assert.deepEqual(views, reportViews(data.topo, data.rows(0), data.analysis(0), 5, 800, false));
+    assert.deepEqual(views, reportViews(data.topo, data.rows(0), data.analysis(0), 5, 800));
 
     // The views are computed once for each width
     assert.equal(data.reportViews(0, 800), views);
     const narrow = data.reportViews(0, 400);
     assert.notEqual(narrow, views);
     assert.equal(narrow[0].view.width, 400);
-    assert.deepEqual(narrow, reportViews(data.topo, data.rows(0), data.analysis(0), 5, 400, false));
+    assert.deepEqual(narrow, reportViews(data.topo, data.rows(0), data.analysis(0), 5, 400));
     assert.equal(data.reportViews(0, 400), narrow);
     assert.equal(data.reportViews(0, 800), views);
 });
@@ -96,8 +104,8 @@ test('PlanData reportViews, options', () => {
     const alt = data.reportViews(1, 800);
     assert.deepEqual(main.map((view) => view.endStation.toFixed(3)), ['86.236']);
     assert.deepEqual(alt.map((view) => view.endStation), [90]);
-    assert.deepEqual(main, reportViews(data.topo, data.rows(0), data.analysis(0), 5, 800, false));
-    assert.deepEqual(alt, reportViews(data.topo, data.rows(1), data.analysis(1), 4, 800, false));
+    assert.deepEqual(main, reportViews(data.topo, data.rows(0), data.analysis(0), 5, 800));
+    assert.deepEqual(alt, reportViews(data.topo, data.rows(1), data.analysis(1), 4, 800));
     assert.equal(data.reportViews(0, 800), main);
     assert.equal(data.reportViews(1, 800), alt);
 });

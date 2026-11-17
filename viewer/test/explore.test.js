@@ -1,9 +1,11 @@
-import {Explorer, exploreStyle} from '../lib/explore.js';
 import {planData, simplePlan} from './viewFixtures.js';
 import {projection, smoothLimitsCanvas, view3DParts} from '../lib/view3d.js';
+import {Explorer} from '../lib/explore.js';
 import {argsParse} from '../lib/args.js';
 import assert from 'node:assert/strict';
+import {exploreStyle} from '../lib/draw.js';
 import {fixturePlan} from './fixture.js';
+import {opsToSvg} from '../lib/canvas.js';
 import test from 'node:test';
 
 
@@ -76,10 +78,10 @@ test('Explorer, the view arguments', () => {
 });
 
 
-test('Explorer.render, the SVG drawing', () => {
+test('Explorer.renderSvg', () => {
     const globals = {'vFile': 'plans/fixture.json', 'vExplore': true, 'vOption': 1, 'vAzimuth': 120, 'vZoom': 2, 'vX': 100, 'vY': 50};
     const explorer = explore(fixturePlan(), globals);
-    const svg = explorer.render(800, 600);
+    const svg = explorer.renderSvg(800, 600);
 
     // The drawing fills the width and height, without margins
     assert.equal(
@@ -107,7 +109,7 @@ test('Explorer.render, the SVG drawing', () => {
         `<text x="12" y="20" font-size="14" ${textAttr} fill="#1f4e8c" ${textStroke} font-weight="bold">Back to the report</text></a>`;
     assert.equal(
         svg,
-        `${svgOpen}${parts.elements.join('')}${backLink}` +
+        `${svgOpen}${opsToSvg(parts.ops)}${backLink}` +
             `<rect x="8" y="414" width="380" height="152" rx="4" fill="white" fill-opacity="0.75"/>${helpTexts.join('')}${status}</svg>`
     );
 
@@ -115,30 +117,28 @@ test('Explorer.render, the SVG drawing', () => {
     assert.equal(press(explorer, 'KeyH'), 'render');
     assert.equal(explorer.state.help, false);
     assert.equal(
-        explorer.render(800, 600),
-        `${svgOpen}${parts.elements.join('')}${backLink}` +
+        explorer.renderSvg(800, 600),
+        `${svgOpen}${opsToSvg(parts.ops)}${backLink}` +
             '<rect x="8" y="540" width="380" height="26" rx="4" fill="white" fill-opacity="0.75"/>' +
             `<text x="16" y="553" font-size="12" ${textAttr} fill="#222" ${textStroke}>H - keyboard help</text>${status}</svg>`
     );
     assert.equal(press(explorer, 'Slash', '?'), 'render');
     assert.equal(explorer.state.help, true);
-    assert.equal(explorer.render(800, 600), svg);
+    assert.equal(explorer.renderSvg(800, 600), svg);
 
     // The drawing with other terrain limits
-    const limited = explorer.render(800, 600, false, {...smoothLimitsCanvas, 'points': 300});
-    const limitedParts = view3DParts(
-        data.plan, data.topo, data.rows(1), 1, data.analysis(1), view, false, {...smoothLimitsCanvas, 'points': 300}
-    );
+    const limited = explorer.renderSvg(800, 600, {...smoothLimitsCanvas, 'points': 300});
+    const limitedParts = view3DParts(data.plan, data.topo, data.rows(1), 1, data.analysis(1), view, {...smoothLimitsCanvas, 'points': 300});
     assert.deepEqual([limitedParts.step, limitedParts.smooth, limitedParts.pointLimited], [2, 1, true]);
-    assert.ok(limited.startsWith(`${svgOpen}${limitedParts.elements.join('')}${backLink}`));
+    assert.ok(limited.startsWith(`${svgOpen}${opsToSvg(limitedParts.ops)}${backLink}`));
 });
 
 
-test('Explorer.render, the canvas drawing', () => {
+test('Explorer.render', () => {
     const explorer = explore(simplePlan(), {'vFile': 'simple.json', 'vExplore': true});
-    const drawing = explorer.render(400, 300, true);
+    const drawing = explorer.render(400, 300);
     const {view, data} = explorer;
-    const parts = view3DParts(data.plan, data.topo, data.rows(0), 0, data.analysis(0), view, true);
+    const parts = view3DParts(data.plan, data.topo, data.rows(0), 0, data.analysis(0), view);
 
     // The drawing's size, label, and terrain - the 55 pixel grid cells are divided in four (the SVG drawing's limit)
     assert.deepEqual(
@@ -152,8 +152,8 @@ test('Explorer.render, the canvas drawing', () => {
 
     // The drawing's operations, then the overlays' - the keyboard help and the view status, in meters (the report link is left
     // to the page)
-    assert.equal(drawing.ops.length, parts.elements.length + 10);
-    assert.deepEqual(drawing.ops.slice(0, -10).map((op) => op.t), parts.elements.map((op) => op.t));
+    assert.equal(drawing.ops.length, parts.ops.length + 10);
+    assert.deepEqual(drawing.ops.slice(0, -10).map((op) => op.t), parts.ops.map((op) => op.t));
     assert.deepEqual(drawing.ops.slice(-10), [
         {'t': 5, 'x': 8, 'y': 114, 'width': 380, 'height': 152, 'rx': 4, 'f': 'white', 'o': 0.75},
         ...helpLines.map((text, ixLine) => (
@@ -173,7 +173,7 @@ test('Explorer.render, the canvas drawing', () => {
 
     // Without the help
     press(explorer, 'KeyH');
-    assert.deepEqual(explorer.render(400, 300, true).ops.slice(-3, -1), [
+    assert.deepEqual(explorer.render(400, 300).ops.slice(-3, -1), [
         {'t': 5, 'x': 8, 'y': 240, 'width': 380, 'height': 26, 'rx': 4, 'f': 'white', 'o': 0.75},
         {'t': 3, 'text': 'H - keyboard help', 'x': 16, 'y': 253, 'size': 12, 'anchor': 'start', 'f': '#222', 'bold': false}
     ]);
@@ -181,22 +181,22 @@ test('Explorer.render, the canvas drawing', () => {
     // The view status - the zoom and exaggeration to two decimal places
     pressAll(explorer, [], [['Equal', '+'], ['BracketLeft', '['], ['KeyQ'], ['ArrowUp', '', true], ['KeyD'], ['KeyR']]);
     assert.equal(
-        explorer.render(400, 300, true).ops.at(-1).text,
+        explorer.render(400, 300).ops.at(-1).text,
         'Center x 26, y 18, z 111 m - zoom 1.41x, rotation 20, tilt 40, exaggeration 1.25x'
     );
 
     // The canvas terrain limits - the cells are at least 3 pixels, or as small as the point limit allows
     press(explorer, 'Home');
-    let canvas = explorer.render(400, 300, true, smoothLimitsCanvas);
+    let canvas = explorer.render(400, 300, smoothLimitsCanvas);
     assert.deepEqual([canvas.smooth, canvas.step, canvas.pointLimited], [8, 1, false]);
-    canvas = explorer.render(400, 300, true, {...smoothLimitsCanvas, 'points': 400});
+    canvas = explorer.render(400, 300, {...smoothLimitsCanvas, 'points': 400});
     assert.deepEqual([canvas.smooth, canvas.step, canvas.pointLimited], [4, 1, true]);
 });
 
 
 test('Explorer.keyDown, moving', () => {
     const explorer = explore(fixturePlan());
-    explorer.render(800, 600, true);
+    explorer.render(800, 600);
     const {scale} = explorer.view;
     assert.equal(Math.round(100 / scale * 10) / 10, 67.2);
 
@@ -243,7 +243,7 @@ test('Explorer.keyDown, moving', () => {
 
 test('Explorer.keyDown, zooming, rotating, tilting, and exaggerating', () => {
     const explorer = explore(fixturePlan());
-    explorer.render(800, 600, true);
+    explorer.render(800, 600);
 
     // Zoom in and out by the square root of two - from 1 to 64
     assert.deepEqual(pressAll(explorer, ['zoom'], [['Equal', '+'], ['Equal', '='], ['Minus', '-'], ['Minus', '_'], ['Minus', '-']]), [
@@ -257,7 +257,7 @@ test('Explorer.keyDown, zooming, rotating, tilting, and exaggerating', () => {
 
     // A zoom between steps zooms to the nearest step's next step
     const between = explore(fixturePlan(), {'vZoom': 3});
-    between.render(800, 600, true);
+    between.render(800, 600);
     assert.deepEqual(pressAll(between, ['zoom'], [['Equal', '+'], ['Home'], ['Minus', '-']]), [[4], [3], [2]]);
 
     // Rotate 10 degrees left and right - Q and E, or shift and the left and right arrows
@@ -295,7 +295,7 @@ test('Explorer.keyDown, zooming, rotating, tilting, and exaggerating', () => {
 test('Explorer.keyDown, the other keys', () => {
     const globals = {'vFile': 'plans/fixture.json', 'vExplore': true, 'vAzimuth': 120, 'vTilt': 50, 'vZoom': 2, 'vX': 100, 'vY': 50};
     const explorer = explore(fixturePlan(), globals);
-    explorer.render(800, 600, true);
+    explorer.render(800, 600);
     const initial = {...explorer.state};
 
     // Reset the view to the initial view - 0 or Home. The help stays as it is (hidden, then shown). The top view's scale

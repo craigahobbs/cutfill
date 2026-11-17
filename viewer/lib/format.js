@@ -31,7 +31,8 @@ export function fixedTrim(value, digits) {
 
 // Format a pixel coordinate - one decimal digit, without an all-zero fraction. This is called for every drawn
 // point, so the common case is computed with integer math: when the value's tenths aren't within a rounding
-// error of a half, rounding the scaled value is exactly toFixed's result.
+// error of a half, rounding the scaled value is exactly toFixed's result. A drawing's coordinates are a few thousand
+// pixels at most, so the text of the tenths within a drawing is kept.
 export function px(value) {
     const negative = value < 0;
     const absolute = negative ? -value : value;
@@ -41,12 +42,28 @@ export function px(value) {
         const fraction = scaled - floor;
         if (fraction < 0.4999999 || fraction > 0.5000001) {
             const tenths = fraction < 0.5 ? floor : floor + 1;
-            const whole = Math.floor(tenths / 10);
-            const tenth = tenths - whole * 10;
-            return (negative ? '-' : '') + (tenth === 0 ? whole : `${whole}.${tenth}`);
+            if (tenths < pxTexts.length) {
+                let text = pxTexts[tenths];
+                if (text === null) {
+                    text = tenthsText(tenths);
+                    pxTexts[tenths] = text;
+                }
+                return negative ? `-${text}` : text;
+            }
+            return (negative ? '-' : '') + tenthsText(tenths);
         }
     }
     return fixedTrim(value, 1);
+}
+
+const pxTexts = new Array(65536).fill(null);
+
+
+// Format a whole number of tenths
+function tenthsText(tenths) {
+    const whole = Math.floor(tenths / 10);
+    const tenth = tenths - whole * 10;
+    return tenth === 0 ? `${whole}` : `${whole}.${tenth}`;
 }
 
 

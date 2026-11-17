@@ -54,9 +54,16 @@ test('px', () => {
     assert.equal(px(1.45), '1.4');
     assert.equal(px(2.675), '2.7');
 
-    // Large values
+    // Large values - beyond a drawing's coordinates, whose text is kept
+    assert.equal(px(6553.5), '6553.5');
+    assert.equal(px(6553.6), '6553.6');
+    assert.equal(px(-6553.6), '-6553.6');
+    assert.equal(px(-123456.789), '-123456.8');
     assert.equal(px(1e7), '10000000');
     assert.equal(px(12345678.25), '12345678.3');
+
+    // A value's text is the same when it's formatted again, whatever its sign
+    assert.deepEqual([px(12.34), px(-12.34), px(12.34), px(-0.04), px(0.04)], ['12.3', '-12.3', '12.3', '-0', '0']);
 });
 
 

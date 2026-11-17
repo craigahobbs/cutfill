@@ -121,7 +121,7 @@ test('planView, features, structures, and the other options', () => {
     const {planDrawing, planElements} = drawings(complexPlan(), 0, 420);
     assert.equal(planDrawing.scale, 5);
     assert.equal(planDrawing.height, 420);
-    assert.equal(planElements.length, 101);
+    assert.equal(planElements.length, 105);
 
     // The 4 foot contours of the 80% slope cross each of the 64 grid cells twice (within it and along its top) - every fifth
     // contour (120, 140, and 160 feet) is an index contour
@@ -168,8 +168,13 @@ test('planView, features, structures, and the other options', () => {
         '<polyline points="175.8,335 192.4,335"',
         '<polyline points="192.4,335 209,335"'
     ]);
-    assert.equal(withAttr(planElements, 'fill', 'rgb(196,120,64)').length, 18);
-    assert.equal(withAttr(planElements, 'fill', 'rgb(218,184,96)').length, 19);
+    // The side slopes - a cut or a fill ends with an interval that tapers to the road's edge, as at the bridge (the left
+    // side's cut and the right side's fill) and where the road leaves the topography (both sides' fills)
+    assert.equal(withAttr(planElements, 'fill', 'rgb(196,120,64)').length, 18 + 1);
+    assert.equal(withAttr(planElements, 'fill', 'rgb(218,184,96)').length, 19 + 3);
+    assert.ok(planElements.includes(
+        '<polygon points="225.6,285 225.6,164 242.2,285 242.2,285" fill="rgb(196,120,64)" stroke="rgb(196,120,64)" stroke-width="0.5"/>'
+    ));
 
     // The culverts cross the road and its slopes - the culvert beyond the end of the road is at its end
     assert.deepEqual(withAttr(planElements, 'stroke-width', '3').filter((element) => element.includes('stroke="#2a6fdb"')), [
