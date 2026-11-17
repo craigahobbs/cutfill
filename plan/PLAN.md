@@ -233,17 +233,26 @@ road (`--surface asphalt`), or an all-new corridor (`--all-new`).
    an existing road that the best follows, it's a different corridor (Step 4), or the notes prefer
    it. Its length and earthwork are in its cost score already - they aren't reasons to keep it.
 2. **Draft the descriptions**: `draft PLAN.json WORK/descriptions.md` writes the plan's and each
-   option's facts. Edit the file - **don't delete or reword its lines**: add your own sentences, as
-   new paragraphs and bullets, for what the tools don't know:
-   - *The plan* (under `# Plan`): first, a sentence or two on the road and its purpose, from the
-     notes. For each feature you added, what it is and why (and that an assumption is one). The
-     options you engineered and dropped, with their cost scores. To its limitations: a misplaced
-     point, a place you couldn't find, anything else you defaulted.
-   - *Each option* (under `# Option: NAME`): a sentence or two on its corridor - where it goes, from
-     the plot - and its trade-off against the best option. What a reviewer should verify in the
-     field.
+   option's facts. Edit the file - **don't delete or reword its lines** - and add only these, each
+   as its own short paragraph or bullet (make each a small edit of its own):
+   - *The plan* (under `# Plan`):
+     - First, one or two sentences on the road and its purpose, from the notes.
+     - Under the added features, one sentence for each: what it is and why you added it (and that
+       it's an assumption, if the notes didn't name it). Skip this if you added none.
+     - One sentence for each option you engineered and didn't keep, with its cost score. Skip this
+       if there were none.
+     - After the limitations, one sentence for each thing you defaulted or couldn't do - a
+       misplaced point, a place you couldn't find. Skip this if there were none.
+   - *Each option* (under `# Option: NAME`), after its first paragraph:
+     - Two or three sentences on its corridor - where it goes, from the plot - and, if it isn't the
+       best option, why it's kept.
+     - After its last bullet, one sentence on what to verify in the field that the draft doesn't
+       say already, and how each of its design warnings is resolved or justified.
 
-   Don't write `~` for "about" - the viewer's Markdown renders `~...~` as strikethrough.
+   **Keep it short, and don't repeat the draft** - its numbers, structures, criteria, and
+   limitations are there already, and a reader has them. Check each direction you write (north,
+   east, uphill) against the plot's coordinates - x is east, y is north. Don't write `~` for
+   "about" - the viewer's Markdown renders `~...~` as strikethrough.
 3. **Set the descriptions**: `describe PLAN.json WORK/descriptions.md`.
 4. **Check the plan**: run `evaluate PLAN.json` (the model must validate), then `plot PLAN.json
    WORK/plan.png` and Read it - each road should run from the start point to the end point, along the
