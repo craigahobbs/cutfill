@@ -362,16 +362,27 @@ export function profileView(plan, option, analysis, width, height) {
         }
     }
 
-    // Grade line - steep segments are highlighted
+    // Grade line - steep segments are highlighted. Each run of segments that are steep, or aren't, is a line - a
+    // segment that doesn't start where the segment before it ends (a step in the grade) starts a line, too.
+    let gradeCoords = null;
+    let gradeSteep = false;
+    let gradePrev = null;
+    const gradeLine = () => {
+        if (gradeCoords !== null) {
+            elements.push(svgPolyline(gradeCoords, gradeSteep ? '#e01e1e' : '#1f2d3d', gradeSteep ? 3 : 2));
+        }
+    };
     for (const grade of analysis.grades) {
         const steep = !grade.existing && Math.abs(grade.grade) > maxGrade + 1e-6;
-        const sample1 = alignmentPointAt(analysis, grade.station);
-        const sample2 = alignmentPointAt(analysis, grade.endStation);
-        elements.push(svgPolyline([
-            left + grade.station * xScale, bottom - (sample1.z - minZ) * yScale,
-            left + grade.endStation * xScale, bottom - (sample2.z - minZ) * yScale
-        ], steep ? '#e01e1e' : '#1f2d3d', steep ? 3 : 2));
+        if (gradePrev === null || steep !== gradeSteep || grade.station !== gradePrev.endStation || grade.z !== gradePrev.endZ) {
+            gradeLine();
+            gradeCoords = [left + grade.station * xScale, bottom - (grade.z - minZ) * yScale];
+            gradeSteep = steep;
+        }
+        gradeCoords.push(left + grade.endStation * xScale, bottom - (grade.endZ - minZ) * yScale);
+        gradePrev = grade;
     }
+    gradeLine();
 
     // Legend
     const legendX = right - 250;
@@ -387,22 +398,4 @@ export function profileView(plan, option, analysis, width, height) {
     }
 
     return `${svgOpen(width, height, `Profile of the ${option.name} road plan option`)}${elements.join('')}</svg>`;
-}
-
-
-// Find the alignment point at a station - a grade's station, which is an alignment point's, so there's always one
-function alignmentPointAt(analysis, stationValue) {
-    // Binary search for the first point at or beyond the station (alignment stations are non-decreasing)
-    const {alignment} = analysis;
-    let ixLow = 0;
-    let ixHigh = alignment.length;
-    while (ixLow < ixHigh) {
-        const ixMid = Math.floor((ixLow + ixHigh) / 2);
-        if (alignment[ixMid].station >= stationValue - 1e-9) {
-            ixHigh = ixMid;
-        } else {
-            ixLow = ixMid + 1;
-        }
-    }
-    return alignment[ixLow];
 }
