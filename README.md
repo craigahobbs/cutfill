@@ -315,7 +315,9 @@ model. It uses these tools:
     can't be planned.
   - `plot` plots the plan - its shaded terrain, contours, features, and options - for the session to
     study (all of it, or a part of it for a closer look), `locate` converts latitudes and
-    longitudes to the plan's coordinates, and `feature` adds and removes the plan's features.
+    longitudes to the plan's coordinates, `feature` adds and removes the plan's features, and `draws`
+    finds the unmapped draws of the terrain (the valleys that need a culvert where a road crosses
+    them) and adds them as streams.
   - `route` and `profile` engineer a road option. `route` finds the least-cost horizontal alignment
     with a lattice search (radius-constrained turns, grade, side slope, stream crossing, rock, and
     exclusion costs), designs the vertical profile by dynamic programming (minimum earthwork within
