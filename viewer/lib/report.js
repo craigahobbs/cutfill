@@ -106,7 +106,9 @@ export function buildReport(data, globals, args, width, canvasViews = false) {
 
     // Plan view
     html.push(heading(3, 'Plan View'));
-    if (outlines.length > 0) {
+    if (outlines.length === 1) {
+        html.push('<p>The numbered marker shows the road segment of 3D view 2, below - the dashed outline shows the area it covers.</p>');
+    } else if (outlines.length > 1) {
         html.push(`<p>The numbered markers show the road segments of 3D views 2 through ${views.length}, below - the dashed ` +
             'outlines show the areas they cover.</p>');
     }

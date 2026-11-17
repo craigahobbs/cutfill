@@ -379,10 +379,10 @@ export const defaultRates = {
 
 
 // The meters per foot
-const metersPerFoot = 0.3048;
+export const metersPerFoot = 0.3048;
 
 
-// Get the meters per plan unit
+// Get the meters per plan unit (of a plan, or another model with "units")
 export function unitScale(plan) {
     return plan.units === 'feet' ? metersPerFoot : 1;
 }
@@ -455,7 +455,7 @@ export function planCriteria(plan) {
 
 
 // Get the plan's cost rates, with defaults
-function planRates(plan) {
+export function planRates(plan) {
     return {...defaultRates, ...plan.costRates};
 }
 
@@ -599,7 +599,7 @@ export function pointInPolygon(x, y, index) {
 
 
 // Compute the intersection of segments p1-p2 and p3-p4 - returns the fraction along p1-p2, or null
-function segmentIntersect(x1, y1, x2, y2, x3, y3, x4, y4) {
+export function segmentIntersect(x1, y1, x2, y2, x3, y3, x4, y4) {
     const denom = (x2 - x1) * (y4 - y3) - (y2 - y1) * (x4 - x3);
     if (denom === 0) {
         return null;
@@ -656,13 +656,13 @@ function segmentChunks(points) {
 
 
 // Create the polygon indexes (polygonIndex) of a topography's features of a type
-function featureIndexes(topo, type) {
+export function featureIndexes(topo, type) {
     return topo.features.filter((feature) => feature.type === type).map((feature) => polygonIndex(feature.points));
 }
 
 
 // Determine if a point is inside any of the indexed polygons
-function pointInPolygons(x, y, indexes) {
+export function pointInPolygons(x, y, indexes) {
     for (const index of indexes) {
         if (pointInPolygon(x, y, index)) {
             return true;

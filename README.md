@@ -397,9 +397,21 @@ The model is defined with [Schema Markdown](https://craigahobbs.github.io/schema
 
 ## The example
 
-The [example](example/example.json) is a synthetic hillside site - its topography was digitized from
-a drawn map, [example.png](example/example.png), so it has no georeference - and its options were
-engineered with `route`:
+The [example](example/example.json) is an access road up a hill at the south edge of Kennewick,
+Washington - not quite half a mile of road, to climb 200 feet. It was planned from its road site model,
+[example.site.json](example/example.site.json): the road's start and end points, as latitudes and
+longitudes, and its planning notes.
+
+```
+make plan FILE=example/example.site.json
+```
+
+The site's terrain is the USGS's 1 meter lidar elevations, and its features are the USGS's roads -
+plus two draws, the house lots at the foot of the hill, and an unmapped dirt track to the hilltop, which
+the planning session added from the terrain and the topographic map. The plan has two options: the
+least-cost road, which follows the track to the hilltop, and an all-new road. The plan's image,
+[example.png](example/example.png), isn't an input - it's the USGS topographic map of the site, which
+the planning tools download for the report's source map.
 
 ```
 make run FILE=example/example.json
@@ -425,7 +437,7 @@ targets:
 | --- | --- |
 | [viewer/](viewer/) | The Roadie viewer - the web application, the road plan model (its schema, validation, earthwork, and cost analysis), and the command line behind `make evaluate` and `make doc`. JavaScript, built with [javascript-build](https://github.com/craigahobbs/javascript-build#readme) - see its [README](#url=viewer/README.md). |
 | `plan/` | The planning tools (`bin/plan.js`) - the road site model, the site's USGS lidar terrain and features, plotting, and road engineering - and the road planning instructions for Claude Code ([PLAN.md](#url=plan/PLAN.md)). JavaScript, built with [javascript-build](https://github.com/craigahobbs/javascript-build#readme). |
-| `example/` | The example plan |
+| `example/` | The example - its road site model, and its plan |
 
 `CLAUDE.md` is the repository guide for Claude Code.
 

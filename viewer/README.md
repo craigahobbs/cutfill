@@ -69,10 +69,10 @@ headless Chrome on an Apple Silicon Mac (`tools/bench.js`), from navigation unti
 
 | Plan | MarkdownUp viewer | Roadie viewer |
 | --- | --- | --- |
-| Example (1,200 ft site, 3 options) | 377 ms | 74 ms |
+| The first example (a synthetic 1,200 ft site, 3 options) | 377 ms | 74 ms |
 | A small site (2 options) | 910 ms | 201 ms |
 | A 4 mile road (13 MB of SVG) | 2,468 ms (first content: 2,396 ms) | 418 ms (first content: 126 ms) |
-| 3D explorer key press, example | 110 ms | 27 ms |
+| 3D explorer key press, the first example | 110 ms | 27 ms |
 | 3D explorer key press, the 4 mile road | 375 ms | 40 ms |
 
 Those measurements were of the viewer bundled into a single file. Serving its modules as they are loads within about
