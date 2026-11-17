@@ -75,7 +75,7 @@ site:
 	mkdir -p build/gh-pages/example/ build/gh-pages/plan/
 	cp index.html build/gh-pages/
 	$(SITE_LINKS) README.md > build/gh-pages/README.md
-	cp example/example.json example/example.png example/screenshot.png build/gh-pages/example/
+	cp example/example.site.json example/example.json example/example.png example/screenshot.png build/gh-pages/example/
 	cp plan/PLAN.md build/gh-pages/plan/
 	cp -R viewer/build/app build/gh-pages/viewer
 	$(SITE_LINKS) viewer/README.md > build/gh-pages/viewer/README.md

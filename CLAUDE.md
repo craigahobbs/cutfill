@@ -16,7 +16,8 @@ The project is two subprojects, and the top-level makefile delegates to them:
   its road options. **Planning a road** (`make plan`, `make update`) follows PLAN.md - when asked to plan or update
   a road, follow PLAN.md exactly. The planning session runs in `plan/`. See [plan/README.md](plan/README.md).
 
-`example/` is a small synthetic plan. `index.html` renders this project's README on its web site.
+`example/` is the example - a road site model (`example.site.json`) and the plan a planning session made from it
+(`example.json`, and its USGS topographic map image). `index.html` renders this project's README on its web site.
 
 ## Commands
 

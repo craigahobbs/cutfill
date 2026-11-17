@@ -305,6 +305,24 @@ test('buildReport, a narrow road has road segment views', () => {
 });
 
 
+test('buildReport, a road with one road segment view', () => {
+    // The 2 foot wide road is under 6 pixels wide in the overview, and one view's length - its only road segment view
+    // is of all of it
+    const planValue = fixturePlan();
+    planValue.options[0].section.width = 2;
+    const {html} = report(planData(planValue));
+    const lines = outline(html);
+    assert.deepEqual(lines.slice(lines.indexOf('<h3 id="plan-view">Plan View</h3>'), lines.indexOf('<h3 id="profile">Profile</h3>')), [
+        '<h3 id="plan-view">Plan View</h3>',
+        '<p>The numbered marker shows the road segment of 3D view 2, below - the dashed outline shows the area it covers.</p>',
+        '<svg: Plan view of the Direct road plan option>'
+    ]);
+    assert.deepEqual(captions(html).map((caption) => caption.slice(0, caption.indexOf(','))), [
+        '<strong>View 1 of 2: Overview</strong> - the whole site', '<strong>View 2 of 2</strong> - stations 0+00 to 4+40'
+    ]);
+});
+
+
 test('buildReport, a missing map image', () => {
     // A local plan's map image that wasn't opened with it - the plan's description has a horizontal rule, like the footer's
     const planValue = simplePlan();

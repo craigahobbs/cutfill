@@ -1,34 +1,35 @@
-# Hillside Driveway
+# Hilltop Access Road, Kennewick, Washington
 
-Topography: 61 x 61 grid, 20 ft spacing, 1,200 x 1,200 ft, elevations 474.0 to 662.2 ft
+Topography: 423 x 515 grid, 5 ft spacing, 2,110 x 2,570 ft, elevations 740.1 to 1,137.2 ft
 
-- start (150.0, 80.0): ground elevation 507.0
-- end (900.0, 1120.0): ground elevation 655.0
+- start (800.0, 1766.4): ground elevation 932.6 - latitude and longitude 46.16755, -119.16811
+- end (1309.3, 800.0): ground elevation 1136.7 - latitude and longitude 46.16490, -119.16610
+- Topography sources: USGS 3D Elevation Program 1 meter elevation model WA_ColumbiaValley_2018_D19 (2021-10-04)
 - Design criteria: maximum grade 12%, minimum radius 50 ft, maximum wall height 20 ft
 
 ## Options (lengths in ft, volumes in cy)
 
-| Option           | Length | Max Grade | Cut   | Fill  | Borrow | Waste | Warnings | Cost Score |
-|------------------|--------|-----------|-------|-------|--------|-------|----------|------------|
-| West Climb       | 2,127  | 11.0%     | 945   | 285   | 0      | 538   | 0        | 158.1      |
-| East Bench       | 1,958  | 11.0%     | 1,143 | 5,114 | 4,119  | 0     | 0        | 262.1      |
-| West Climb Paved | 2,127  | 11.0%     | 945   | 285   | 0      | 538   | 0        | 227.4      |
+| Option        | Length | Max Grade | Cut   | Fill | Borrow | Waste | Warnings | Cost Score |
+|---------------|--------|-----------|-------|------|--------|-------|----------|------------|
+| Hilltop Track | 2,337  | 11.0%     | 1,602 | 384  | 0      | 1,010 | 0        | 152.6      |
+| New Road      | 2,435  | 11.0%     | 2,260 | 369  | 0      | 1,597 | 0        | 191.3      |
 
-## Option 0: West Climb
+## Option 0: Hilltop Track
 
 | Item                     |  Quantity | Cost Score | Share |
 |--------------------------|----------:|-----------:|------:|
-| Clearing and grubbing    | 39,966 sf |        7.4 |  4.7% |
-| Common excavation        |    945 cy |       14.5 |  9.1% |
-| Embankment               |    285 cy |        1.4 |  0.9% |
-| Waste (export)           |    538 cy |        4.1 |  2.6% |
-| Overhaul                 |  32 cy-mi |        0.3 |  0.2% |
-| Surfacing (gravel)       | 32,279 sf |       57.0 | 36.0% |
-| Ditches and cross drains |  2,127 ft |       29.2 | 18.4% |
-| Culverts (3)             |     52 ft |       27.1 | 17.1% |
-| Erosion control          | 39,966 sf |        2.8 |  1.8% |
-| Mobilization             |           |       14.4 |  9.1% |
-| **Total**                |           |  **158.1** |       |
+| Clearing and grubbing    | 39,777 sf |        7.4 |  4.8% |
+| Common excavation        |  1,602 cy |       24.5 | 16.1% |
+| Embankment               |    384 cy |        1.9 |  1.2% |
+| Waste (export)           |  1,010 cy |        7.7 |  5.1% |
+| Overhaul                 |  68 cy-mi |        0.7 |  0.4% |
+| Surfacing (gravel)       | 27,176 sf |       48.0 | 31.4% |
+| Ditches and cross drains |  1,798 ft |       24.7 | 16.2% |
+| Existing road upgrade    |  7,537 sf |        9.1 |  6.0% |
+| Culverts (1)             |     25 ft |       12.0 |  7.9% |
+| Erosion control          | 39,777 sf |        2.8 |  1.8% |
+| Mobilization             |           |       13.9 |  9.1% |
+| **Total**                |           |  **152.6** |       |
 
 ### Design Warnings
 
@@ -36,32 +37,30 @@ None
 
 ### Structures
 
-| Type    | Name               | Station        | Side | Detail          |
-|---------|--------------------|----------------|------|-----------------|
-| Culvert | Sag cross drain    | 0+70           |      | Diameter 1.5 ft |
-| Turnout |                    | 3+30 to 3+80   | left |                 |
-| Turnout |                    | 6+84 to 7+34   | left |                 |
-| Turnout |                    | 10+39 to 10+89 | left |                 |
-| Culvert | Mill Creek culvert | 10+82          |      | Diameter 3 ft   |
-| Turnout |                    | 13+94 to 14+44 | left |                 |
-| Turnout |                    | 17+48 to 17+98 | left |                 |
-| Culvert | Sag cross drain    | 20+68          |      | Diameter 1.5 ft |
+| Type          | Name              | Station        | Side  | Detail         |
+|---------------|-------------------|----------------|-------|----------------|
+| Turnout       |                   | 3+64 to 4+14   | right |                |
+| Culvert       | East draw culvert | 6+12           |       | Diameter 3 ft  |
+| Turnout       |                   | 7+54 to 8+04   | right |                |
+| Turnout       |                   | 11+43 to 11+93 | right |                |
+| Turnout       |                   | 15+33 to 15+83 | left  |                |
+| Existing road | Existing road     | 15+88 to 21+27 |       | Upgrade 539 ft |
 
-## Option 1: East Bench
+## Option 1: New Road
 
 | Item                     |  Quantity | Cost Score | Share |
 |--------------------------|----------:|-----------:|------:|
-| Clearing and grubbing    | 48,616 sf |        9.0 |  3.4% |
-| Common excavation        |  1,143 cy |       17.5 |  6.7% |
-| Embankment               |  5,114 cy |       25.4 |  9.7% |
-| Borrow (import)          |  4,119 cy |       81.9 | 31.2% |
-| Overhaul                 | 245 cy-mi |        2.5 |  0.9% |
-| Surfacing (gravel)       | 29,413 sf |       51.9 | 19.8% |
-| Ditches and cross drains |  1,958 ft |       26.9 | 10.2% |
-| Culverts (2)             |     39 ft |       19.8 |  7.6% |
-| Erosion control          | 48,616 sf |        3.4 |  1.3% |
-| Mobilization             |           |       23.8 |  9.1% |
-| **Total**                |           |  **262.1** |       |
+| Clearing and grubbing    | 52,594 sf |        9.8 |  5.1% |
+| Common excavation        |  2,260 cy |       34.6 | 18.1% |
+| Embankment               |    369 cy |        1.8 |  1.0% |
+| Waste (export)           |  1,597 cy |       12.2 |  6.4% |
+| Overhaul                 | 199 cy-mi |        2.0 |  1.0% |
+| Surfacing (gravel)       | 37,095 sf |       65.5 | 34.2% |
+| Ditches and cross drains |  2,435 ft |       33.4 | 17.5% |
+| Culverts (1)             |     20 ft |       11.0 |  5.7% |
+| Erosion control          | 52,594 sf |        3.7 |  1.9% |
+| Mobilization             |           |       17.4 |  9.1% |
+| **Total**                |           |  **191.3** |       |
 
 ### Design Warnings
 
@@ -69,45 +68,13 @@ None
 
 ### Structures
 
-| Type    | Name               | Station        | Side  | Detail          |
-|---------|--------------------|----------------|-------|-----------------|
-| Culvert | Sag cross drain    | 0+20           |       | Diameter 1.5 ft |
-| Turnout |                    | 3+67 to 4+17   | left  |                 |
-| Culvert | Mill Creek culvert | 6+93           |       | Diameter 3 ft   |
-| Turnout |                    | 7+59 to 8+09   | left  |                 |
-| Turnout |                    | 11+50 to 12+00 | left  |                 |
-| Turnout |                    | 15+42 to 15+92 | right |                 |
-
-## Option 2: West Climb Paved
-
-| Item                     |  Quantity | Cost Score | Share |
-|--------------------------|----------:|-----------:|------:|
-| Clearing and grubbing    | 39,966 sf |        7.4 |  3.3% |
-| Common excavation        |    945 cy |       14.5 |  6.4% |
-| Embankment               |    285 cy |        1.4 |  0.6% |
-| Waste (export)           |    538 cy |        4.1 |  1.8% |
-| Overhaul                 |  32 cy-mi |        0.3 |  0.1% |
-| Surfacing (asphalt)      | 32,279 sf |      120.0 | 52.7% |
-| Ditches and cross drains |  2,127 ft |       29.2 | 12.8% |
-| Culverts (3)             |     52 ft |       27.1 | 11.9% |
-| Erosion control          | 39,966 sf |        2.8 |  1.2% |
-| Mobilization             |           |       20.7 |  9.1% |
-| **Total**                |           |  **227.4** |       |
-
-### Design Warnings
-
-None
-
-### Structures
-
-| Type    | Name               | Station        | Side | Detail          |
-|---------|--------------------|----------------|------|-----------------|
-| Culvert | Sag cross drain    | 0+70           |      | Diameter 1.5 ft |
-| Turnout |                    | 3+30 to 3+80   | left |                 |
-| Turnout |                    | 6+84 to 7+34   | left |                 |
-| Turnout |                    | 10+39 to 10+89 | left |                 |
-| Culvert | Mill Creek culvert | 10+82          |      | Diameter 3 ft   |
-| Turnout |                    | 13+94 to 14+44 | left |                 |
-| Turnout |                    | 17+48 to 17+98 | left |                 |
-| Culvert | Sag cross drain    | 20+68          |      | Diameter 1.5 ft |
+| Type    | Name              | Station        | Side  | Detail        |
+|---------|-------------------|----------------|-------|---------------|
+| Turnout |                   | 3+23 to 3+73   | right |               |
+| Culvert | East draw culvert | 6+23           |       | Diameter 3 ft |
+| Turnout |                   | 6+71 to 7+21   | right |               |
+| Turnout |                   | 10+19 to 10+69 | right |               |
+| Turnout |                   | 13+67 to 14+17 | right |               |
+| Turnout |                   | 17+15 to 17+65 | right |               |
+| Turnout |                   | 20+63 to 21+13 | right |               |
 
