@@ -23,7 +23,6 @@ make test [TEST=name]         # the unit tests (node --test)
 make lint                     # ESLint
 make cover                    # the unit tests, with 100% coverage required
 make app                      # stage the application (build/app/)
-make check PLANS="<plan.json> ..."      # check the canvas 3D drawings against the SVG drawing
 ```
 
 The source is ES modules in `lib/`, loaded by `index.html`:
@@ -33,7 +32,7 @@ The source is ES modules in `lib/`, loaded by `index.html`:
 | `app.js` | The application - routing on the URL hash, plan loading (URLs and local files), the pages |
 | `model.js` | The road plan model - its schema and validation, and the earthwork, structure, and cost analysis |
 | `report.js`, `tables.js`, `planView.js`, `view3d.js` | The report, its cost and structures tables, the plan and profile views, and the 3D views |
-| `explore.js`, `canvas.js` | The 3D explorer and its canvas drawing |
+| `explore.js`, `canvas.js` | The 3D explorer, and the 3D views' drawing operations - painted on a canvas, or converted to SVG markup |
 | `doc.js`, `schemaDoc.js` | The model documentation page, generated from the model's schema |
 | `args.js`, `format.js`, `draw.js`, `markdown.js`, `planData.js`, `smoothing.js` | URL arguments, formatting, drawing helpers, Markdown, a loaded plan's cached analyses and drawings, and the 3D drawings' time budget |
 | `cli.js` | The command line (`bin/roadie.js`) - not part of the web application |
@@ -44,8 +43,7 @@ the viewer validates every plan it loads. The package is the viewer's only depen
 modules next to its own (`schema-markdown/lib/`), and the page's import map resolves them.
 
 The unit tests (`test/`) run the application in [jsdom](https://github.com/jsdom/jsdom#readme) with a fake clock,
-IndexedDB, `fetch`, and canvas context (`test/appHelpers.js`). `make check` verifies that the canvas 3D drawings - the
-explorer's and the report's - are the SVG drawing's, operation for operation, for whole plans.
+IndexedDB, `fetch`, and canvas context (`test/appHelpers.js`).
 
 
 ### The command line
@@ -90,10 +88,10 @@ Where the time goes:
 - **Each plan's analyses, finished grade, report views, and drawings are cached**, so switching options and returning
   from the explorer don't recompute them.
 - **The 3D drawings are canvases.** An SVG drawing of a large plan is tens of thousands of elements - most of its time
-  was the browser building, styling, laying out, and painting them, not computing them. The canvas drawing is the
-  same drawing (`make check` verifies its operations match the SVG drawing exactly), painted directly. The explorer's
-  key presses are coalesced into one frame per animation frame, and the road's hover tooltips are found by
-  hit-testing. Before printing, the report's 3D views are redrawn at twice their resolution (Chrome prints them as
+  was the browser building, styling, laying out, and painting them, not computing them. A 3D drawing is an array of
+  drawing operations, painted directly (the command line's SVG drawings are the same operations, as markup). The
+  explorer's key presses are coalesced into one frame per animation frame, and the road's hover tooltips are found
+  by hit-testing. Before printing, the report's 3D views are redrawn at twice their resolution (Chrome prints them as
   vector drawings).
 - **The terrain's detail adapts to the computer.** The pages measure how long the 3D drawings take (through the next
   animation frame, so the canvas's rasterization counts) and keep an estimate of the cost of a terrain cell (in local

@@ -1,5 +1,6 @@
-// canvas.js - canvas drawing operations for the 3D explorer - the same drawing as the SVG 3D view, painted directly,
-// without building and parsing SVG markup and laying out its elements
+// canvas.js - the 3D views' drawing operations - a drawing is an array of operations, painted on a canvas (the 3D
+// explorer and the report's 3D views - without building and parsing SVG markup and laying out its elements) or
+// converted to SVG markup (the command line's drawings)
 
 import {svgPolygon, svgPolyline, svgText} from './draw.js';
 import {px} from './format.js';
@@ -22,8 +23,8 @@ export function opTerrainCell(coords, offset, fill, minor, index) {
 }
 
 
-export function opPolygon(coords, fill, stroke, strokeWidth, title = null, dashArray = null) {
-    return {'t': opPolygonType, 'c': coords, 'f': fill, 's': stroke, 'w': strokeWidth, title, 'd': dashArray};
+export function opPolygon(coords, fill, stroke, strokeWidth, title = null) {
+    return {'t': opPolygonType, 'c': coords, 'f': fill, 's': stroke, 'w': strokeWidth, title};
 }
 
 
@@ -143,17 +144,18 @@ export function paintOps(ctx, ops) {
             if (op.i !== null) {
                 strokeSegments(painter, op.i, 1.2);
             }
-        } else if (type === opPolygonType || type === opPolylineType) {
-            const isPolygon = type === opPolygonType;
-            tracePath(ctx, op.c, isPolygon);
-            if (isPolygon && op.f !== 'none') {
-                painter.fillStyle(op.f);
-                ctx.fill();
-            }
+        } else if (type === opPolygonType) {
+            tracePath(ctx, op.c, true);
+            painter.fillStyle(op.f);
+            ctx.fill();
+            painter.strokeStyle(op.s, op.w, 'butt', 'miter');
+            ctx.stroke();
+        } else if (type === opPolylineType) {
+            tracePath(ctx, op.c, false);
             if (op.d !== null) {
                 ctx.setLineDash(op.d.split(' ').map(Number));
             }
-            painter.strokeStyle(op.s, op.w, isPolygon ? 'butt' : 'round', isPolygon ? 'miter' : 'round');
+            painter.strokeStyle(op.s, op.w, 'round', 'round');
             ctx.stroke();
             if (op.d !== null) {
                 ctx.setLineDash([]);
@@ -205,8 +207,7 @@ function pointInCoords(x, y, coords, start = 0, end = coords.length) {
 export function hitTitle(ops, x, y) {
     for (let ixOp = ops.length - 1; ixOp >= 0; ixOp--) {
         const op = ops[ixOp];
-        const hit = op.t === opCell ? pointInCoords(x, y, op.c, op.o, op.o + 8) :
-            (op.t === opPolygonType && op.f !== 'none' && pointInCoords(x, y, op.c));
+        const hit = op.t === opCell ? pointInCoords(x, y, op.c, op.o, op.o + 8) : (op.t === opPolygonType && pointInCoords(x, y, op.c));
         if (hit) {
             return op.title ?? null;
         }
@@ -215,7 +216,17 @@ export function hitTitle(ops, x, y) {
 }
 
 
-// Convert drawing operations to SVG markup - the 3D view's SVG elements (for checking the canvas drawing)
+// Create a terrain cell's contour segments' SVG path element
+function contourPath(segments, width) {
+    let path = '';
+    for (let ix = 0; ix < segments.length; ix += 4) {
+        path += `M${px(segments[ix])} ${px(segments[ix + 1])}L${px(segments[ix + 2])} ${px(segments[ix + 3])}`;
+    }
+    return `<path d="${path}" fill="none" stroke="${contourColor}" stroke-width="${width}" stroke-linecap="round"/>`;
+}
+
+
+// Convert drawing operations to SVG markup - the 3D view's SVG elements
 export function opsToSvg(ops) {
     let svg = '';
     for (const op of ops) {
@@ -226,17 +237,14 @@ export function opsToSvg(ops) {
             svg += `<polygon points="${px(coords[offset])},${px(coords[offset + 1])} ${px(coords[offset + 2])},${px(coords[offset + 3])} ` +
                 `${px(coords[offset + 4])},${px(coords[offset + 5])} ${px(coords[offset + 6])},${px(coords[offset + 7])}" ` +
                 `fill="${op.f}" stroke="${op.f}" stroke-width="0.6"/>`;
-            for (const [segments, width] of [[op.m, 0.5], [op.i, 1.2]]) {
-                if (segments !== null) {
-                    let path = '';
-                    for (let ix = 0; ix < segments.length; ix += 4) {
-                        path += `M${px(segments[ix])} ${px(segments[ix + 1])}L${px(segments[ix + 2])} ${px(segments[ix + 3])}`;
-                    }
-                    svg += `<path d="${path}" fill="none" stroke="${contourColor}" stroke-width="${width}" stroke-linecap="round"/>`;
-                }
+            if (op.m !== null) {
+                svg += contourPath(op.m, 0.5);
+            }
+            if (op.i !== null) {
+                svg += contourPath(op.i, 1.2);
             }
         } else if (type === opPolygonType) {
-            svg += svgPolygon(op.c, op.f, op.s, op.w, op.title, op.d !== null ? ` stroke-dasharray="${op.d}"` : '');
+            svg += svgPolygon(op.c, op.f, op.s, op.w, op.title);
         } else if (type === opPolylineType) {
             svg += svgPolyline(op.c, op.s, op.w, op.d);
         } else if (type === opTextType) {

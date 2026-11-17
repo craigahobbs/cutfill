@@ -1,9 +1,9 @@
 // explore.js - the full-window 3D explorer, controlled with the keyboard
 
 import {escapeHtml, number, round, unitLabel} from './format.js';
+import {exploreStyle, svgOpen, svgText} from './draw.js';
 import {maxZoom, projection, view3DParts} from './view3d.js';
-import {opRect, opText} from './canvas.js';
-import {svgOpen, svgStyle, svgText} from './draw.js';
+import {opRect, opText, opsToSvg} from './canvas.js';
 import {argsURL} from './args.js';
 
 
@@ -20,10 +20,6 @@ const exploreHelp = [
 ];
 
 
-// The 3D explorer's drawing style - the full-window view has no margins
-export const exploreStyle = svgStyle.replace('margin: 0.75em 0 1.5em 0;', 'margin: 0;');
-
-
 // The 3D explorer's view argument names
 const exploreViewArgs = ['azimuth', 'tilt', 'exaggeration', 'zoom', 'x', 'y', 'z'];
 
@@ -37,10 +33,9 @@ function zoomStep(zoom, direction) {
 
 export class Explorer {
     constructor(data, globals, args) {
-        const {options} = data.plan;
         this.data = data;
         this.globals = globals;
-        this.ixOption = Math.max(0, Math.min(options.length - 1, args.option));
+        this.ixOption = data.optionIndex(args.option);
         this.analysis = data.analysis(this.ixOption);
         this.rows = data.rows(this.ixOption);
         this.state = {'help': true};
@@ -72,45 +67,49 @@ export class Explorer {
     }
 
 
-    // Draw the 3D explorer's view, filling the width and height - with "canvas", returns the drawing's width, height,
-    // label, and drawing operations (canvas.js) - the report link is left to the page. Otherwise, returns the SVG markup.
-    // "smoothLimits" are the smooth terrain's limits (default is the SVG drawing's - see view3DParts).
-    render(width, height, canvas = false, smoothLimits = undefined) {
-        const {state, data} = this;
-        const {plan, topo} = data;
-        const view = this.updateView(width, height);
-        const parts = view3DParts(plan, topo, this.rows, this.ixOption, this.analysis, view, canvas, smoothLimits);
-        const text = canvas ? opText : svgText;
-
-        // The overlays - the report link, the keyboard help, and the view status
-        const overlays = [];
-        if (!canvas) {
-            const backText = svgText('Back to the report', 12, 20, 14, 'start', '#1f4e8c', true);
-            overlays.push(`<a href="${escapeHtml(this.backURL())}">${backText}</a>`);
+    // Draw the 3D explorer's view, filling the width and height - returns the drawing (view3DParts) with the overlays
+    // (the keyboard help and the view status) - the report link is left to the page. "smoothLimits" are the smooth
+    // terrain's limits (default is the SVG drawing's - see view3DParts).
+    render(width, height, smoothLimits) {
+        const drawing = this.draw3D(width, height, smoothLimits);
+        for (const overlay of this.overlays()) {
+            drawing.ops.push(overlay);
         }
+        return drawing;
+    }
+
+
+    // Draw the 3D explorer's view as SVG markup, with the report link
+    renderSvg(width, height, smoothLimits) {
+        const drawing = this.draw3D(width, height, smoothLimits);
+        const backText = svgText('Back to the report', 12, 20, 14, 'start', '#1f4e8c', true);
+        return `${svgOpen(drawing.width, drawing.height, drawing.label, exploreStyle)}${opsToSvg(drawing.ops)}` +
+            `<a href="${escapeHtml(this.backURL())}">${backText}</a>${opsToSvg(this.overlays())}</svg>`;
+    }
+
+
+    // Draw the 3D view, without the overlays
+    draw3D(width, height, smoothLimits) {
+        const {data} = this;
+        const view = this.updateView(width, height);
+        return view3DParts(data.plan, data.topo, this.rows, this.ixOption, this.analysis, view, smoothLimits);
+    }
+
+
+    // Create the overlays' drawing operations - the keyboard help and the view status
+    overlays() {
+        const {state, view, height} = this;
         const helpLines = state.help ? exploreHelp : ['H - keyboard help'];
         const helpTop = height - 36 - 18 * helpLines.length;
-        const helpHeight = 18 * helpLines.length + 8;
-        overlays.push(canvas ? opRect(8, helpTop - 6, 380, helpHeight, 4, 'white', 0.75) :
-            `<rect x="8" y="${helpTop - 6}" width="380" height="${helpHeight}" rx="4" fill="white" fill-opacity="0.75"/>`);
+        const overlays = [opRect(8, helpTop - 6, 380, 18 * helpLines.length + 8, 4, 'white', 0.75)];
         for (let ixLine = 0; ixLine < helpLines.length; ixLine++) {
-            overlays.push(text(helpLines[ixLine], 16, helpTop + 7 + 18 * ixLine, 12, 'start', '#222', false));
+            overlays.push(opText(helpLines[ixLine], 16, helpTop + 7 + 18 * ixLine, 12, 'start', '#222', false));
         }
         const status = `Center x ${number(view.xc, 0)}, y ${number(view.yc, 0)}, z ${number(view.zc, 0)} ` +
-            `${unitLabel(plan.units, 'length')} - zoom ${round(view.zoom, 2)}x, rotation ${round(state.azimuth, 1)}, ` +
+            `${unitLabel(this.data.plan.units, 'length')} - zoom ${round(view.zoom, 2)}x, rotation ${round(state.azimuth, 1)}, ` +
             `tilt ${round(state.tilt, 1)}, exaggeration ${round(state.exaggeration, 2)}x`;
-        overlays.push(text(status, 12, height - 14, 12, 'start', '#222', false));
-
-        if (canvas) {
-            for (const overlay of overlays) {
-                parts.elements.push(overlay);
-            }
-            return {
-                'width': parts.width, 'height': parts.height, 'label': parts.label, 'ops': parts.elements,
-                'smooth': parts.smooth, 'step': parts.step, 'pointLimited': parts.pointLimited
-            };
-        }
-        return `${svgOpen(parts.width, parts.height, parts.label, exploreStyle)}${parts.elements.join('')}${overlays.join('')}</svg>`;
+        overlays.push(opText(status, 12, height - 14, 12, 'start', '#222', false));
+        return overlays;
     }
 
 

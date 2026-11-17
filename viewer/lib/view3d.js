@@ -1,12 +1,12 @@
 // view3d.js - the 3D views: projection, finished grade, terrain, road, and the report's 3D view choices
 
 import {
-    cellContours, colors, contourInterval, contourLevel, labelX, minRoadPx, niceStep, quadBrightness, rgb, roadColor, roadFeatureColor,
-    samplePoints, svgOpen, svgPolygon, svgPolyline, svgText, terrainFill
+    cellContours, colors, contourInterval, contourLevel, labelX, minRoadPx, niceStep, planMarkers, quadBrightness, rgb, roadColor,
+    roadFeatureColor, roadSides, samplePoints, streamColor, svgOpen, terrainFill
 } from './draw.js';
 import {centerlineAt, elevation, gradient, outsideBox, sampleAt, unitLength} from './model.js';
-import {fixed, station as formatStation, px, round} from './format.js';
-import {opCircle, opPolygon, opPolyline, opTerrainCell, opText} from './canvas.js';
+import {fixed, station as formatStation, round} from './format.js';
+import {opCircle, opPolygon, opPolyline, opTerrainCell, opText, opsToSvg} from './canvas.js';
 
 
 // The maximum 3D view zoom factor
@@ -20,7 +20,7 @@ const minorContourPx = 6;
 // The 3D terrain limits - the maximum number of terrain cells per side of a view ("sideCells"), and the smooth terrain's
 // maximum number of interpolated grid points ("points"), minimum elevation grid cell size to smooth, in pixels
 // ("facetPx"), minimum smooth cell size, in pixels ("cellPx"), and maximum number of cells per elevation grid cell side
-// ("count"). These are the SVG drawing's limits (the command line's reports).
+// ("count"). These are the SVG drawings' limits (view3D - the command line's reports).
 const smoothLimits = {'sideCells': 240, 'points': 40000, 'facetPx': 0, 'cellPx': 12, 'count': 4};
 
 
@@ -33,6 +33,10 @@ export const smoothLimitsCanvas = {'sideCells': null, 'points': 174000, 'facetPx
 
 // The 3D view's padding around the topography, in pixels (room for the start and end labels)
 const pad3D = 16;
+
+
+// The compass's north pointer color
+const compassColor = '#c0392b';
 
 
 // Compute the finished grade topography rows - the original grid with the road and its slopes applied
@@ -347,9 +351,9 @@ class DepthItems {
 
 
 // Project a terrain grid row's points at the given columns - the grid's northwest point is at (xOrigin, yTop). Fills
-// the pixel coordinates (and for SVG, the formatted "x,y" point strings), the depths, and the points' view outcodes - 1
-// left of the view, 2 right of it, plus 4 above it, 8 below it.
-function projectGridRow(view, rows, row, cols, xOrigin, yTop, spacing, points, pxs, pys, depths, codes) {
+// the pixel coordinates, the depths, and the points' view outcodes - 1 left of the view, 2 right of it, plus 4 above
+// it, 8 below it.
+function projectGridRow(view, rows, row, cols, xOrigin, yTop, spacing, pxs, pys, depths, codes) {
     const {xc, yc, zc, exaggeration, cosAz, sinAz, cosTilt, sinTilt, scale, width, height, cy} = view;
     const halfWidth = width * 0.5;
     const rowZ = rows[row];
@@ -363,9 +367,6 @@ function projectGridRow(view, rows, row, cols, xOrigin, yTop, spacing, points, p
         const away = x0 * sinAz + y0CosAz;
         const pxValue = halfWidth + (x0 * cosAz - y0SinAz) * scale;
         const pyValue = cy - (away * sinTilt + z0 * cosTilt) * scale;
-        if (points !== null) {
-            points[ixCol] = `${px(pxValue)},${px(pyValue)}`;
-        }
         pxs[ixCol] = pxValue;
         pys[ixCol] = pyValue;
         depths[ixCol] = away * cosTilt - z0 * sinTilt;
@@ -389,8 +390,8 @@ function coordsVisible(view, coords) {
 }
 
 
-// Add a 3D shaded quadrilateral item ([depth, element]) from world points, unless it's outside the view
-function pushQuad(items, view, point1, point2, point3, point4, color, bias, title, canvas) {
+// Add a 3D shaded quadrilateral item from world points, unless it's outside the view
+function pushQuad(items, view, point1, point2, point3, point4, color, bias, title = null) {
     const [coords, depth] = projectPoints(view, [point1, point2, point3, point4]);
     if (!coordsVisible(view, coords)) {
         return;
@@ -400,7 +401,7 @@ function pushQuad(items, view, point1, point2, point3, point4, color, bias, titl
         [point1[0], point1[1], point1[2] * exaggeration], [point2[0], point2[1], point2[2] * exaggeration],
         [point3[0], point3[1], point3[2] * exaggeration], [point4[0], point4[1], point4[2] * exaggeration]
     ));
-    items.push(depth - bias, canvas ? opPolygon(coords, fill, fill, 0.5, title) : svgPolygon(coords, fill, fill, 0.5, title));
+    items.push(depth - bias, opPolygon(coords, fill, fill, 0.5, title));
 }
 
 
@@ -534,19 +535,16 @@ function viewCullBox(view, topo, samples) {
 }
 
 
-// The contour color and the contour segment buffer
-const contourColor = 'rgba(70,50,30,0.45)';
+// The contour segment buffer
 const contourSegments = new Float64Array(8);
 
 
 // Create a 3D view's drawing of a projection (projection) - "rows" are the finished grade topography rows
-// (finishedRows). Returns an object with the drawing's width, height, label, and elements - SVG element markup strings,
-// or for a canvas drawing, the drawing operations (canvas.js) - and its terrain's grid step ("step"), its smooth terrain's
-// cells per grid cell side ("smooth"), and whether the point limit kept the terrain from being drawn more finely
-// ("pointLimited"). "limits" are the terrain's limits (smoothLimits).
-export function view3DParts(plan, topo, rows, ixOption, analysis, view, canvas = false, limits = smoothLimits) {
-    const polyline = canvas ? opPolyline : svgPolyline;
-    const text = canvas ? opText : svgText;
+// (finishedRows). Returns the drawing - an object with its width, height, label, and drawing operations ("ops" - see
+// canvas.js) - and its terrain's grid step ("step"), its smooth terrain's cells per grid cell side ("smooth"), and
+// whether the point limit kept the terrain from being drawn more finely ("pointLimited"). "limits" are the terrain's
+// limits (smoothLimits).
+export function view3DParts(plan, topo, rows, ixOption, analysis, view, limits = smoothLimits) {
     const {units} = plan;
     const {samples} = analysis;
     const option = plan.options[ixOption];
@@ -648,24 +646,22 @@ export function view3DParts(plan, topo, rows, ixOption, analysis, view, canvas =
 
     // Each cell corner is shared by up to four cells, so the corners are projected one grid row at a time
     const colCount = cols.length;
-    let pointsTop = canvas ? null : new Array(colCount);
     let pxsTop = new Float64Array(colCount);
     let pysTop = new Float64Array(colCount);
     let depthsTop = new Float64Array(colCount);
     let codesTop = new Int32Array(colCount);
-    let pointsBottom = canvas ? null : new Array(colCount);
     let pxsBottom = new Float64Array(colCount);
     let pysBottom = new Float64Array(colCount);
     let depthsBottom = new Float64Array(colCount);
     let codesBottom = new Int32Array(colCount);
     const ixColLast = colCount - 2;
 
-    // A canvas drawing's cell corners are kept in one coordinate array
-    const cellCoords = canvas ? new Float64Array(8 * Math.ceil((rowLast - rowFirst) / step) * (colCount - 1)) : null;
+    // The cells' corners are kept in one coordinate array
+    const cellCoords = new Float64Array(8 * Math.ceil((rowLast - rowFirst) / step) * (colCount - 1));
     let cellCount = 0;
 
     let row = rowFirst;
-    projectGridRow(view, drawRows, row, cols, xOrigin, yTop, drawSpacing, pointsTop, pxsTop, pysTop, depthsTop, codesTop);
+    projectGridRow(view, drawRows, row, cols, xOrigin, yTop, drawSpacing, pxsTop, pysTop, depthsTop, codesTop);
     while (row < rowLast) {
         const row2 = Math.min(rowLast, row + step);
         const y1 = yTop - row * drawSpacing;
@@ -678,9 +674,7 @@ export function view3DParts(plan, topo, rows, ixOption, analysis, view, canvas =
         const zRowNorth = drawRows[rowNorth];
         const zRowSouth = drawRows[rowSouth];
         const dySpan = (rowSouth - rowNorth) * drawSpacing;
-        projectGridRow(
-            view, drawRows, row2, cols, xOrigin, yTop, drawSpacing, pointsBottom, pxsBottom, pysBottom, depthsBottom, codesBottom
-        );
+        projectGridRow(view, drawRows, row2, cols, xOrigin, yTop, drawSpacing, pxsBottom, pysBottom, depthsBottom, codesBottom);
         for (let ixCol = 0; ixCol <= ixColLast; ixCol++) {
             // Skip the cell if its corners' bounding box is outside the view - if all of its corners are outside the same
             // side of the view
@@ -708,10 +702,7 @@ export function view3DParts(plan, topo, rows, ixOption, analysis, view, canvas =
             const zAvg = (zNW + zNE + zSE + zSW) * 0.25;
             const fill = terrainFill((zAvg - minZ) / rangeZ, -dzdx, -dzdy);
 
-            // Cell contours - a path of the minor contours and a path of the index contours (for a canvas drawing, arrays
-            // of the segments' coordinates)
-            let minorPath = '';
-            let indexPath = '';
+            // Cell contours - the minor contours' and the index contours' segments' coordinates
             let minorSegments = null;
             let indexSegments = null;
             const zMax = Math.max(zNW, zNE, zSE, zSW);
@@ -736,49 +727,27 @@ export function view3DParts(plan, topo, rows, ixOption, analysis, view, canvas =
                         y0 = y1 - contourSegments[ixValue + 3] * cellHeight - yc;
                         const sx2 = viewHalfWidth + (x0 * cosAz - y0 * sinAz) * scale;
                         const sy2 = cy - ((x0 * sinAz + y0 * cosAz) * sinTilt + zUp) * scale;
-                        if (canvas) {
-                            if (isIndex) {
-                                (indexSegments ??= []).push(sx1, sy1, sx2, sy2);
-                            } else {
-                                (minorSegments ??= []).push(sx1, sy1, sx2, sy2);
-                            }
+                        if (isIndex) {
+                            (indexSegments ??= []).push(sx1, sy1, sx2, sy2);
                         } else {
-                            const segment = `M${px(sx1)} ${px(sy1)}L${px(sx2)} ${px(sy2)}`;
-                            if (isIndex) {
-                                indexPath += segment;
-                            } else {
-                                minorPath += segment;
-                            }
+                            (minorSegments ??= []).push(sx1, sy1, sx2, sy2);
                         }
                     }
                 }
             }
-            if (canvas) {
-                const offset = cellCount * 8;
-                cellCoords[offset] = pxsTop[ixCol];
-                cellCoords[offset + 1] = pysTop[ixCol];
-                cellCoords[offset + 2] = pxsTop[ixCol + 1];
-                cellCoords[offset + 3] = pysTop[ixCol + 1];
-                cellCoords[offset + 4] = pxsBottom[ixCol + 1];
-                cellCoords[offset + 5] = pysBottom[ixCol + 1];
-                cellCoords[offset + 6] = pxsBottom[ixCol];
-                cellCoords[offset + 7] = pysBottom[ixCol];
-                cellCount += 1;
-                items.push(cellDepth, opTerrainCell(cellCoords, offset, fill, minorSegments, indexSegments));
-                continue;
-            }
-            let cell = `<polygon points="${pointsTop[ixCol]} ${pointsTop[ixCol + 1]} ${pointsBottom[ixCol + 1]} ${pointsBottom[ixCol]}" ` +
-                `fill="${fill}" stroke="${fill}" stroke-width="0.6"/>`;
-            if (minorPath !== '') {
-                cell += `<path d="${minorPath}" fill="none" stroke="${contourColor}" stroke-width="0.5" stroke-linecap="round"/>`;
-            }
-            if (indexPath !== '') {
-                cell += `<path d="${indexPath}" fill="none" stroke="${contourColor}" stroke-width="1.2" stroke-linecap="round"/>`;
-            }
-            items.push(cellDepth, cell);
+            const offset = cellCount * 8;
+            cellCoords[offset] = pxsTop[ixCol];
+            cellCoords[offset + 1] = pysTop[ixCol];
+            cellCoords[offset + 2] = pxsTop[ixCol + 1];
+            cellCoords[offset + 3] = pysTop[ixCol + 1];
+            cellCoords[offset + 4] = pxsBottom[ixCol + 1];
+            cellCoords[offset + 5] = pysBottom[ixCol + 1];
+            cellCoords[offset + 6] = pxsBottom[ixCol];
+            cellCoords[offset + 7] = pysBottom[ixCol];
+            cellCount += 1;
+            items.push(cellDepth, opTerrainCell(cellCoords, offset, fill, minorSegments, indexSegments));
         }
         row = row2;
-        [pointsTop, pointsBottom] = [pointsBottom, pointsTop];
         [pxsTop, pxsBottom] = [pxsBottom, pxsTop];
         [pysTop, pysBottom] = [pysBottom, pysTop];
         [depthsTop, depthsBottom] = [depthsBottom, depthsTop];
@@ -789,8 +758,8 @@ export function view3DParts(plan, topo, rows, ixOption, analysis, view, canvas =
     for (const feature of topo.features) {
         const {type} = feature;
         let {points} = feature;
-        // A stream or a road is a line - a rock or an exclusion area is a dashed outline
-        const line = type === 'stream' || type === 'road';
+        // A stream, a road, or a trail is a line - a rock or an exclusion area is a dashed outline
+        const line = type !== 'rock' && type !== 'exclusion';
         if (!line) {
             points = [...points, points[0]];
         }
@@ -828,7 +797,7 @@ export function view3DParts(plan, topo, rows, ixOption, analysis, view, canvas =
                         const [pxb, pyb] = pointB;
                         if (Math.max(pxa, pxb) >= 0 && Math.min(pxa, pxb) <= width && Math.max(pya, pyb) >= 0 &&
                             Math.min(pya, pyb) <= viewHeight) {
-                            items.push((pointA[2] + pointB[2]) / 2 - cellSize * 0.5, polyline([pxa, pya, pxb, pyb], stroke,
+                            items.push((pointA[2] + pointB[2]) / 2 - cellSize * 0.5, opPolyline([pxa, pya, pxb, pyb], stroke,
                                 strokeWidth, line ? null : '4 3'));
                         }
                     }
@@ -866,20 +835,20 @@ export function view3DParts(plan, topo, rows, ixOption, analysis, view, canvas =
 
             // Road surface (or bridge deck)
             pushQuad(items, view, prevPoints[1], points[1], points[2], prevPoints[2],
-                bridge ? colors.bridge : (existing ? colors.existing : surfaceColor), bias, title, canvas);
+                bridge ? colors.bridge : (existing ? colors.existing : surfaceColor), bias, title);
             if (bridge) {
                 for (const ixEdge of [1, 2]) {
                     const edgePrev = prevPoints[ixEdge];
                     const edge = points[ixEdge];
                     pushQuad(items, view, edgePrev, edge, [edge[0], edge[1], edge[2] - deckDepth],
-                        [edgePrev[0], edgePrev[1], edgePrev[2] - deckDepth], colors.bridge, bias * 1.1, null, canvas);
+                        [edgePrev[0], edgePrev[1], edgePrev[2] - deckDepth], colors.bridge, bias * 1.1);
                 }
                 prevPoints = points;
                 continue;
             }
 
             // Side slopes and walls
-            for (const [sideName, ixDaylight, ixEdge] of [['left', 0, 1], ['right', 3, 2]]) {
+            for (const [sideName, ixDaylight, ixEdge] of roadSides) {
                 const side = sample[sideName];
                 const sidePrev = prev[sideName];
                 const {kind} = side;
@@ -888,12 +857,10 @@ export function view3DParts(plan, topo, rows, ixOption, analysis, view, canvas =
                 const edge = points[ixEdge];
                 if (kind === 'wall' || kindPrev === 'wall') {
                     pushQuad(items, view, edgePrev, edge, [edge[0], edge[1], edge[2] + side.drop],
-                        [edgePrev[0], edgePrev[1], edgePrev[2] + sidePrev.drop], colors.wall, bias * 0.9, null, canvas);
+                        [edgePrev[0], edgePrev[1], edgePrev[2] + sidePrev.drop], colors.wall, bias * 0.9);
                 } else if (kind !== 'none' || kindPrev !== 'none') {
                     const slopeKind = kind !== 'none' ? kind : kindPrev;
-                    pushQuad(
-                        items, view, edgePrev, prevPoints[ixDaylight], points[ixDaylight], edge, colors[slopeKind], bias * 0.9, null, canvas
-                    );
+                    pushQuad(items, view, edgePrev, prevPoints[ixDaylight], points[ixDaylight], edge, colors[slopeKind], bias * 0.9);
                 }
             }
         }
@@ -913,8 +880,8 @@ export function view3DParts(plan, topo, rows, ixOption, analysis, view, canvas =
             const prev = samples[ixSample - 1];
             const [coords, depth] = projectPoints(view, [[prev.x, prev.y, prev.z], [sample.x, sample.y, sample.z]]);
             if (coordsVisible(view, coords)) {
-                items.push(depth - bias * 1.2, polyline(coords, 'white', 6));
-                items.push(depth - lineBias, polyline(coords, roadColor, 3));
+                items.push(depth - bias * 1.2, opPolyline(coords, 'white', 6));
+                items.push(depth - lineBias, opPolyline(coords, roadColor, 3));
             }
         }
     }
@@ -925,7 +892,7 @@ export function view3DParts(plan, topo, rows, ixOption, analysis, view, canvas =
             const sample = sampleAt(samples, structure.station);
             const points = samplePoints(sample, halfWidth);
             const [coords, depth] = projectPoints(view, [points[0], points[3]]);
-            items.push(depth - bias * 1.2, polyline(coords, '#2a6fdb', 4));
+            items.push(depth - bias * 1.2, opPolyline(coords, streamColor, 4));
         }
     }
 
@@ -935,49 +902,40 @@ export function view3DParts(plan, topo, rows, ixOption, analysis, view, canvas =
     for (let stationValue = labelStep; stationValue < length - labelStep * 0.25; stationValue += labelStep) {
         const [pxValue, pyValue, depth] = project(view, ...centerlineAt(samples, stationValue));
         if (pxValue >= 0 && pxValue <= width && pyValue >= 0 && pyValue <= viewHeight) {
-            const labelText = text(formatStation(stationValue, units), pxValue + 6, pyValue - 9, 11, 'start', '#222', false);
-            items.push(depth - labelBias, canvas ? [opCircle(pxValue, pyValue, 3, '#222', 'white'), labelText] :
-                `<circle cx="${px(pxValue)}" cy="${px(pyValue)}" r="3" fill="#222" stroke="white"/>${labelText}`);
+            items.push(depth - labelBias, [
+                opCircle(pxValue, pyValue, 3, '#222', 'white'),
+                opText(formatStation(stationValue, units), pxValue + 6, pyValue - 9, 11, 'start', '#222', false)
+            ]);
         }
     }
 
     // Sort the items by depth, farthest first
-    const elements = items.sorted();
+    const ops = items.sorted();
 
     // Start and end markers (always on top) - the poles are the same height on screen at any zoom
     const poleHeight = poleHeight3D(topo, exaggeration) / view.zoom;
-    for (const [point, defaultLabel, color] of [[plan.start, 'Start', '#1a8f3c'], [plan.end, 'End', '#c0392b']]) {
+    for (const [point, label, color] of planMarkers(plan)) {
         const {x, y} = point;
         let z = elevation(topo, x, y);
         z = z === null ? minZ : z;
         const base = project(view, x, y, z);
         const top = project(view, x, y, z + poleHeight);
-        elements.push(polyline([base[0], base[1], top[0], top[1]], color, 2.5));
-        const label = point.label ?? defaultLabel;
-        elements.push(text(label, labelX(label, 13, top[0], width), top[1] - 9, 13, 'middle', color, true));
+        ops.push(opPolyline([base[0], base[1], top[0], top[1]], color, 2.5));
+        ops.push(opText(label, labelX(label, 13, top[0], width), top[1] - 9, 13, 'middle', color, true));
     }
 
     // Compass
-    if (canvas) {
-        elements.push(...compassOps(view, width - 36, 36));
-    } else {
-        elements.push(compass(view, width - 36, 36));
+    for (const op of compassOps(view, width - 36, 36)) {
+        ops.push(op);
     }
 
     const label = `3D view of the ${option.name} road plan option`;
-    return {width, 'height': viewHeight, label, elements, smooth, step, pointLimited};
+    return {width, 'height': viewHeight, label, ops, smooth, step, pointLimited};
 }
 
 
-// Create a 3D view SVG element markup
-export function view3D(plan, topo, rows, ixOption, analysis, view) {
-    const parts = view3DParts(plan, topo, rows, ixOption, analysis, view);
-    return `${svgOpen(parts.width, parts.height, parts.label)}${parts.elements.join('')}</svg>`;
-}
-
-
-// Compute a compass's north pointer polygon and label position for a view
-function compassGeometry(view, cx, cy) {
+// Create a compass's drawing operations - a pointer to north in a view
+function compassOps(view, cx, cy) {
     const north = project(view, view.xc, view.yc + 1, view.zc);
     const center = project(view, view.xc, view.yc, view.zc);
     const dx = north[0] - center[0];
@@ -985,26 +943,18 @@ function compassGeometry(view, cx, cy) {
     const length = Math.sqrt(dx * dx + dy * dy);
     const ux = dx / length;
     const uy = dy / length;
-    return [[cx + ux * 18, cy + uy * 18, cx - uy * 6, cy + ux * 6, cx + uy * 6, cy - ux * 6], cx - ux * 12, cy - uy * 12];
-}
-
-
-// Create a compass's drawing operations showing north for a view
-function compassOps(view, cx, cy) {
-    const [pointer, labelXValue, labelYValue] = compassGeometry(view, cx, cy);
     return [
         opCircle(cx, cy, 22, 'white', '#888', null, 0.8),
-        opPolygon(pointer, '#c0392b', '#c0392b', 1),
-        opText('N', labelXValue, labelYValue, 11, 'middle', '#333', true)
+        opPolygon([cx + ux * 18, cy + uy * 18, cx - uy * 6, cy + ux * 6, cx + uy * 6, cy - ux * 6], compassColor, compassColor, 1),
+        opText('N', cx - ux * 12, cy - uy * 12, 11, 'middle', '#333', true)
     ];
 }
 
 
-// Create a compass element showing north for a view
-function compass(view, cx, cy) {
-    const [pointer, labelXValue, labelYValue] = compassGeometry(view, cx, cy);
-    return `<circle cx="${cx}" cy="${cy}" r="22" fill="white" fill-opacity="0.8" stroke="#888"/>` +
-        `${svgPolygon(pointer, '#c0392b', '#c0392b', 1)}${svgText('N', labelXValue, labelYValue, 11, 'middle', '#333', true)}`;
+// Create a 3D view's SVG markup (see view3DParts)
+export function view3D(plan, topo, rows, ixOption, analysis, view) {
+    const drawing = view3DParts(plan, topo, rows, ixOption, analysis, view);
+    return `${svgOpen(drawing.width, drawing.height, drawing.label)}${opsToSvg(drawing.ops)}</svg>`;
 }
 
 
@@ -1014,8 +964,10 @@ function compass(view, cx, cy) {
 
 
 // The topographic features' line colors and widths, by feature type
-const featureStrokes = {'stream': '#2a6fdb', 'road': roadFeatureColor, 'rock': '#555555', 'exclusion': 'rgba(208,49,45,0.55)'};
-const featureWidths = {'stream': 2.5, 'road': 1.5, 'rock': 1, 'exclusion': 1};
+const featureStrokes = {
+    'stream': streamColor, 'road': roadFeatureColor, 'trail': roadFeatureColor, 'rock': '#555555', 'exclusion': 'rgba(208,49,45,0.55)'
+};
+const featureWidths = {'stream': 2.5, 'road': 1.5, 'trail': 1, 'rock': 1, 'exclusion': 1};
 
 
 // The report 3D views' vertical exaggeration
@@ -1041,13 +993,13 @@ const maxViewTurn = 40;
 // Choose the report's 3D views - an overview of the whole site, then, if the road is too narrow to see in the
 // overview, views of equal road segments from the start to the end. Returns an array of report view objects ("args",
 // "view", "station", "endStation", and "leftToRight").
-export function reportViews(topo, rows, analysis, halfWidth, width, smooth) {
+export function reportViews(topo, rows, analysis, halfWidth, width) {
     const maxHeight = Math.round(width * 0.75);
     const {samples, length} = analysis;
     const finishedTopo = {...topo, rows};
 
     // The overview - the whole site, fit to its terrain
-    let viewpoint = chooseViewpoint(topo, finishedTopo, samples, 0, length, [55, 70], null);
+    let viewpoint = chooseViewpoint(topo, finishedTopo, samples, [55, 70], null);
     const terrainPoints = [];
     const {nRows, nCols, spacing} = topo;
     const step = Math.max(1, Math.ceil(Math.max(nRows, nCols) / 40));
@@ -1058,7 +1010,6 @@ export function reportViews(topo, rows, analysis, halfWidth, width, smooth) {
         }
     }
     const overviewArgs = fitViewpoint(topo, terrainPoints, viewpoint, width, maxHeight);
-    overviewArgs.smooth = smooth;
     const views = [reportView(topo, samples, 0, length, viewpoint, overviewArgs, width, maxHeight)];
     const overview = views[0].view;
     if (2 * halfWidth * overview.scale >= reportRoadPx) {
@@ -1072,13 +1023,13 @@ export function reportViews(topo, rows, analysis, halfWidth, width, smooth) {
     for (let ixSegment = 0; ixSegment < count; ixSegment++) {
         const stationValue = length * ixSegment / count;
         const endStation = length * (ixSegment + 1) / count;
-        viewpoint = chooseViewpoint(topo, finishedTopo, samples, stationValue, endStation, [40, 55, 70], baseAzimuth);
+        const segment = samples.filter((sample) => sample.station >= stationValue - 1e-6 && sample.station <= endStation + 1e-6);
+        viewpoint = chooseViewpoint(topo, finishedTopo, segment, [40, 55, 70], baseAzimuth);
         const footprint = [];
-        for (const sample of segmentSamples(samples, stationValue, endStation)) {
+        for (const sample of segment) {
             footprint.push(...samplePoints(sample, halfWidth));
         }
         const viewArgs = fitViewpoint(topo, footprint, viewpoint, width, maxHeight);
-        viewArgs.smooth = smooth;
         views.push(reportView(topo, samples, stationValue, endStation, viewpoint, viewArgs, width, maxHeight));
     }
     return views;
@@ -1113,25 +1064,19 @@ function reportView(topo, samples, stationValue, endStation, viewpoint, viewArgs
 }
 
 
-// Get the road samples within a station range
-function segmentSamples(samples, stationValue, endStation) {
-    return samples.filter((sample) => sample.station >= stationValue - 1e-6 && sample.station <= endStation + 1e-6);
-}
-
-
 // Compute the signed difference of two angles, in degrees (-180 to 180)
 function angleDifference(angle, otherAngle) {
     return (angle - otherAngle + 540) % 360 - 180;
 }
 
 
-// Choose a road segment's viewpoint - returns an object with the "azimuth" and "tilt" (degrees). The viewpoint looks
-// across the segment's direction of travel. Without a base azimuth (the overview), it looks from the side looking
-// upslope (or, on flat ground, the side with the start on the left). Otherwise, it looks from the base azimuth's side,
-// turned at most maxViewTurn degrees from the base azimuth - or along the base azimuth itself. The lowest of the tilts
-// that shows all of the road points wins - otherwise, the view is from straight above, which hides none of the road.
-function chooseViewpoint(topo, finishedTopo, samples, stationValue, endStation, tilts, baseAzimuth) {
-    const segment = segmentSamples(samples, stationValue, endStation);
+// Choose the viewpoint of a road segment (its samples) - returns an object with the "azimuth" and "tilt" (degrees). The
+// viewpoint looks across the segment's direction of travel. Without a base azimuth (the overview), it looks from the
+// side looking upslope (or, on flat ground, the side with the start on the left). Otherwise, it looks from the base
+// azimuth's side, turned at most maxViewTurn degrees from the base azimuth - or along the base azimuth itself. The
+// lowest of the tilts that shows all of the road points wins - otherwise, the view is from straight above, which hides
+// none of the road.
+function chooseViewpoint(topo, finishedTopo, segment, tilts, baseAzimuth) {
     const [first] = segment;
     const last = segment[segment.length - 1];
     let travelX = last.x - first.x;

@@ -3,12 +3,12 @@
 import {costTable, structuresTable} from './tables.js';
 import {displayQuantity, encodeUrl, escapeHtml, fixed, station as formatStation, headerId, number, unitLabel} from './format.js';
 import {latLongText, planLatLong} from './geo.js';
+import {planMarkers, svgStyle} from './draw.js';
 import {planView, profileView} from './planView.js';
-import {svgOpen, svgStyle} from './draw.js';
+import {view3D, view3DParts} from './view3d.js';
 import {argsLink} from './args.js';
 import {markdownHtml} from './markdown.js';
 import {sampleAt} from './model.js';
-import {view3DParts} from './view3d.js';
 
 
 // The cost score explanation
@@ -51,9 +51,9 @@ function table(fields, rows) {
 // drawing (view3DParts). Otherwise, they're SVG drawings with the SVG terrain limits (smoothLimits).
 export function buildReport(data, globals, args, width, canvasViews = false) {
     const {plan, topo} = data;
-    const {units, options} = plan;
-    const ixOption = Math.max(0, Math.min(options.length - 1, args.option));
-    const option = options[ixOption];
+    const {units} = plan;
+    const ixOption = data.optionIndex(args.option);
+    const option = plan.options[ixOption];
     const analyses = data.analyses();
     const analysis = analyses[ixOption];
     const html = [];
@@ -67,11 +67,9 @@ export function buildReport(data, globals, args, width, canvasViews = false) {
     // The site - the start and end points' latitudes and longitudes, and the topography's sources
     const site = [];
     if ('georeference' in plan) {
-        site.push(`<strong>Site:</strong> ${['start', 'end'].map((name) => {
-            const point = plan[name];
-            const label = point.label ?? (name === 'start' ? 'Start' : 'End');
-            return `${escapeHtml(label)} (${latLongText(planLatLong(plan, point.x, point.y))})`;
-        }).join(' to ')}.`);
+        site.push(`<strong>Site:</strong> ${planMarkers(plan).map(([point, label]) => (
+            `${escapeHtml(label)} (${latLongText(planLatLong(plan, point.x, point.y))})`
+        )).join(' to ')}.`);
     }
     const sources = plan.topography.sources ?? [];
     if (sources.length > 0) {
@@ -128,22 +126,21 @@ export function buildReport(data, globals, args, width, canvasViews = false) {
         const reportView = views[ixView];
         html.push(`<p>${viewCaption(globals, units, reportView, ixView, views.length)}</p>`);
         const {view} = reportView;
-        const label = `3D view of the ${option.name} road plan option`;
         if (canvasViews) {
             // A canvas 3D view, drawn later (render) - smoothed wherever the canvas terrain limits allow
             const smoothView = {...view, 'smooth': true};
+            const label = `3D view of the ${option.name} road plan option`;
             html.push(`<canvas width="${view.width}" height="${view.height}" role="img" aria-label="${escapeHtml(label)}" ` +
                 `style="${svgStyle}" data-view="${ixView}"></canvas>`);
             views3D.push({
                 view,
                 'render': (limits) => data.drawing(
                     `3d/${ixOption}/${width}/${ixView}/${limits.points}`,
-                    () => view3DParts(plan, topo, data.rows(ixOption), ixOption, analysis, smoothView, true, limits)
+                    () => view3DParts(plan, topo, data.rows(ixOption), ixOption, analysis, smoothView, limits)
                 )
             });
         } else {
-            const {elements} = view3DParts(plan, topo, data.rows(ixOption), ixOption, analysis, view);
-            html.push(`${svgOpen(view.width, view.height, label)}${elements.join('')}</svg>`);
+            html.push(view3D(plan, topo, data.rows(ixOption), ixOption, analysis, view));
         }
     }
 
@@ -166,11 +163,14 @@ export function buildReport(data, globals, args, width, canvasViews = false) {
         html.push(textTable(structuresTable(units, option, analysis)));
     }
 
-    // Source topographic map image
-    const imageURL = data.imageURL ?? null;
+    // Source topographic map image - a local plan's image is opened with the plan
+    const {imageURL, imageMissing} = data;
     if (imageURL !== null) {
         html.push(heading(3, 'Source Map'));
         html.push(`<p><img src="${escapeHtml(imageURL)}" alt="The source topographic map" style="max-width: 100%; height: auto;"></p>`);
+    } else if (imageMissing !== null) {
+        html.push(heading(3, 'Source Map'));
+        html.push(`<p>Open the map image ("${escapeHtml(imageMissing)}") with the road plan to show it here.</p>`);
     }
 
     // Footer

@@ -1,13 +1,14 @@
 // app.js - the Roadie viewer web application
 
 import {AdaptiveSmoothing, reportBudget} from './smoothing.js';
-import {Explorer, exploreStyle} from './explore.js';
 import {argsLink, argsParse, argsURL, parseHash} from './args.js';
 import {buildReport, planImageURL} from './report.js';
 import {escapeHtml, round} from './format.js';
 import {hitTitle, opCell, paintOps} from './canvas.js';
+import {Explorer} from './explore.js';
 import {PlanData} from './planData.js';
 import {buildDoc} from './doc.js';
+import {exploreStyle} from './draw.js';
 import {planPad} from './planView.js';
 import {smoothLimitsCanvas} from './view3d.js';
 import {validatePlan} from './model.js';
@@ -27,9 +28,9 @@ const printRatio = 2;
 const canvasBackground = '#f4f1ea';
 
 
-// Paint a canvas 3D drawing (a report view's "elements" or the explorer's "ops") at a pixel ratio - the canvas bitmap is
-// the drawing's size times the ratio. The canvas's CSS size is the drawing's - its width, and with "fixedHeight", its
-// height (otherwise, its height follows its width).
+// Paint a canvas 3D drawing (a report view's or the explorer's) at a pixel ratio - the canvas bitmap is the drawing's
+// size times the ratio. The canvas's CSS size is the drawing's - its width, and with "fixedHeight", its height
+// (otherwise, its height follows its width).
 function paintCanvas(canvas, drawing, ratio, fixedHeight) {
     const {width, height} = drawing;
     const bitmapWidth = Math.round(width * ratio);
@@ -48,14 +49,14 @@ function paintCanvas(canvas, drawing, ratio, fixedHeight) {
     // The drawing's background is painted, not left to the canvas's style, so it prints (printing omits backgrounds)
     ctx.fillStyle = canvasBackground;
     ctx.fillRect(0, 0, width, height);
-    paintOps(ctx, drawing.ops ?? drawing.elements);
+    paintOps(ctx, drawing.ops);
 }
 
 
 // Count a canvas 3D drawing's terrain cells
 function countCells(drawing) {
     let cells = 0;
-    for (const op of drawing.ops ?? drawing.elements) {
+    for (const op of drawing.ops) {
         if (op.t === opCell) {
             cells += 1;
         }
@@ -69,9 +70,7 @@ function showCanvasTitle(canvas, drawing, event) {
     if (drawing !== null) {
         const rect = canvas.getBoundingClientRect();
         const scale = drawing.width / rect.width;
-        const title = hitTitle(
-            drawing.ops ?? drawing.elements, (event.clientX - rect.left - 1) * scale, (event.clientY - rect.top - 1) * scale
-        );
+        const title = hitTitle(drawing.ops, (event.clientX - rect.left - 1) * scale, (event.clientY - rect.top - 1) * scale);
         if ((canvas.title || null) !== title) {
             canvas.title = title ?? '';
         }
@@ -145,6 +144,7 @@ export class RoadieApp {
         this.plans = new Map();
         this.localFiles = new Map();
         this.dbPromise = null;
+        this.adaptiveSmoothing = null;
         this.page = null;
         this.routeCount = 0;
         this.printing = false;
@@ -196,6 +196,13 @@ export class RoadieApp {
             this.dbPromise = openDb(this.window);
         }
         return this.dbPromise;
+    }
+
+
+    // The canvas 3D drawings' adaptive terrain - it starts from the cell cost measured the last time
+    get smoothing() {
+        this.adaptiveSmoothing ??= new AdaptiveSmoothing(this.storageGet(cellCostKey));
+        return this.adaptiveSmoothing;
     }
 
 
@@ -303,8 +310,11 @@ export class RoadieApp {
         if (image !== undefined) {
             if (isLocal) {
                 const imageBlob = await this.localFile(image.slice(image.lastIndexOf('/') + 1));
-                data.imageURL = imageBlob !== null ? this.window.URL.createObjectURL(imageBlob) : null;
-                data.imageMissing = imageBlob === null ? image : null;
+                if (imageBlob !== null) {
+                    data.imageURL = this.window.URL.createObjectURL(imageBlob);
+                } else {
+                    data.imageMissing = image;
+                }
             } else {
                 data.imageURL = planImageURL(file, image);
             }
@@ -462,12 +472,7 @@ class ReportPage {
         const scrollY = headerId === null && this.report !== undefined ? window.scrollY : null;
         const report = buildReport(data, this.globals, this.args, this.width, true);
         this.report = report;
-        let {html} = report;
-        if (data.imageMissing) {
-            html = html.replace('<hr>', `<h3 id="source-map">Source Map</h3><p>Open the map image ("${escapeHtml(data.imageMissing)}") ` +
-                'with the road plan to show it here.</p>\n<hr>');
-        }
-        app.render(report.title, html, headerId);
+        app.render(report.title, report.html, headerId);
         if (scrollY !== null) {
             window.scrollTo(0, scrollY);
         }
@@ -513,7 +518,6 @@ class ReportPage {
         this.pending.delete(ixView);
         this.observer.unobserve(this.canvases[ixView]);
         const {app} = this;
-        app.smoothing ??= new AdaptiveSmoothing(app.storageGet(cellCostKey));
         const {smoothing, window} = app;
         const timeBegin = performance.now();
         const points = smoothing.targetPoints(reportBudget);
@@ -526,7 +530,7 @@ class ReportPage {
         window.requestAnimationFrame(() => {
             smoothing.recordCost(performance.now() - timeBegin, cells);
             app.storageSet(cellCostKey, smoothing.cellCost);
-            app.logTime(`3D view ${ixView + 1} - ${drawing.elements.length} operations, ${cells} cells, step ${drawing.step}, ` +
+            app.logTime(`3D view ${ixView + 1} - ${drawing.ops.length} operations, ${cells} cells, step ${drawing.step}, ` +
                 `smooth ${drawing.smooth}${drawing.pointLimited ? ` (${points} point limit)` : ''} - drawn`, timeBegin);
         });
     }
@@ -589,7 +593,6 @@ class ExplorePage {
         this.frameId = null;
         this.refineId = null;
         this.drawing = null;
-        app.smoothing ??= new AdaptiveSmoothing(app.storageGet(cellCostKey));
         app.document.title = `${data.plan.title} - 3D`;
         app.document.body.classList.toggle('roadie-explore', true);
         app.window.scrollTo(0, 0);
@@ -617,7 +620,7 @@ class ExplorePage {
         const timeBegin = performance.now();
         const [width, height] = this.size();
         const points = smoothing.points(still);
-        const drawing = this.explorer.render(width, height, true, {...smoothLimitsCanvas, points});
+        const drawing = this.explorer.render(width, height, {...smoothLimitsCanvas, points});
         this.drawing = drawing;
         const timeBuilt = performance.now();
         canvas.setAttribute('aria-label', drawing.label);

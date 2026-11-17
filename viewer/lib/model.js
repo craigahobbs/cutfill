@@ -147,8 +147,12 @@ export const roadieTypes = parseSchemaMarkdown([
     '    # An area polygon the road must avoid (building, wetland, property line, etc.)',
     '    exclusion',
     '',
-    '    # An existing road or trail polyline - it\'s drawn, for reference',
+    '    # An existing road polyline - it\'s drawn, and the planning tools\' route search may follow it (see the',
+    '    # existing road structure)',
     '    road',
+    '',
+    '    # An existing trail polyline - it\'s drawn, for reference',
+    '    trail',
     '',
     '',
     '# The road design criteria',
@@ -375,7 +379,7 @@ export const defaultRates = {
 
 
 // The meters per foot
-const metersPerFoot = 0.3048
+const metersPerFoot = 0.3048;
 
 
 // Get the meters per plan unit
@@ -632,6 +636,42 @@ export function outsideBox(box, xMin, xMax, yMin, yMax) {
 }
 
 
+// The number of segments in a polyline's chunk (segmentChunks)
+const chunkSegments = 16;
+
+
+// Bound a polyline's segments in chunks, to skip the segments that can't cross another segment - a segment outside a
+// chunk's bounding box can't cross the chunk's segments. Returns [ixPoint, ixPointEnd, bounds] arrays - the chunk's
+// segments are those ending at points ixPoint up to ixPointEnd.
+function segmentChunks(points) {
+    const count = points.length;
+    const chunks = [];
+    for (let ixPoint = 1; ixPoint < count;) {
+        const ixPointEnd = Math.min(count, ixPoint + chunkSegments);
+        chunks.push([ixPoint, ixPointEnd, bounds(points, ixPoint - 1, ixPointEnd)]);
+        ixPoint = ixPointEnd;
+    }
+    return chunks;
+}
+
+
+// Create the polygon indexes (polygonIndex) of a topography's features of a type
+function featureIndexes(topo, type) {
+    return topo.features.filter((feature) => feature.type === type).map((feature) => polygonIndex(feature.points));
+}
+
+
+// Determine if a point is inside any of the indexed polygons
+function pointInPolygons(x, y, indexes) {
+    for (const index of indexes) {
+        if (pointInPolygon(x, y, index)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+
 //
 // Cross sections
 //
@@ -709,8 +749,7 @@ function crossSection(depth, slope, halfWidth, cutSlope, fillSlope, wallLeft, wa
 
 // Compute an option's alignment - point objects with "x", "y", "z", and "station". Within an existing road, the
 // elevation is the ground's.
-function optionAlignment(topo, option) {
-    const existingRoads = structuresOfType(option, 'existingRoad');
+function optionAlignment(topo, option, existingRoads) {
     const points = [];
     let stationValue = 0;
     let prev = null;
@@ -748,17 +787,17 @@ function existingAt(existingRoads, stationValue) {
 }
 
 
-// Find the structures of a type covering a station
-function structureAt(structures, type, stationValue, side) {
+// Determine if any of the structures (bridges or retaining walls) covers a station - on a side of the road, if given
+function structureAt(structures, stationValue, side = null) {
     for (const structure of structures) {
-        if (structure.type === type && stationValue >= structure.station && stationValue <= structure.endStation) {
+        if (stationValue >= structure.station && stationValue <= structure.endStation) {
             const structureSide = structure.side ?? 'both';
             if (side === null || structureSide === 'both' || structureSide === side) {
-                return structure;
+                return true;
             }
         }
     }
-    return null;
+    return false;
 }
 
 
@@ -767,22 +806,13 @@ const maxSamples = 2000;
 
 
 // Compute an option's cross section samples
-function optionSamples(plan, topo, option, alignment) {
+function optionSamples(topo, option, alignment, rockCutSlope, bridges, existingRoads) {
     const {section} = option;
     const halfWidth = section.width * 0.5;
     const cutSlope = section.cutSlope ?? 1;
     const fillSlope = section.fillSlope ?? 1.5;
-    const {rockCutSlope} = planCriteria(plan);
-    // The bridges and walls (each sample looks them up, so the other structures are filtered out once)
-    const bridges = structuresOfType(option, 'bridge');
     const walls = structuresOfType(option, 'retainingWall');
-    const existingRoads = structuresOfType(option, 'existingRoad');
-    const rockFeatures = [];
-    for (const feature of topo.features) {
-        if (feature.type === 'rock') {
-            rockFeatures.push(polygonIndex(feature.points));
-        }
-    }
+    const rockFeatures = featureIndexes(topo, 'rock');
 
     // Compute the sample interval
     const length = alignment[alignment.length - 1].station;
@@ -822,17 +852,9 @@ function optionSamples(plan, topo, option, alignment) {
             z = existing ? ground : z;
         }
 
-        // Rock?
-        let rock = false;
-        for (const rockPoints of rockFeatures) {
-            if (pointInPolygon(x, y, rockPoints)) {
-                rock = true;
-                break;
-            }
-        }
-
         // Compute the cross section - a bridge or an existing road has no earthwork
-        const bridge = bridges.length > 0 && structureAt(bridges, 'bridge', stationValue, null) !== null;
+        const rock = pointInPolygons(x, y, rockFeatures);
+        const bridge = structureAt(bridges, stationValue);
         let section2;
         if (bridge || existing) {
             section2 = crossSection(0, 0, halfWidth, cutSlope, fillSlope, false, false);
@@ -843,8 +865,8 @@ function optionSamples(plan, topo, option, alignment) {
                 halfWidth,
                 rock ? rockCutSlope : cutSlope,
                 fillSlope,
-                walls.length > 0 && structureAt(walls, 'retainingWall', stationValue, 'left') !== null,
-                walls.length > 0 && structureAt(walls, 'retainingWall', stationValue, 'right') !== null
+                structureAt(walls, stationValue, 'left'),
+                structureAt(walls, stationValue, 'right')
             );
         }
 
@@ -876,17 +898,15 @@ function optionSamples(plan, topo, option, alignment) {
 function runWarnings(warnings, samples, units, predicate, message) {
     let runStart = null;
     let runEnd = null;
-    for (const sample of samples) {
-        if (predicate(sample)) {
-            runStart = runStart === null ? sample.station : runStart;
-            runEnd = sample.station;
+    for (let ixSample = 0; ixSample <= samples.length; ixSample++) {
+        // The end of the samples ends a run, too
+        if (ixSample < samples.length && predicate(samples[ixSample])) {
+            runEnd = samples[ixSample].station;
+            runStart ??= runEnd;
         } else if (runStart !== null) {
             warnings.push(`${message} from ${formatStation(runStart, units)} to ${formatStation(runEnd, units)}`);
             runStart = null;
         }
-    }
-    if (runStart !== null) {
-        warnings.push(`${message} from ${formatStation(runStart, units)} to ${formatStation(runEnd, units)}`);
     }
 }
 
@@ -896,28 +916,9 @@ function sampleNoDaylight(kind, sample) {
 }
 
 
-// The number of alignment segments in a stream crossing chunk (analyzeOption)
-const crossingChunk = 16;
-
-
-// Analyze a road plan option - compute its geometry, earthwork, structures, cost, and warnings
-export function analyzeOption(plan, ixOption, topo) {
-    const option = plan.options[ixOption];
-    const {units} = plan;
-    const scale = unitScale(plan);
-    const criteria = planCriteria(plan);
-    const rates = planRates(plan);
-    const {section} = option;
-    const {width} = section;
-    const structures = option.structures ?? [];
-    const existingRoads = structuresOfType(option, 'existingRoad');
-    const alignment = optionAlignment(topo, option);
-    const samples = optionSamples(plan, topo, option, alignment);
-    const length = alignment[alignment.length - 1].station;
-    const warnings = [];
-    const lengthUnit = unitLabel(units, 'length');
-
-    // Segment grades - an existing road's (as-built) grades aren't part of the maximum grade
+// Compute an alignment's segment grades - returns the grade objects ("station", "endStation", "grade", in percent, and
+// "existing") and the maximum grade. An existing road's (as-built) grades aren't part of the maximum grade.
+function optionGrades(alignment, existingRoads) {
     const grades = [];
     let maxGrade = 0;
     for (let ixPoint = 1; ixPoint < alignment.length; ixPoint++) {
@@ -931,27 +932,35 @@ export function analyzeOption(plan, ixOption, topo) {
             maxGrade = existing ? maxGrade : Math.max(maxGrade, Math.abs(grade));
         }
     }
+    return [grades, maxGrade];
+}
 
-    // Grade warnings (merge consecutive steep segments)
+
+// Add a warning for each run of consecutive segments steeper than the maximum grade
+function gradeWarnings(warnings, grades, maxGrade, units) {
     let runStart = null;
     let runMax = 0;
     for (let ixGrade = 0; ixGrade < grades.length; ixGrade++) {
         const grade = grades[ixGrade];
-        const steep = !grade.existing && Math.abs(grade.grade) > criteria.maxGrade + 1e-6;
+        const steep = !grade.existing && Math.abs(grade.grade) > maxGrade + 1e-6;
         if (steep) {
             runStart = runStart === null ? grade.station : runStart;
             runMax = Math.max(runMax, Math.abs(grade.grade));
         }
         if (runStart !== null && (!steep || ixGrade === grades.length - 1)) {
             const runEnd = steep ? grade.endStation : grade.station;
-            warnings.push(`Grade ${fixed(runMax, 1)}% exceeds the maximum grade (${fixedTrim(criteria.maxGrade, 1)}%) from ` +
+            warnings.push(`Grade ${fixed(runMax, 1)}% exceeds the maximum grade (${fixedTrim(maxGrade, 1)}%) from ` +
                 `${formatStation(runStart, units)} to ${formatStation(runEnd, units)}`);
             runStart = null;
             runMax = 0;
         }
     }
+}
 
-    // Curve radii
+
+// Find an alignment's minimum curve radius - the smallest radius of the circles through each three consecutive points
+// (an existing road's curves aren't checked). Returns [radius, station], or [null, null] if the alignment is straight.
+function minCurveRadius(alignment, existingRoads) {
     let minRadius = null;
     let minRadiusStation = null;
     for (let ixPoint = 1; ixPoint < alignment.length - 1; ixPoint++) {
@@ -978,6 +987,84 @@ export function analyzeOption(plan, ixOption, topo) {
             }
         }
     }
+    return [minRadius, minRadiusStation];
+}
+
+
+// Add a warning for each stream crossing without a culvert (within the tolerance of the crossing), a bridge, or an
+// existing road. The alignment's and the streams' segments are bounded in chunks (segmentChunks) - an alignment segment
+// is only intersected with the segments of the stream chunks its bounding box touches.
+function crossingWarnings(warnings, topo, alignment, units, bridges, culverts, existingRoads, tolerance) {
+    const alignmentChunks = segmentChunks(alignment);
+    for (const feature of topo.features) {
+        if (feature.type !== 'stream') {
+            continue;
+        }
+        const streamPoints = feature.points;
+        const streamBounds = bounds(streamPoints);
+        const streamChunks = segmentChunks(streamPoints);
+        for (const [ixChunk, ixChunkEnd, chunkBounds] of alignmentChunks) {
+            if (outsideBox(streamBounds, chunkBounds[0], chunkBounds[1], chunkBounds[2], chunkBounds[3])) {
+                continue;
+            }
+            for (let ixPoint = ixChunk; ixPoint < ixChunkEnd; ixPoint++) {
+                const point = alignment[ixPoint];
+                const prev = alignment[ixPoint - 1];
+                const xMin = Math.min(prev.x, point.x);
+                const xMax = Math.max(prev.x, point.x);
+                const yMin = Math.min(prev.y, point.y);
+                const yMax = Math.max(prev.y, point.y);
+                if (outsideBox(streamBounds, xMin, xMax, yMin, yMax)) {
+                    continue;
+                }
+                for (const [ixStreamChunk, ixStreamChunkEnd, streamChunkBounds] of streamChunks) {
+                    if (outsideBox(streamChunkBounds, xMin, xMax, yMin, yMax)) {
+                        continue;
+                    }
+                    for (let ixStream = ixStreamChunk; ixStream < ixStreamChunkEnd; ixStream++) {
+                        const streamPrev = streamPoints[ixStream - 1];
+                        const streamPoint = streamPoints[ixStream];
+                        const crossing = segmentIntersect(
+                            prev.x, prev.y, point.x, point.y, streamPrev.x, streamPrev.y, streamPoint.x, streamPoint.y
+                        );
+                        if (crossing !== null) {
+                            const stationValue = prev.station + crossing * (point.station - prev.station);
+                            if (!structureAt(bridges, stationValue) && !existingAt(existingRoads, stationValue) &&
+                                !culverts.some((culvert) => Math.abs(culvert.station - stationValue) <= tolerance)) {
+                                warnings.push(`The ${feature.name ?? 'stream'} crossing at ${formatStation(stationValue, units)} ` +
+                                    'has no culvert or bridge');
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+// Analyze a road plan option - compute its geometry, earthwork, structures, cost, and warnings
+export function analyzeOption(plan, ixOption, topo) {
+    const option = plan.options[ixOption];
+    const {units} = plan;
+    const scale = unitScale(plan);
+    const criteria = planCriteria(plan);
+    const rates = planRates(plan);
+    const {section} = option;
+    const {width} = section;
+    const structures = option.structures ?? [];
+    const bridges = structuresOfType(option, 'bridge');
+    const existingRoads = structuresOfType(option, 'existingRoad');
+    const alignment = optionAlignment(topo, option, existingRoads);
+    const samples = optionSamples(topo, option, alignment, criteria.rockCutSlope, bridges, existingRoads);
+    const length = alignment[alignment.length - 1].station;
+    const warnings = [];
+    const lengthUnit = unitLabel(units, 'length');
+
+    // Grades and curves
+    const [grades, maxGrade] = optionGrades(alignment, existingRoads);
+    gradeWarnings(warnings, grades, criteria.maxGrade, units);
+    const [minRadius, minRadiusStation] = minCurveRadius(alignment, existingRoads);
     if (minRadius !== null && minRadius < criteria.minRadius) {
         warnings.push(`Curve radius ${fixed(minRadius, 0)} ${lengthUnit} at ${formatStation(minRadiusStation, units)} ` +
             `is less than the minimum radius (${fixed(criteria.minRadius, 0)} ${lengthUnit})`);
@@ -1002,14 +1089,9 @@ export function analyzeOption(plan, ixOption, topo) {
     }
 
     // Sample warnings
-    const exclusions = [];
-    for (const feature of topo.features) {
-        if (feature.type === 'exclusion') {
-            exclusions.push(polygonIndex(feature.points));
-        }
-    }
+    const exclusions = featureIndexes(topo, 'exclusion');
     runWarnings(warnings, samples, units, (sample) => sample.outside, 'The road is outside the topography');
-    runWarnings(warnings, samples, units, (sample) => exclusions.some((exclusion) => pointInPolygon(sample.x, sample.y, exclusion)),
+    runWarnings(warnings, samples, units, (sample) => pointInPolygons(sample.x, sample.y, exclusions),
         'The road crosses an exclusion area');
     runWarnings(warnings, samples, units, (sample) => sampleNoDaylight('fill', sample),
         'The fill slope does not daylight (retaining wall needed)');
@@ -1019,57 +1101,8 @@ export function analyzeOption(plan, ixOption, topo) {
         'The retaining wall exceeds the maximum wall height');
     runWarnings(warnings, samples, units, (sample) => sample.bridge && sample.ground > sample.z, 'The bridge deck is below the ground');
 
-    // Stream crossings - an alignment segment outside a stream's bounding box can't cross it, so the alignment's
-    // segments are bounded in chunks ([ixPoint, ixPointEnd, bounds] - the segments ending at points ixPoint up to
-    // ixPointEnd) to skip the chunks outside the stream's bounding box
-    const alignmentCount = alignment.length;
-    const chunks = [];
-    for (let ixChunk = 1; ixChunk < alignmentCount;) {
-        const ixChunkEnd = Math.min(alignmentCount, ixChunk + crossingChunk);
-        chunks.push([ixChunk, ixChunkEnd, bounds(alignment, ixChunk - 1, ixChunkEnd)]);
-        ixChunk = ixChunkEnd;
-    }
-    for (const feature of topo.features) {
-        if (feature.type === 'stream') {
-            const streamPoints = feature.points;
-            const streamBounds = bounds(streamPoints);
-            const streamCount = streamPoints.length;
-            for (const [ixChunk, ixChunkEnd, chunkBounds] of chunks) {
-                if (outsideBox(streamBounds, chunkBounds[0], chunkBounds[1], chunkBounds[2], chunkBounds[3])) {
-                    continue;
-                }
-                for (let ixPoint = ixChunk; ixPoint < ixChunkEnd; ixPoint++) {
-                    const point = alignment[ixPoint];
-                    const prev = alignment[ixPoint - 1];
-                    if (outsideBox(streamBounds, Math.min(prev.x, point.x), Math.max(prev.x, point.x),
-                        Math.min(prev.y, point.y), Math.max(prev.y, point.y))) {
-                        continue;
-                    }
-                    for (let ixStream = 1; ixStream < streamCount; ixStream++) {
-                        const streamPrev = streamPoints[ixStream - 1];
-                        const streamPoint = streamPoints[ixStream];
-                        const crossing = segmentIntersect(
-                            prev.x, prev.y, point.x, point.y, streamPrev.x, streamPrev.y, streamPoint.x, streamPoint.y
-                        );
-                        if (crossing !== null) {
-                            const stationValue = prev.station + crossing * (point.station - prev.station);
-                            let crossed = structureAt(structures, 'bridge', stationValue, null) !== null ||
-                                existingAt(existingRoads, stationValue);
-                            for (const structure of structures) {
-                                if (structure.type === 'culvert' && Math.abs(structure.station - stationValue) <= tolerance) {
-                                    crossed = true;
-                                }
-                            }
-                            if (!crossed) {
-                                warnings.push(`The ${feature.name ?? 'stream'} crossing at ${formatStation(stationValue, units)} ` +
-                                    'has no culvert or bridge');
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
+    // Stream crossings
+    crossingWarnings(warnings, topo, alignment, units, bridges, structuresOfType(option, 'culvert'), existingRoads, tolerance);
 
     // Earthwork, area, and mass haul quantities (plan units)
     const {shrink, swell} = rates;
