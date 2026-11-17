@@ -493,7 +493,7 @@ test('analyzeOption, repeated alignment point', () => {
         analysis.samples.map(({station, x, y, z, dx, dy}) => [station, x, y, z, dx, dy].map((value) => Math.round(value * 1000) / 1000)),
         [[0, 20, 20, 102, 1, 0], [3.333, 20, 23.333, 102.333, 0, 1], [6.667, 20, 26.667, 102.667, 0, 1], [10, 20, 30, 103, 0, 1]]
     );
-    assert.deepEqual(analysis.grades, [{'station': 0, 'endStation': 10, 'grade': 10, 'existing': false}]);
+    assert.deepEqual(analysis.grades, [{'station': 0, 'endStation': 10, 'z': 102, 'endZ': 103, 'grade': 10, 'existing': false}]);
 });
 
 
@@ -595,7 +595,7 @@ test('analyzeOption, the simple plan', () => {
     assert.equal(analysis.existingLength, 0);
     assert.equal(analysis.culvertCount, 0);
     assert.deepEqual(analysis.alignment, [{'x': 0, 'y': 20, 'z': 102, 'station': 0}, {'x': 40, 'y': 20, 'z': 102, 'station': 40}]);
-    assert.deepEqual(analysis.grades, [{'station': 0, 'endStation': 40, 'grade': 0, 'existing': false}]);
+    assert.deepEqual(analysis.grades, [{'station': 0, 'endStation': 40, 'z': 102, 'endZ': 102, 'grade': 0, 'existing': false}]);
     assert.deepEqual(analysis.warnings, []);
 
     // Costs
@@ -708,8 +708,8 @@ test('analyzeOption, ground alignment', () => {
     assert.equal(analysis.name, 'Alt');
     assert.equal(analysis.minRadius, null);
     assert.deepEqual(analysis.grades, [
-        {'station': 0, 'endStation': 40, 'grade': 0, 'existing': false},
-        {'station': 40, 'endStation': 90, 'grade': -264, 'existing': false}
+        {'station': 0, 'endStation': 40, 'z': 132, 'endZ': 132, 'grade': 0, 'existing': false},
+        {'station': 40, 'endStation': 90, 'z': 132, 'endZ': 0, 'grade': -264, 'existing': false}
     ]);
     assert.deepEqual(analysis.warnings, [
         'Grade 264.0% exceeds the maximum grade (10%) from 0+40 to 0+90',
@@ -756,9 +756,9 @@ test('analyzeOption, existing road', () => {
 
     // Only the new road's grade (30%), curves, and stream crossings are checked
     assert.deepEqual(analysis.grades, [
-        {'station': 0, 'endStation': 20, 'grade': 30, 'existing': false},
-        {'station': 20, 'endStation': 30, 'grade': 30, 'existing': true},
-        {'station': 30, 'endStation': 40, 'grade': 30, 'existing': true}
+        {'station': 0, 'endStation': 20, 'z': 100, 'endZ': 106, 'grade': 30, 'existing': false},
+        {'station': 20, 'endStation': 30, 'z': 106, 'endZ': 109, 'grade': 30, 'existing': true},
+        {'station': 30, 'endStation': 40, 'z': 109, 'endZ': 112, 'grade': 30, 'existing': true}
     ]);
     assert.equal(analysis.maxGrade, 30);
     assert.equal(analysis.minRadius, null);

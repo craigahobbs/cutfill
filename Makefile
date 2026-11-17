@@ -65,7 +65,8 @@ doc:
 
 # Stage the project's web site - the documentation at its root (index.html renders README.md), the planning
 # instructions, the example plan, and the viewer application (and its README) in viewer/. The site's READMEs link to
-# the other Markdown documents as rendered Markdown ("#url=plan/PLAN.md&<header ID>"), not to the Markdown files.
+# the other Markdown documents as rendered Markdown ("#url=plan/PLAN.md&<header ID>"), not to the Markdown files. The
+# site's viewer has the example plan's URL (its page element's "data-example" attribute), so its home page links to it.
 SITE_LINKS := sed -E 's/\]\(([^):\#]*\.md)\#([^)]*)\)/](\#url=\1\&\2)/g; s/\]\(([^):\#]*\.md)\)/](\#url=\1)/g'
 
 .PHONY: site
@@ -78,6 +79,9 @@ site:
 	cp example/example.site.json example/example.json example/example.png example/screenshot.png build/gh-pages/example/
 	cp plan/PLAN.md build/gh-pages/plan/
 	cp -R viewer/build/app build/gh-pages/viewer
+	sed 's|<div id="roadie">|<div id="roadie" data-example="../example/example.json">|' viewer/build/app/index.html \
+		> build/gh-pages/viewer/index.html
+	grep -q 'data-example="../example/example.json"' build/gh-pages/viewer/index.html
 	$(SITE_LINKS) viewer/README.md > build/gh-pages/viewer/README.md
 
 

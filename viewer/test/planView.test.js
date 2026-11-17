@@ -399,21 +399,19 @@ test('profileView, structures', () => {
         '<rect x="269" y="272" width="23.7" height="8" fill="#2a8f8f"/>',
         `<text x="280.8" y="264" ${labelAttr} fill="#2a8f8f" ${textStroke} font-weight="bold">Turnout</text>`,
         '<circle cx="404" cy="42.4" r="5" fill="white" stroke="#2a6fdb" stroke-width="2.5"/>',
-        `<polyline points="64,200.8 142.9,200.8" fill="none" stroke="#1f2d3d" stroke-width="2" ${lineAttr}/>`
+        `<polyline points="64,200.8 142.9,200.8 221.7,200.8" fill="none" stroke="#1f2d3d" stroke-width="2" ${lineAttr}/>`
     ]);
 
-    // The grade line's segments - those over the maximum grade (10%) are highlighted (the zero-length segment isn't drawn)
+    // The grade line - each run of its segments that are over the maximum grade (10%), or aren't, is a line, and those
+    // over it are highlighted (the zero-length segment isn't drawn)
     const rGrade = /points="([^"]*)".* stroke="([^"]*)" stroke-width="(\d)"/;
     assert.deepEqual(
         profileElements.slice(ixStructures + 12, -10).map((element) => element.match(rGrade).slice(1)),
         [
-            ['64,200.8 142.9,200.8', '#1f2d3d', '2'],
-            ['142.9,200.8 221.7,200.8', '#1f2d3d', '2'],
+            ['64,200.8 142.9,200.8 221.7,200.8', '#1f2d3d', '2'],
             ['221.7,200.8 261.1,183.2', '#e01e1e', '3'],
-            ['261.1,183.2 300.6,183.2', '#1f2d3d', '2'],
-            ['300.6,183.2 340,183.2', '#1f2d3d', '2'],
-            ['340,183.2 348.8,165.6', '#e01e1e', '3'],
-            ['348.8,165.6 404,42.4', '#e01e1e', '3']
+            ['261.1,183.2 300.6,183.2 340,183.2', '#1f2d3d', '2'],
+            ['340,183.2 348.8,165.6 404,42.4', '#e01e1e', '3']
         ]
     );
     assert.deepEqual(texts(profileElements, 'font-size', '10').slice(-1), ['Over 10%']);
@@ -463,11 +461,9 @@ test('profileView, a bridge and an existing road', () => {
         ['550.4', 'rgb(196,120,64)']
     ]);
 
-    // The grade line's segments are within the maximum grade
+    // The grade line's segments are within the maximum grade - they're one line
     assert.deepEqual(profileElements.slice(ixBridge + 5, -10), [
-        `<polyline points="64,208.2 321.8,189.7" fill="none" stroke="#1f2d3d" stroke-width="2" ${lineAttr}/>`,
-        `<polyline points="321.8,189.7 515.1,137.4" fill="none" stroke="#1f2d3d" stroke-width="2" ${lineAttr}/>`,
-        `<polyline points="515.1,137.4 960,50.8" fill="none" stroke="#1f2d3d" stroke-width="2" ${lineAttr}/>`
+        `<polyline points="64,208.2 321.8,189.7 515.1,137.4 960,50.8" fill="none" stroke="#1f2d3d" stroke-width="2" ${lineAttr}/>`
     ]);
 });
 
@@ -494,8 +490,7 @@ test('profileView, an existing road\'s steep grades aren\'t highlighted', () => 
     const ixGrade = profileElements.findIndex((element) => element.includes('stroke="#e01e1e"'));
     assert.deepEqual(profileElements.slice(ixGrade, -10), [
         `<polyline points="64,242.3 234,129.1" fill="none" stroke="#e01e1e" stroke-width="3" ${lineAttr}/>`,
-        `<polyline points="234,129.1 319,72.6" fill="none" stroke="#1f2d3d" stroke-width="2" ${lineAttr}/>`,
-        `<polyline points="319,72.6 404,16" fill="none" stroke="#1f2d3d" stroke-width="2" ${lineAttr}/>`
+        `<polyline points="234,129.1 319,72.6 404,16" fill="none" stroke="#1f2d3d" stroke-width="2" ${lineAttr}/>`
     ]);
     assert.deepEqual(texts(profileElements, 'font-weight', 'bold').slice(2), ['Existing road']);
     assert.deepEqual(withAttr(profileElements, 'fill', 'rgba(112,110,104,0.12)'), [

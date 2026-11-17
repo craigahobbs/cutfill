@@ -35,7 +35,9 @@ make run FILE=<plan.json>    # view a plan in the browser
 - Number formatting is `toFixed`'s (`fixed`/`fixedTrim`/`px` in `format.js`), and `round` is
   `Math.round(x * 10 ** d) / 10 ** d` - the drawings and the command line's output depend on them.
 - `index.html` preloads every application module (a unit test checks the list) - add a `modulepreload` link with a new
-  module. Its import map resolves the `schema-markdown` package, which `make app` stages next to `lib/`.
+  module. Its import map resolves the `schema-markdown` package, which `make app` stages next to `lib/`. The home page
+  links to an example plan if the page's `roadie` element has a `data-example` attribute (the plan's URL) - the
+  project's web site adds it (the top-level makefile's `site`).
 - ESLint's `id-length` rule allows the coordinate names `x`, `y`, and `z` (`ESLINT_ARGS` in the makefile) - other names
   are two characters or longer.
 - Optimizations must leave the output byte-identical - compare `tools/render.js` output (the report and `--explore`)

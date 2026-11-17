@@ -420,8 +420,10 @@ export class RoadieApp {
     }
 
 
-    // Render the home page - the recent local plans are added when IndexedDB answers
+    // Render the home page - the recent local plans are added when IndexedDB answers. The page's example road plan, if
+    // it has one, is its element's "data-example" attribute - the plan's URL.
     renderHome(globals) {
+        const example = this.main.dataset.example ?? null;
         const html = [
             '<h1>Roadie</h1>',
             '<p>Roadie is a 3D viewer for road grading plan models. A road grading plan model contains the site topography, ' +
@@ -433,6 +435,7 @@ export class RoadieApp {
                 'The files stay on your computer.</p>',
             '</div>',
             '<div id="roadie-recent"></div>',
+            ...(example !== null ? [`<p>${argsLink(globals, 'View the example road plan', {'file': example})}</p>`] : []),
             '<p>To view a road plan model URL, use the "file" argument: <code>#var.vFile=\'plan.json\'</code></p>',
             '<hr>',
             `<p>${argsLink(globals, 'Road plan model documentation', {'doc': true})}</p>`

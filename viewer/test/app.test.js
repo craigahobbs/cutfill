@@ -114,6 +114,24 @@ test('the home page', async (context) => {
 });
 
 
+test('the home page with an example road plan', async (context) => {
+    // The page's element has the example plan's URL - the home page links to it
+    const browser = fakeBrowser(context, {'files': fixtureFiles});
+    const {main} = browser;
+    main.dataset.example = 'plans/fixture.json';
+    await startApp(browser);
+    const exampleLink = '<p><a href="#var.vFile=\'plans%2Ffixture.json\'">View the example road plan</a></p>';
+    assert.equal(main.innerHTML, homeHtml().replace('<p>To view a road plan', `${exampleLink}\n<p>To view a road plan`));
+    assert.deepEqual(browser.fetches, []);
+
+    // The link opens the example's report
+    browser.window.location.hash = main.querySelector('a[href*="vFile"]').getAttribute('href');
+    await flush();
+    assert.deepEqual(browser.fetches, ['plans/fixture.json']);
+    assert.equal(browser.document.title, 'Fixture Plan');
+});
+
+
 test('the home page lists the recent local plans', async (context) => {
     // Open local plans, a second apart - the last with its map image
     const indexedDB = new FakeIndexedDB();

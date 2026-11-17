@@ -916,8 +916,9 @@ function sampleNoDaylight(kind, sample) {
 }
 
 
-// Compute an alignment's segment grades - returns the grade objects ("station", "endStation", "grade", in percent, and
-// "existing") and the maximum grade. An existing road's (as-built) grades aren't part of the maximum grade.
+// Compute an alignment's segment grades - returns the grade objects (the segment's "station" and "endStation", its
+// elevations there, "z" and "endZ", its "grade", in percent, and "existing") and the maximum grade. An existing road's
+// (as-built) grades aren't part of the maximum grade.
 function optionGrades(alignment, existingRoads) {
     const grades = [];
     let maxGrade = 0;
@@ -928,7 +929,7 @@ function optionGrades(alignment, existingRoads) {
         if (run > 0) {
             const grade = 100 * (point.z - prev.z) / run;
             const existing = existingAt(existingRoads, prev.station) && existingAt(existingRoads, point.station);
-            grades.push({'station': prev.station, 'endStation': point.station, grade, existing});
+            grades.push({'station': prev.station, 'endStation': point.station, 'z': prev.z, 'endZ': point.z, grade, existing});
             maxGrade = existing ? maxGrade : Math.max(maxGrade, Math.abs(grade));
         }
     }

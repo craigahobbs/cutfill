@@ -234,6 +234,8 @@ anything:
 - **View a plan URL** - `viewer/#url=<plan.json URL>` (the URL is relative to the viewer). The plan's
   map image is relative to the plan's URL. Plans hosted on another site must allow cross-origin
   requests (CORS).
+- **View the example** - the web site's viewer has a link to [the example](#the-example) on its home
+  page.
 
 The viewer validates every plan it loads against the [road plan model](#the-road-plan-model), and
 reports the first problem it finds.
@@ -417,7 +419,8 @@ the planning tools download for the report's source map.
 make run FILE=example/example.json
 ```
 
-On the project's web site, [view the example](viewer/#url=../example/example.json).
+On the project's web site, [view the example](viewer/#url=../example/example.json) - the site's viewer
+links to it from its home page, too.
 
 
 ## Development
