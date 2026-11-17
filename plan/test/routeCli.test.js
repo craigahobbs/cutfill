@@ -312,6 +312,31 @@ test('profile, an edited alignment', () => {
 });
 
 
+test('profile, a routed option\'s alignment is kept', () => {
+    // The route follows the existing road around its corner - its alignment is at the stations' interval
+    const routed = run(roadPlan(), ['route', 'plan.json', '-n', 'Road']).plan;
+    const pointsOf = (plan) => plan.options[0].alignment.map(({x, y}) => [x, y]);
+    assert.equal(routed.options[0].alignment.length, 115);
+
+    // Its profile is designed again on the alignment as it is - it isn't resampled, which would cut the road's corner
+    const {result, plan} = run(routed, ['profile', 'plan.json', '-n', 'Road']);
+    assert.equal(result.code, 0);
+    assert.deepEqual(pointsOf(plan), pointsOf(routed));
+    assert.deepEqual(plan.options[0].structures.filter(({type}) => type === 'existingRoad'), routed.options[0].structures.filter(
+        ({type}) => type === 'existingRoad'
+    ));
+
+    // Designed again, the option is the same
+    assert.deepEqual(run(plan, ['profile', 'plan.json', '-n', 'Road']).plan, plan);
+
+    // With a moved point, the alignment is resampled
+    const edited = structuredClone(plan);
+    edited.options[0].alignment[10].y += 3;
+    const resampled = run(edited, ['profile', 'plan.json', '-n', 'Road']).plan;
+    assert.notDeepEqual(pointsOf(resampled), pointsOf(edited));
+});
+
+
 test('profile, a road down a slope too steep for the grade limit', () => {
     // The profile ends above the ground
     const {result, plan} = runExpected(profilePlan(), 'profile-down');

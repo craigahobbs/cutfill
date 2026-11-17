@@ -1,9 +1,9 @@
 // routeCli.js - the "route" and "profile" commands: engineer a road option, or re-design an existing option's profile
 // and structures (a port of the Python planning tools', but for the existing roads the route follows)
 
+import {alignmentPolyline, followRoads, resamplePolyline, routeLattice, routeSearch, smoothCurves} from './route.js';
 import {analyzeOption, planTopo} from '../../viewer/lib/model.js';
 import {designStructures, existingMask} from './structures.js';
-import {followRoads, resamplePolyline, routeLattice, routeSearch, smoothCurves} from './route.js';
 import {lineIndex, nearestLine} from './roads.js';
 import {orderPlan, planText, readPlan} from './planFile.js';
 import {pyFixed, pyRound} from './numeric.js';
@@ -253,15 +253,15 @@ function routeAlignment(plan, topo, design, roads, commandArgs, lines) {
 
 
 // Design the profile of an option's alignment - its existing roads are the argument's ranges, or the option's existing
-// road structures. Returns the alignment and its profile (like routeAlignment).
+// road structures. An alignment that's already at the stations' interval (the route command's, or this command's) is
+// kept as it is. Returns the alignment and its profile (like routeAlignment).
 function profileAlignment(topo, design, option, commandArgs) {
     const existingRoads = commandArgs.existingRoads ??
         (option.structures ?? []).filter((structure) => structure.type === 'existingRoad').map(
             (structure) => [structure.station, structure.endStation]
         );
-    const points = option.alignment;
     const interval = Math.max(design.stationInterval, topo.spacing * 0.5);
-    const alignment = resamplePolyline(points.map((point) => point.x), points.map((point) => point.y), interval);
+    const alignment = alignmentPolyline(option.alignment, interval, existingRoads);
     const designed = designProfile(
         topo, design, alignment.x, alignment.y, alignment.stations, existingMask(alignment.stations, existingRoads)
     );

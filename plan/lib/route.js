@@ -422,6 +422,40 @@ export function resamplePolyline(pointsX, pointsY, interval) {
 }
 
 
+// The tolerances of an alignment that's already at an interval (alignmentPolyline) - its points' spacing, and its
+// length (an alignment's length along its points is a little less than the length it was sampled along)
+const spacingTolerance = 0.02;
+const lengthTolerance = 0.002;
+
+
+// Get an option's alignment for its profile's design - its points' ({x, y} objects) "x" and "y" coordinate arrays and
+// their evenly-spaced "stations". The points are resampled at the interval - unless they're already an alignment at
+// the interval (one the tools made): as many points as the interval makes of their length, evenly spaced (but for
+// an existing road's corners, where they're closer). Such an alignment is kept as it is, so designing its profile
+// again doesn't move it - resampling it would cut its corners, a little shorter each time. "existingRoads" are the
+// alignment's existing roads ([station, end station] ranges).
+export function alignmentPolyline(points, interval, existingRoads = []) {
+    const pointsX = points.map((point) => point.x);
+    const pointsY = points.map((point) => point.y);
+    const pointStations = polylineStations(pointsX, pointsY);
+    const length = pointStations[pointStations.length - 1];
+    const count = points.length - 1;
+    const spacing = length / count;
+    const isExisting = (stationValue) => existingRoads.some(([start, end]) => stationValue >= start - 1e-6 && stationValue <= end + 1e-6);
+    let isAlignment = count >= Math.ceil(length / interval) && count <= Math.ceil(length * (1 + lengthTolerance) / interval);
+    for (let ix = 1; ix <= count && isAlignment; ix++) {
+        const distance = pointStations[ix] - pointStations[ix - 1];
+        isAlignment = distance <= spacing * (1 + spacingTolerance) && (
+            distance >= spacing * (1 - spacingTolerance) || (isExisting(pointStations[ix - 1]) && isExisting(pointStations[ix]))
+        );
+    }
+    if (isAlignment) {
+        return {'x': Float64Array.from(pointsX), 'y': Float64Array.from(pointsY), 'stations': linspace(length, points.length)};
+    }
+    return resamplePolyline(pointsX, pointsY, interval);
+}
+
+
 // Compute the circumradius at each polyline point (infinite at the ends and on straight runs)
 export function turnRadius(x, y) {
     const radius = new Float64Array(x.length).fill(Infinity);
