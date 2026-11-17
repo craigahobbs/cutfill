@@ -1,10 +1,8 @@
 // terrain.js - a road site's topography grid, from the USGS 3D Elevation Program's 1 meter elevation models
 
 import {project, transverseMercator, unproject, utmFalseEasting, utmZone} from '../../viewer/lib/geo.js';
-
-
-// The meters per foot
-export const metersPerFoot = 0.3048;
+import {round} from '../../viewer/lib/format.js';
+import {unitScale} from '../../viewer/lib/model.js';
 
 
 // The topography grid's size limit, in grid points - the default grid spacing is the finest that's within it
@@ -32,7 +30,7 @@ const marginMaximum = {'feet': 2000, 'meters': 600};
 // ("scale"), the grid "spacing" (in plan units), "nCols", and "nRows", and the plan's "start" and "end" points.
 export function siteLayout(site, limit = gridLimit) {
     const {units, start, end} = site;
-    const scale = units === 'feet' ? metersPerFoot : 1;
+    const scale = unitScale(site);
 
     // The projection - its center is rounded, to about a tenth of a meter, so it's exactly the plan's georeference
     const latitude = round((start.latitude + end.latitude) / 2, 6);
@@ -76,9 +74,9 @@ export function siteLayout(site, limit = gridLimit) {
 }
 
 
-// Round a number to a number of decimal places
-export function round(value, digits) {
-    return Math.round(value * 10 ** digits) / 10 ** digits;
+// Get the size of a layout's grid, in plan units ([width, height])
+export function layoutSize(layout) {
+    return [(layout.nCols - 1) * layout.spacing, (layout.nRows - 1) * layout.spacing];
 }
 
 
@@ -108,8 +106,7 @@ export function layoutPoint(layout, latitude, longitude) {
 
 // Get the box of the Earth that contains a layout's grid - [west, south, east, north], in degrees
 export function layoutBox(layout) {
-    const width = (layout.nCols - 1) * layout.spacing;
-    const height = (layout.nRows - 1) * layout.spacing;
+    const [width, height] = layoutSize(layout);
     let box = null;
     for (const [x, y] of [[0, 0], [width, 0], [0, height], [width, height], [width / 2, 0], [width / 2, height]]) {
         const [latitude, longitude] = layoutLatLong(layout, x, y);

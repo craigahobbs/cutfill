@@ -73,6 +73,38 @@ test('designProfile, an existing road', () => {
     // All of the road is an existing road
     const all = profileFixture('profile-existing-all').designed;
     assert.deepEqual(plain(all.profile), plain(all.ground));
+
+    // A new road up a slope too steep for the depth limit, then an existing road - within the limit, the grade limit
+    // can't reach the existing road, so the new road is designed with a deeper limit (or none), and breaks grade at
+    // the junction
+    for (const [rise, depth] of [[2.6, 112.054], [8, 355.054]]) {
+        const steep = alignmentFixture(planePlan({rise}), designArgs(), [[50, 0], [50, 100]], 5, [[50, 100]]);
+        const steepDesigned = designProfile(steep.topo, steep.design, steep.x, steep.y, steep.stations, steep.existing);
+        assert.equal(plain(steep.existing).join(''), '000000000011111111111');
+        assert.deepEqual(plain(steepDesigned.profile.slice(10)), plain(steepDesigned.ground.slice(10)));
+        assert.ok(Math.max(...grades(steepDesigned.profile.slice(0, 10), 5)) <= steep.design.grade + 1e-9);
+        assert.ok(Math.abs(steepDesigned.ground[9] - steepDesigned.profile[9] - depth) < 0.001, `${rise}`);
+    }
+});
+
+
+test('designProfile, an existing road has no earthwork', () => {
+    // A new road up a 40% slope from the end of an existing road along it. The existing road's bench has no earthwork
+    // for the new road's cut and fill to balance, so the new road's deepest cut and fill are its own - they don't
+    // depend on the existing road's length.
+    const newDepths = (size) => {
+        const far = (size - 1) * 10;
+        const {topo, design, x, y, stations, existing} = alignmentFixture(
+            planePlan({'rise': 0.4, size}), designArgs(), [[0, 100], [far - 150, 100], [far - 10, 130]], 5, [[0, far - 160]]
+        );
+        const {profile, ground} = designProfile(topo, design, x, y, stations, existing);
+        const depths = Array.from(ground, (z, ix) => z - profile[ix]).filter((depth, ix) => !existing[ix]);
+        return [existing.reduce((sum, mask) => sum + mask, 0), Math.max(...depths), -Math.min(...depths)].map(
+            (value) => Math.round(value * 100) / 100
+        );
+    };
+    assert.deepEqual(newDepths(41), [49, 1.51, 0.36]);
+    assert.deepEqual(newDepths(61), [89, 1.51, 0.35]);
 });
 
 

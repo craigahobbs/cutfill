@@ -1,7 +1,10 @@
 // plot.js - a road plan model's plot - its terrain (shaded, with contours), features, and options, with the plan's
 // coordinates along its sides - for the planning session to study the site and its options with
 
-import {cellContours, contourInterval, contourLevel, niceStep, svgPoints, svgPolyline, svgText} from '../../viewer/lib/draw.js';
+import {
+    cellContours, contourInterval, contourLevel, niceStep, planMarkers, roadColor, roadFeatureColor, streamColor, svgPoints, svgPolyline,
+    svgText
+} from '../../viewer/lib/draw.js';
 import {escapeHtml, px} from '../../viewer/lib/format.js';
 import {Buffer} from 'node:buffer';
 import {grayPng} from './png.js';
@@ -17,12 +20,14 @@ const marginTop = 34;
 const marginBottom = 34;
 
 
-// The options' colors
-const optionColors = ['#d6246e', '#e07b00', '#7b3fc4', '#0a8f8f', '#7a8a00', '#1f3f9e'];
+// The options' colors - the first is the viewer's road color
+const optionColors = [roadColor, '#e07b00', '#7b3fc4', '#0a8f8f', '#7a8a00', '#1f3f9e'];
 
 
-// The features' colors
-const featureColors = {'stream': '#2a6fdb', 'road': '#6e675f', 'trail': '#6e675f', 'rock': '#555555', 'exclusion': '#d0312d'};
+// The features' colors - the streams' and roads' are the viewer's
+const featureColors = {
+    'stream': streamColor, 'road': roadFeatureColor, 'trail': roadFeatureColor, 'rock': '#555555', 'exclusion': '#d0312d'
+};
 
 
 // The smallest terrain cell that's drawn, in pixels - a finer grid's cells are drawn several together
@@ -224,13 +229,13 @@ export function planPlot(plan, topo, width = 1400, box = null) {
     }
 
     // The start and end points
-    for (const [point, defaultLabel, color] of [[plan.start, 'Start', '#1a8f3c'], [plan.end, 'End', '#c0392b']]) {
+    for (const [point, label, color] of planMarkers(plan)) {
         if (isInside(point)) {
             const x = planX(point.x);
             const y = planY(point.y);
             elements.push(
                 `<circle cx="${px(x)}" cy="${px(y)}" r="6" fill="${color}" stroke="white" stroke-width="2"/>`,
-                svgText(point.label ?? defaultLabel, x + 9, y - 9, 13, 'start', color, true)
+                svgText(label, x + 9, y - 9, 13, 'start', color, true)
             );
         }
     }
@@ -333,6 +338,22 @@ function terrainShade(topo, cols, rows) {
         }
     }
     return pixels;
+}
+
+
+// The plot's text font files, by platform - the plot's text is sans-serif, which the renderer draws with Arial
+const fontFiles = {
+    'darwin': () => ['/System/Library/Fonts/Supplemental/Arial.ttf', '/System/Library/Fonts/Supplemental/Arial Bold.ttf'],
+    'win32': (env) => ['arial.ttf', 'arialbd.ttf'].map((file) => `${env.SystemRoot ?? 'C:\\Windows'}\\Fonts\\${file}`)
+};
+
+
+// Get the plot renderer's font options - "platform" is the computer's platform, "env" is its environment variables,
+// and "fileExists" is a function that determines if a file exists. Where the computer has the plot's font files, only
+// they are loaded: matching the plot's text against every font of the computer takes seconds, most of a plot's time.
+export function plotFonts(platform, env, fileExists) {
+    const files = Object.hasOwn(fontFiles, platform) ? fontFiles[platform](env) : [];
+    return files.length > 0 && files.every(fileExists) ? {'loadSystemFonts': false, 'fontFiles': files} : {'loadSystemFonts': true};
 }
 
 

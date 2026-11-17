@@ -1,8 +1,7 @@
 // locate.js - the "locate" command - convert latitudes and longitudes to a road plan's coordinates, and back
 
-import {elevation, planTopo} from '../../viewer/lib/model.js';
+import {elevation, planTopo, unitScale} from '../../viewer/lib/model.js';
 import {latLongText, planLatLong, project, transverseMercator} from '../../viewer/lib/geo.js';
-import {metersPerFoot} from './terrain.js';
 import {nearestText} from './roads.js';
 import {readPlan} from './planFile.js';
 
@@ -42,7 +41,7 @@ export function locateCommand(args, io) {
 
     // Convert the points
     const topo = planTopo(plan);
-    const scale = plan.units === 'feet' ? metersPerFoot : 1;
+    const scale = unitScale(plan);
     const projection = transverseMercator(georeference.latitude, georeference.longitude);
     const lines = [];
     for (const [first, second] of points) {

@@ -1,6 +1,6 @@
 import {
-    analyzeOption, centerlineAt, culvertDiameter, elevation, gradient, outsideBox, planCriteria, planTopo, sampleAt, unitLength,
-    validatePlan
+    analyzeOption, centerlineAt, culvertDiameter, defaultRates, elevation, featureIndexes, gradient, metersPerFoot, outsideBox,
+    planCriteria, planRates, planTopo, pointInPolygons, sampleAt, segmentIntersect, unitLength, unitScale, validatePlan
 } from '../lib/model.js';
 import {planComplex, planExistingRoad, planSimple} from './planFixtures.js';
 import assert from 'node:assert/strict';
@@ -324,6 +324,52 @@ test('analyzeOption, segment intersections', () => {
         {'type': 'stream', 'name': 'Cross', 'points': [{'x': 15, 'y': 25}, {'x': 25, 'y': 15}]}
     ];
     assert.deepEqual(crossingWarnings(analyze(plan)), ['The Cross crossing at 0+014 has no culvert or bridge']);
+});
+
+
+test('unitScale and planRates', () => {
+    // The meters per plan unit - of a plan, or another model with units
+    assert.equal(metersPerFoot, 0.3048);
+    assert.deepEqual([unitScale({'units': 'feet'}), unitScale({'units': 'meters'})], [0.3048, 1]);
+
+    // A plan's cost rates are the defaults, but for its own
+    assert.deepEqual(planRates({}), defaultRates);
+    assert.deepEqual(planRates({'costRates': {'gravel': 25, 'culvert': 1000}}), {...defaultRates, 'gravel': 25, 'culvert': 1000});
+    assert.equal(defaultRates.gravel, 19);
+});
+
+
+test('featureIndexes and pointInPolygons', () => {
+    const square = (type, x) => ({type, 'points': [{x, 'y': 0}, {'x': x + 10, 'y': 0}, {'x': x + 10, 'y': 10}, {x, 'y': 10}]});
+    const topo = {'features': [square('rock', 0), square('exclusion', 40), square('rock', 20), {'type': 'stream', 'points': []}]};
+    const rocks = featureIndexes(topo, 'rock');
+    const exclusions = featureIndexes(topo, 'exclusion');
+    assert.deepEqual([rocks.length, exclusions.length, featureIndexes(topo, 'wetland').length], [2, 1, 0]);
+
+    // A point is inside any of a type's polygons
+    assert.deepEqual(
+        [5, 15, 25, 45].map((x) => [pointInPolygons(x, 5, rocks), pointInPolygons(x, 5, exclusions)]),
+        [[true, false], [false, false], [true, false], [false, true]]
+    );
+    assert.equal(pointInPolygons(5, 11, rocks), false);
+    assert.equal(pointInPolygons(5, 5, []), false);
+});
+
+
+test('segmentIntersect', () => {
+    // The fraction along the first segment
+    assert.equal(segmentIntersect(0, 0, 10, 0, 5, -5, 5, 0.5), 0.5);
+    assert.equal(segmentIntersect(0, 0, 10, 0, 2.5, -5, 2.5, 5), 0.25);
+    assert.equal(segmentIntersect(0, 0, 10, 0, 0, -5, 0, 5), 0);
+    assert.equal(segmentIntersect(0, 0, 10, 0, 10, 0, 10, 5), 1);
+
+    // Beyond either segment's ends, and parallel segments
+    assert.equal(segmentIntersect(0, 1, 10, 1, 5, -5, 5, 0.5), null);
+    assert.equal(segmentIntersect(0, 0, 10, 0, 11, -5, 11, 5), null);
+    assert.equal(segmentIntersect(0, 0, 10, 0, -1, -5, -1, 5), null);
+    assert.equal(segmentIntersect(0, 0, 10, 0, 5, 1, 5, 5), null);
+    assert.equal(segmentIntersect(0, 0, 10, 0, 0, 1, 10, 1), null);
+    assert.equal(segmentIntersect(0, 0, 10, 0, 5, 0, 15, 0), null);
 });
 
 

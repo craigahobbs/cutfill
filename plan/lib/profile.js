@@ -1,8 +1,8 @@
 // profile.js - the road's vertical profile design (a port of the Python planning tools')
 
 import {arange, hypot, movingAverage, pairwiseSum, pyRound} from './numeric.js';
-import {crossSection, featurePolygons, groundElevation, groundGradient, pointInPolygons, sectionCut, sectionFill, sectionSlopeWidth,
-    sectionWall} from './design.js';
+import {crossSection, groundElevation, groundGradient, sectionCut, sectionFill, sectionSlopeWidth, sectionWall} from './design.js';
+import {featureIndexes, pointInPolygons} from '../../viewer/lib/model.js';
 import {turnRadius} from './route.js';
 
 
@@ -15,6 +15,20 @@ function argMin(values) {
         }
     }
     return ixMin;
+}
+
+
+// Find the index of the minimum of a station's total costs - they're within the station's levels ("first" up to "end")
+// and infinite at its other levels, so only its levels are searched. It's the first of equal minimums, as argMin
+// finds - the first level, if the station's costs are all infinite.
+function argMinLevels(totals, first, end) {
+    let ixMin = first;
+    for (let ix = first + 1; ix < end; ix++) {
+        if (totals[ix] < totals[ixMin]) {
+            ixMin = ix;
+        }
+    }
+    return totals[ixMin] === Infinity ? 0 : ixMin;
 }
 
 
@@ -48,7 +62,7 @@ function designProfileDepth(topo, design, x, y, stations, existing, depthLimit) 
     const last = count - 1;
     const ds = stations[1] - stations[0];
     const isExisting = existing ?? new Uint8Array(count);
-    const rocks = featurePolygons(topo, 'rock');
+    const rocks = featureIndexes(topo, 'rock');
 
     // The ground, its side slope, and the cut slope at each station
     const ground = new Float64Array(count);
@@ -151,8 +165,8 @@ function designProfileDepth(topo, design, x, y, stations, existing, depthLimit) 
             const cell = cells[ix] - first;
 
             // Within an existing road (or where the grade limit can't reach one), any grade
-            if (isExisting[ix] && (isExisting[ix - 1] || previous.every((cost) => cost === Infinity))) {
-                const ixMin = argMin(previous);
+            const ixMin = isExisting[ix] ? argMinLevels(previous, levelFirst[ix - 1], levelEnd[ix - 1]) : 0;
+            if (isExisting[ix] && (isExisting[ix - 1] || previous[ixMin] === Infinity)) {
                 for (let level = first; level < end; level++) {
                     back[cell + level] = ixMin;
                     total[level] = previous[ixMin] + stationCost(ix, level);
@@ -186,7 +200,6 @@ function designProfileDepth(topo, design, x, y, stations, existing, depthLimit) 
             // The grade limit can't reach the existing road's ground? Break grade at the junction.
             const level = groundLevel[ix];
             if (isExisting[ix] && total[level] === Infinity) {
-                const ixMin = argMin(previous);
                 back[cell + level] = ixMin;
                 total[level] = previous[ixMin] + stationCost(ix, level);
             }
@@ -218,6 +231,10 @@ function designProfileDepth(topo, design, x, y, stations, existing, depthLimit) 
             return pairwiseSum(values);
         };
         const pathSection = (member) => (ix, level) => {
+            // An existing road has no earthwork
+            if (isExisting[ix]) {
+                return 0;
+            }
             stationSection(ix, level);
             return section[member];
         };

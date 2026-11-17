@@ -345,13 +345,29 @@ test('profile, no option', () => {
 
 
 test('route and profile, the plan can\'t be loaded', () => {
-    const error = {'code': 1, 'lines': ['error: could not load the road plan "missing.json"']};
+    const error = {'code': 1, 'lines': ['error: Could not load the road plan "missing.json"']};
     assert.deepEqual(run(profilePlan(), ['route', 'missing.json', '-n', 'Test']).result, error);
     assert.deepEqual(run(profilePlan(), ['profile', 'missing.json', '-n', 'Test']).result, error);
     assert.deepEqual(
         run('Not JSON', ['route', 'plan.json', '-n', 'Test']).result,
-        {'code': 1, 'lines': ['error: could not load the road plan "plan.json"']}
+        {'code': 1, 'lines': ['error: Could not load the road plan "plan.json"']}
     );
+
+    // An invalid plan isn't engineered
+    const invalid = profilePlan();
+    invalid.topography.spacing = 0;
+    for (const command of ['route', 'profile']) {
+        const {result, written} = run(invalid, [command, 'plan.json', '-n', 'Test']);
+        assert.deepEqual(result, {
+            'code': 1,
+            'lines': [
+                'error: The road plan "plan.json" is invalid:',
+                '',
+                'Invalid value 0 (type "number") for member "topography.spacing", expected type "float" [> 0]'
+            ]
+        });
+        assert.equal(written, null);
+    }
 });
 
 

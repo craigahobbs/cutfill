@@ -4,8 +4,8 @@ import {validatePlan} from '../../viewer/lib/model.js';
 
 
 // Read and validate a road plan model file - "io" is the tools' input and output functions. Returns an object with the
-// "plan" or, if it can't be loaded or is invalid, the "error" text lines. A site's plan, without options yet, is a
-// plan.
+// "plan" or, if it can't be loaded or is invalid, the "error" text lines. A site's plan, without options yet (or
+// without its options member), is a plan - its options are an empty array.
 export function readPlan(io, planPath) {
     let planValue;
     try {
@@ -13,7 +13,8 @@ export function readPlan(io, planPath) {
     } catch {
         return {'error': [`error: Could not load the road plan "${planPath}"`]};
     }
-    const siteOnly = Array.isArray(planValue?.options) && planValue.options.length === 0;
+    const options = planValue !== null && typeof planValue === 'object' ? planValue.options : null;
+    const siteOnly = options === undefined || (Array.isArray(options) && options.length === 0);
     const validated = validatePlan(siteOnly ? {...planValue, 'options': [siteOption]} : planValue);
     if ('error' in validated) {
         return {'error': [`error: The road plan "${planPath}" is invalid:`, '', validated.error]};

@@ -1,4 +1,4 @@
-import {planPlot, plotCommand} from '../lib/plot.js';
+import {planPlot, plotCommand, plotFonts} from '../lib/plot.js';
 import {planTopo, validatePlan} from '../../viewer/lib/model.js';
 import {Buffer} from 'node:buffer';
 import assert from 'node:assert/strict';
@@ -386,4 +386,24 @@ options:
         const io = testIo();
         assert.deepEqual([await cliMain(['plot', ...args], io), io.output.join('')], [1, usage]);
     }
+});
+
+
+test('plotFonts', () => {
+    // Where the computer has the plot's font files, only they are loaded
+    const mac = ['/System/Library/Fonts/Supplemental/Arial.ttf', '/System/Library/Fonts/Supplemental/Arial Bold.ttf'];
+    assert.deepEqual(plotFonts('darwin', {}, () => true), {'loadSystemFonts': false, 'fontFiles': mac});
+    assert.deepEqual(
+        plotFonts('win32', {'SystemRoot': 'D:\\Win'}, () => true),
+        {'loadSystemFonts': false, 'fontFiles': ['D:\\Win\\Fonts\\arial.ttf', 'D:\\Win\\Fonts\\arialbd.ttf']}
+    );
+    assert.deepEqual(
+        plotFonts('win32', {}, () => true).fontFiles,
+        ['C:\\Windows\\Fonts\\arial.ttf', 'C:\\Windows\\Fonts\\arialbd.ttf']
+    );
+
+    // Without one of them - or on another platform - the computer's fonts are loaded
+    assert.deepEqual(plotFonts('darwin', {}, (file) => file !== mac[1]), {'loadSystemFonts': true});
+    assert.deepEqual(plotFonts('linux', {}, () => true), {'loadSystemFonts': true});
+    assert.deepEqual(plotFonts('toString', {}, () => true), {'loadSystemFonts': true});
 });

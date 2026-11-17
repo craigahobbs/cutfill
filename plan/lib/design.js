@@ -1,7 +1,7 @@
 // design.js - the road engineering's design parameters and unit costs, ground model, and cross sections (a port of the
 // Python planning tools')
 
-import {defaultRates, elevation, linearAreas, pointInPolygon, polygonIndex, unitScale} from '../../viewer/lib/model.js';
+import {elevation, linearAreas, planCriteria, planRates, unitScale} from '../../viewer/lib/model.js';
 
 
 // Create the road design parameters and unit costs (per plan unit) of a plan and the route and profile commands'
@@ -9,11 +9,11 @@ import {defaultRates, elevation, linearAreas, pointInPolygon, polygonIndex, unit
 // "bridgeFill". The grade, width, turnouts, and bridge fill arguments may be null.
 export function createDesign(plan, args) {
     const feet = plan.units === 'feet';
-    const criteria = plan.criteria ?? {};
-    const maxGrade = (criteria.maxGrade ?? 12) / 100;
+    const criteria = planCriteria(plan);
+    const maxGrade = criteria.maxGrade / 100;
     const grade = args.grade ? args.grade / 100 : Math.max(maxGrade - 0.01, maxGrade * 0.9);
     const width = args.width ? args.width : (feet ? 14 : 4.3);
-    const rates = {...defaultRates, ...plan.costRates};
+    const rates = planRates(plan);
     const scale = unitScale(plan);
     const scale2 = scale * scale;
     const scale3 = scale2 * scale;
@@ -23,8 +23,8 @@ export function createDesign(plan, args) {
         feet,
         grade,
         'switchbackGrade': Math.min(args.switchbackGrade / 100, grade),
-        'minRadius': criteria.minRadius ?? (feet ? 50 : 15),
-        'rockCutSlope': criteria.rockCutSlope ?? 0.5,
+        'minRadius': criteria.minRadius,
+        'rockCutSlope': criteria.rockCutSlope,
         width,
         'halfWidth': width * 0.5,
         'surface': args.surface,
@@ -76,42 +76,11 @@ export function groundGradient(topo, x, y) {
 }
 
 
-// Get the topography's polygon features of a type, indexed for point-in-polygon tests (see pointInPolygons)
-export function featurePolygons(topo, featureType) {
-    return topo.features.filter((feature) => feature.type === featureType).map((feature) => polygonIndex(feature.points));
-}
-
-
-// Determine if a point is inside any of the indexed polygons
-export function pointInPolygons(x, y, polygons) {
-    for (const polygon of polygons) {
-        if (pointInPolygon(x, y, polygon)) {
-            return true;
-        }
-    }
-    return false;
-}
-
-
 // Get the topography's stream features - objects with the stream's "name" and "points"
 export function featureStreams(topo) {
     return topo.features.filter((feature) => feature.type === 'stream').map(
         (feature) => ({'name': feature.name ?? 'stream', 'points': feature.points})
     );
-}
-
-
-// Determine if the segments from (x1, y1) to (x2, y2) and from (x3, y3) to (x4, y4) intersect - returns the fraction
-// along the first segment, or null
-export function segmentIntersection(x1, y1, x2, y2, x3, y3, x4, y4) {
-    const dx = x2 - x1;
-    const dy = y2 - y1;
-    const ex = x4 - x3;
-    const ey = y4 - y3;
-    const denom = dx * ey - dy * ex;
-    const fraction1 = ((x3 - x1) * ey - (y3 - y1) * ex) / denom;
-    const fraction2 = ((x3 - x1) * dy - (y3 - y1) * dx) / denom;
-    return denom !== 0 && fraction1 >= 0 && fraction1 <= 1 && fraction2 >= 0 && fraction2 <= 1 ? fraction1 : null;
 }
 
 

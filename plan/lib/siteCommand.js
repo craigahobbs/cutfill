@@ -3,12 +3,13 @@
 // (the USGS National Map's streams, roads, and trails, and the site's exclusion areas), and its topographic map image
 
 import {elevationModels, roadLines, streamLines, topoMapImageUrl, trailLines} from './usgs.js';
-import {exclusionFeatures, lineFeatures, snapStreams} from './features.js';
-import {layoutBox, layoutGeoreference, layoutLatLong, readTile, round, siteLayout, siteTerrain} from './terrain.js';
+import {exclusionFeatures, lineFeatures, snapDistance, snapStreams} from './features.js';
+import {layoutBox, layoutGeoreference, layoutLatLong, layoutSize, readTile, siteLayout, siteTerrain} from './terrain.js';
 import {orderPlan, planText} from './planFile.js';
 import {elevation as planElevation, planTopo} from '../../viewer/lib/model.js';
 import {latLongText} from '../../viewer/lib/geo.js';
 import {nearestText} from './roads.js';
+import {round} from '../../viewer/lib/format.js';
 import {validateSite} from './site.js';
 
 
@@ -100,7 +101,7 @@ export async function siteCommand(args, io) {
     let image = null;
     try {
         const [south, west] = layoutLatLong(layout, 0, 0);
-        const [north, east] = layoutLatLong(layout, (nCols - 1) * spacing, (nRows - 1) * spacing);
+        const [north, east] = layoutLatLong(layout, ...layoutSize(layout));
         const aspect = (nRows - 1) / (nCols - 1);
         const imageUrl = topoMapImageUrl(
             [west, south, east, north].map((degrees) => round(degrees, 6)),
@@ -187,7 +188,7 @@ export async function siteCommand(args, io) {
     // Report
     const lines = [
         `Grid: ${nCols} x ${nRows} at ${spacing} ${units} spacing ` +
-            `(${Math.round((nCols - 1) * spacing)} x ${Math.round((nRows - 1) * spacing)} ${units})`,
+            `(${layoutSize(layout).map(Math.round).join(' x ')} ${units})`,
         `Elevations: ${minZ.toFixed(1)} to ${maxZ.toFixed(1)} ${units}, contours every ${topography.contourInterval} ${units}`
     ];
     for (const {name, date} of terrain.surveys) {
@@ -201,7 +202,7 @@ export async function siteCommand(args, io) {
             `${featureCount(exclusions, 'exclusion area')}`
     );
     if (streams.length > 0) {
-        lines.push(`Streams: moved to the lowest ground within ${Math.round(30 / layout.scale)} ${units} across them - ` +
+        lines.push(`Streams: moved to the lowest ground within ${Math.round(snapDistance / layout.scale)} ${units} across them - ` +
             `a median of ${snapped.median.toFixed(1)} ${units}`);
     }
     if (image !== null) {

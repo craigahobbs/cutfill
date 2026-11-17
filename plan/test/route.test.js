@@ -1,5 +1,5 @@
 import {blockedPlan, designArgs, expected, hillPlan, plain, planePlan, roadPlan} from './roadFixtures.js';
-import {followRoads, polylineStations, resamplePolyline, routeSearch, smoothCurves, turnRadius} from '../lib/route.js';
+import {followRoads, polylineStations, resamplePolyline, routeLattice, routeSearch, smoothCurves, turnRadius} from '../lib/route.js';
 import assert from 'node:assert/strict';
 import {createDesign} from '../lib/design.js';
 import {lineIndex} from '../lib/roads.js';
@@ -7,9 +7,16 @@ import {planTopo} from '../../viewer/lib/model.js';
 import test from 'node:test';
 
 
+// Search a topography for a route - a search of its route lattice
+function searchTopo(topo, design, start, end, gradeWeight, slopeWeight, startHeading, softBand, gradeMargin, roads) {
+    const routeNodes = routeLattice(topo, design, slopeWeight, roads);
+    return routeSearch(routeNodes, design, start, end, gradeWeight, startHeading, softBand, gradeMargin);
+}
+
+
 // Search for a plan's route - without existing roads, none of the path is one
 function search(plan, args, ...searchArgs) {
-    const route = routeSearch(planTopo(plan), createDesign(plan, args), ...searchArgs);
+    const route = searchTopo(planTopo(plan), createDesign(plan, args), ...searchArgs);
     if (route === null) {
         return null;
     }
@@ -75,7 +82,7 @@ test('smoothCurves', () => {
 function searchRoads(plan) {
     const topo = planTopo(plan);
     const roads = lineIndex(topo.features, 'road', 100);
-    const route = routeSearch(
+    const route = searchTopo(
         topo, createDesign(plan, designArgs()), [plan.start.x, plan.start.y], [plan.end.x, plan.end.y], 1, 1, null, 0.03, 0, roads
     );
     return {route, roads};
@@ -160,7 +167,7 @@ test('routeSearch, existing roads', () => {
     // An all-new road is straight there
     const plan = roadPlan();
     const args = [[plan.start.x, plan.start.y], [plan.end.x, plan.end.y], 1, 1];
-    const allNew = routeSearch(planTopo(plan), createDesign(plan, designArgs()), ...args);
+    const allNew = searchTopo(planTopo(plan), createDesign(plan, designArgs()), ...args);
     assert.deepEqual(allNew.path, [[47, 47], ...latticeLine(70.5, 94, 1, 1, 12)]);
     assert.deepEqual(allNew.existing, new Array(13).fill(false));
 
@@ -259,6 +266,30 @@ test('routeSearch', () => {
     // The grade and side slope weights
     route = search(plane, designArgs({'grade': 8}), [50, 50], [250, 250], 3, 0.25, null, 0, 0.03);
     assert.deepEqual(route, expected['route-plane-weights']);
+});
+
+
+test('routeSearch, a large site and a lattice searched again', () => {
+    // A 2,000 foot plane (86 x 86 nodes) - the route is 63 diagonal moves and 9 moves between the diagonal and east
+    const plan = planePlan({'size': 201, 'spacing': 10, 'rise': 0.02});
+    plan.end = {'x': 1900, 'y': 1700};
+    const design = createDesign(plan, designArgs());
+    const routeNodes = routeLattice(planTopo(plan), design, 1);
+    assert.deepEqual([routeNodes.lattice, routeNodes.nX, routeNodes.nY, routeNodes.moveCosts.length], [23.5, 86, 86, 16]);
+    const route = routeSearch(routeNodes, design, [10, 10], [1900, 1700], 1);
+    assert.equal(route.path.length, 73);
+    assert.deepEqual(route.path.slice(0, 3), [[10, 10], [47, 23.5], [94, 47]]);
+    assert.deepEqual(route.path.slice(-3), [[1856.5, 1645], [1880, 1668.5], [1900, 1700]]);
+    assert.deepEqual([route.lattice, route.heading], [23.5, 2]);
+
+    // The lattice doesn't change when it's searched - another search of it is the same route, and a leg from the
+    assert.deepEqual(routeSearch(routeNodes, design, [10, 10], [1900, 1700], 1), route);
+    // route's end starts with its heading (northeast) - it turns north a step at a time, where a leg without a
+    // heading starts north
+    const leg = routeSearch(routeNodes, design, [1900, 1700], [1900, 1900], 1, route.heading);
+    assert.deepEqual(leg.path.slice(0, 2), [[1900, 1700], [1927, 1739]]);
+    assert.deepEqual(leg.path.at(-1), [1900, 1900]);
+    assert.deepEqual(routeSearch(routeNodes, design, [1900, 1700], [1900, 1900], 1).path.slice(0, 2), [[1900, 1700], [1903.5, 1715.5]]);
 });
 
 

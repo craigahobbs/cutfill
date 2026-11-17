@@ -1,6 +1,6 @@
 import {
-    createDesign, crossSection, featurePolygons, featureStreams, groundElevation, groundGradient, pointInPolygons, sectionCut, sectionFill,
-    sectionSlopeWidth, sectionWall, sectionWallLeft, sectionWallRight, segmentIntersection
+    createDesign, crossSection, featureStreams, groundElevation, groundGradient, sectionCut, sectionFill, sectionSlopeWidth, sectionWall,
+    sectionWallLeft, sectionWallRight
 } from '../lib/design.js';
 import {designArgs, expected, hillPlan, planePlan} from './roadFixtures.js';
 import assert from 'node:assert/strict';
@@ -103,46 +103,11 @@ test('groundElevation and groundGradient', () => {
 });
 
 
-test('featurePolygons and pointInPolygons', () => {
-    const topo = planTopo(hillPlan());
-    const rocks = featurePolygons(topo, 'rock');
-    const exclusions = featurePolygons(topo, 'exclusion');
-    assert.deepEqual([rocks.length, exclusions.length, featurePolygons(topo, 'wetland').length], [1, 1, 0]);
-    assert.deepEqual(
-        [[100, 100], [94, 100], [100, 111], [80, 45]].map(([x, y]) => [pointInPolygons(x, y, rocks), pointInPolygons(x, y, exclusions)]),
-        [[true, false], [false, false], [false, false], [false, true]]
-    );
-    assert.equal(pointInPolygons(100, 100, []), false);
-
-    // Any of the polygons
-    const square = (x) => ({'type': 'rock', 'points': [{x, 'y': 0}, {'x': x + 10, 'y': 0}, {'x': x + 10, 'y': 10}, {x, 'y': 10}]});
-    const squares = featurePolygons({'features': [square(0), square(20)]}, 'rock');
-    assert.deepEqual([5, 15, 25].map((x) => pointInPolygons(x, 5, squares)), [true, false, true]);
-});
-
-
 test('featureStreams', () => {
     const [stream1, stream2] = featureStreams(planTopo(hillPlan()));
     assert.deepEqual(stream1, {'name': 'West Creek', 'points': [{'x': 60, 'y': 0}, {'x': 61, 'y': 100}, {'x': 60, 'y': 200}]});
     assert.deepEqual(stream2, {'name': 'stream', 'points': [{'x': 0, 'y': 150}, {'x': 200, 'y': 151}]});
     assert.deepEqual(featureStreams(planTopo(planePlan())), []);
-});
-
-
-test('segmentIntersection', () => {
-    // The fraction along the first segment
-    assert.equal(segmentIntersection(0, 0, 10, 0, 5, -5, 5, 0.5), 0.5);
-    assert.equal(segmentIntersection(0, 0, 10, 0, 2.5, -5, 2.5, 5), 0.25);
-    assert.equal(segmentIntersection(0, 0, 10, 0, 0, -5, 0, 5), 0);
-    assert.equal(segmentIntersection(0, 0, 10, 0, 10, 0, 10, 5), 1);
-
-    // Beyond either segment's ends, and parallel segments
-    assert.equal(segmentIntersection(0, 1, 10, 1, 5, -5, 5, 0.5), null);
-    assert.equal(segmentIntersection(0, 0, 10, 0, 11, -5, 11, 5), null);
-    assert.equal(segmentIntersection(0, 0, 10, 0, -1, -5, -1, 5), null);
-    assert.equal(segmentIntersection(0, 0, 10, 0, 5, 1, 5, 5), null);
-    assert.equal(segmentIntersection(0, 0, 10, 0, 0, 1, 10, 1), null);
-    assert.equal(segmentIntersection(0, 0, 10, 0, 5, 0, 15, 0), null);
 });
 
 

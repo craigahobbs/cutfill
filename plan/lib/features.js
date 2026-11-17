@@ -1,7 +1,8 @@
 // features.js - a road site's topographic features - its streams, its existing roads and trails, and its exclusion
 // areas, in the plan's coordinates
 
-import {layoutPoint, round} from './terrain.js';
+import {layoutPoint, layoutSize} from './terrain.js';
+import {round} from '../../viewer/lib/format.js';
 
 
 // The distance, in meters, that a line's points are simplified within, and that lines' ends are joined within
@@ -14,40 +15,24 @@ const joinDistance = 0.5;
 // grid and simplified, and the lines of a name that meet end to end are joined - a stream's or a road's reaches
 // are one feature.
 export function lineFeatures(layout, type, lines) {
-    const width = (layout.nCols - 1) * layout.spacing;
-    const height = (layout.nRows - 1) * layout.spacing;
-    const tolerance = simplifyDistance / layout.scale;
     const joinTolerance = joinDistance / layout.scale;
 
     // The lines' parts within the grid, in plan coordinates
     const parts = [];
     for (const line of lines) {
         const points = line.points.map(([longitude, latitude]) => layoutPoint(layout, latitude, longitude));
-        for (const part of clipLine(points, width, height)) {
-            const simple = simplifyLine(part, tolerance);
-            if (simple.length > 1) {
-                parts.push({'name': line.name ?? null, 'points': simple});
-            }
+        for (const simple of gridParts(layout, points)) {
+            parts.push({'name': line.name ?? null, 'points': simple});
         }
     }
 
-    // Join the parts of a name that meet - a part's end at another's start
+    // Join the parts of a name that meet - a part's end at another's start. The joined parts have none that meet, so
+    // only a new part - and then the part it's joined to - can meet another.
     const joined = [];
     for (const part of parts) {
         joined.push(part);
-        for (let merged = true; merged;) {
-            merged = false;
-            for (let ix = 0; ix < joined.length && !merged; ix++) {
-                for (let ix2 = 0; ix2 < joined.length && !merged; ix2++) {
-                    const first = joined[ix];
-                    const second = joined[ix2];
-                    if (ix !== ix2 && first.name === second.name && pointsMeet(first.points.at(-1), second.points[0], joinTolerance)) {
-                        first.points = [...first.points, ...second.points.slice(1)];
-                        joined.splice(ix2, 1);
-                        merged = true;
-                    }
-                }
-            }
+        for (let ixPart = joined.length - 1; ixPart !== -1;) {
+            ixPart = joinPart(joined, ixPart, joinTolerance);
         }
     }
 
@@ -56,6 +41,44 @@ export function lineFeatures(layout, type, lines) {
         ...(name !== null ? {name} : {}),
         'points': points.map(([x, y]) => ({'x': round(x, 1), 'y': round(y, 1)}))
     }));
+}
+
+
+// Join a part to the first of the parts it meets, in the parts' order - a part before it whose end is at its start
+// (the part is added to that part's end), or a part whose start is at its end. Returns the joined part's index, or -1
+// if the part meets none. (No part after it ends at its start: the part is the new part, the last - or a part the new
+// part was added to, whose start no part met before.)
+function joinPart(parts, ixPart, tolerance) {
+    const part = parts[ixPart];
+    const meets = (first, second) => first.name === second.name && pointsMeet(first.points.at(-1), second.points[0], tolerance);
+    const join = (ixFirst, ixSecond) => {
+        const first = parts[ixFirst];
+        first.points = [...first.points, ...parts[ixSecond].points.slice(1)];
+        parts.splice(ixSecond, 1);
+        return ixSecond < ixFirst ? ixFirst - 1 : ixFirst;
+    };
+
+    // The parts before it that end at its start, then the parts that start at its end - the order of a search of
+    // every pair of the parts
+    for (let ix = 0; ix < ixPart; ix++) {
+        if (meets(parts[ix], part)) {
+            return join(ix, ixPart);
+        }
+    }
+    for (let ix = 0; ix < parts.length; ix++) {
+        if (ix !== ixPart && meets(part, parts[ix])) {
+            return join(ixPart, ix);
+        }
+    }
+    return -1;
+}
+
+
+// Clip a line ([x, y] point arrays) to a layout's grid and simplify it - returns its parts within the grid
+function gridParts(layout, points) {
+    const [width, height] = layoutSize(layout);
+    const tolerance = simplifyDistance / layout.scale;
+    return clipLine(points, width, height).map((part) => simplifyLine(part, tolerance)).filter((simple) => simple.length > 1);
 }
 
 
@@ -143,8 +166,7 @@ function simplifyLine(points, tolerance) {
 // Create a site's exclusion area features - an area without a name is named for its place in the site's areas. The
 // areas are clipped to the layout's grid, and an area outside it isn't a feature.
 export function exclusionFeatures(layout, site) {
-    const width = (layout.nCols - 1) * layout.spacing;
-    const height = (layout.nRows - 1) * layout.spacing;
+    const [width, height] = layoutSize(layout);
     const features = [];
     for (const [ixArea, area] of (site.exclusions ?? []).entries()) {
         const polygon = clipPolygon(area.points.map(({latitude, longitude}) => layoutPoint(layout, latitude, longitude)), width, height);
@@ -200,7 +222,7 @@ function clipPolygon(polygon, width, height) {
 
 // The distance, in meters, that a stream is moved within to its valley's bottom, and the height, in meters, of the
 // valley's bottom - a stream is moved to the nearest ground within that height of the lowest
-const snapDistance = 30;
+export const snapDistance = 30;
 const snapHeight = 0.15;
 
 
@@ -213,8 +235,6 @@ const snapHeight = 0.15;
 // moved, in plan units.
 export function snapStreams(layout, streams, elevation) {
     const {scale, spacing} = layout;
-    const width = (layout.nCols - 1) * spacing;
-    const height = (layout.nRows - 1) * spacing;
     const reach = snapDistance / scale;
     const tolerance = snapHeight / scale;
     const step = Math.max(2 * spacing, 3 / scale);
@@ -266,11 +286,8 @@ export function snapStreams(layout, streams, elevation) {
         });
 
         // The moved stream's parts within the grid
-        for (const part of clipLine(moved, width, height)) {
-            const simple = simplifyLine(part, simplifyDistance / scale);
-            if (simple.length > 1) {
-                snapped.push({...stream, 'points': simple.map(([x, y]) => ({'x': round(x, 1), 'y': round(y, 1)}))});
-            }
+        for (const simple of gridParts(layout, moved)) {
+            snapped.push({...stream, 'points': simple.map(([x, y]) => ({'x': round(x, 1), 'y': round(y, 1)}))});
         }
     }
     distances.sort((distance1, distance2) => distance1 - distance2);

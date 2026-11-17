@@ -3,9 +3,9 @@
 
 import {analyzeOption, planTopo} from '../../viewer/lib/model.js';
 import {designStructures, existingMask} from './structures.js';
-import {followRoads, resamplePolyline, routeSearch, smoothCurves} from './route.js';
+import {followRoads, resamplePolyline, routeLattice, routeSearch, smoothCurves} from './route.js';
 import {lineIndex, nearestLine} from './roads.js';
-import {orderPlan, planText} from './planFile.js';
+import {orderPlan, planText, readPlan} from './planFile.js';
 import {pyFixed, pyRound} from './numeric.js';
 import {createDesign} from './design.js';
 import {designProfile} from './profile.js';
@@ -134,100 +134,44 @@ function routeCommand(command, args, io) {
         return null;
     }
 
-    // Load the road plan model
-    let plan;
-    try {
-        plan = JSON.parse(io.readFile(commandArgs.plan));
-    } catch {
-        return {'code': 1, 'lines': [`error: could not load the road plan "${commandArgs.plan}"`]};
+    // Read the road plan model
+    const {plan, error} = readPlan(io, commandArgs.plan);
+    if (error !== undefined) {
+        return {'code': 1, 'lines': error};
     }
-    const {units} = plan;
     const topo = planTopo(plan);
     const design = createDesign(plan, commandArgs);
-    const options = plan.options ?? [];
+    const {options} = plan;
     const ixOption = options.findIndex((option) => option.name === commandArgs.name);
     const existingOption = ixOption === -1 ? null : options[ixOption];
+    const roads = lineIndex(topo.features, 'road', Math.max(topo.spacing, design.minRadius) * 2);
     const lines = [];
 
-    // The existing roads - the argument ranges, or for profile, the option's existing road structures, or for route,
-    // the plan's existing roads that the route follows
-    const roads = lineIndex(topo.features, 'road', Math.max(topo.spacing, design.minRadius) * 2);
-    const followsRoads = command === 'route' && !commandArgs.allNew && commandArgs.existingRoads === null;
-    let existingRoads = [];
-    if (commandArgs.existingRoads !== null) {
-        ({existingRoads} = commandArgs);
-    } else if (command === 'profile' && existingOption !== null) {
-        existingRoads = (existingOption.structures ?? []).filter((structure) => structure.type === 'existingRoad').map(
-            (structure) => [structure.station, structure.endStation]
-        );
-    }
-
     // Design the alignment and its profile
-    let alignment;
     let designed;
     if (command === 'route') {
-        // Search for the horizontal alignment through the via points - each leg starts with the previous leg's heading
-        const waypoints = [[plan.start.x, plan.start.y], ...commandArgs.via, [plan.end.x, plan.end.y]];
-        for (const [softBand, gradeMargin] of routeSearches) {
-            const path = [];
-            const existing = [];
-            let heading = null;
-            let lattice;
-            for (let ixWaypoint = 1; ixWaypoint < waypoints.length; ixWaypoint++) {
-                const leg = routeSearch(
-                    topo, design, waypoints[ixWaypoint - 1], waypoints[ixWaypoint], commandArgs.gradeWeight, commandArgs.slopeWeight,
-                    heading, softBand, gradeMargin, followsRoads ? roads : null
-                );
-                if (leg === null) {
-                    return {'code': 1, 'lines': ['error: no route found (blocked by exclusion areas or the topography boundary?)']};
-                }
-                ({heading, lattice} = leg);
-                path.push(...(path.length === 0 ? leg.path : leg.path.slice(1)));
-                existing.push(...(existing.length === 0 ? leg.existing : leg.existing.slice(1)));
-            }
-
-            // The route's runs along existing roads are the roads' lines - the rest is smoothed to the minimum radius
-            const interval = Math.max(design.stationInterval, Math.min(lattice, topo.spacing) * 0.5);
-            const followed = followRoads(path, existing, roads, lattice, 2 * design.minRadius, design.minRadius);
-            const smooth = smoothCurves(followed.points, interval, design.minRadius, followed.ranges);
-            alignment = resamplePolyline(smooth.x, smooth.y, interval);
-            if (followsRoads) {
-                existingRoads = smooth.ranges;
-            }
-            designed = designProfile(
-                topo, design, alignment.x, alignment.y, alignment.stations, existingMask(alignment.stations, existingRoads)
-            );
-            const endDepth = designed.ground.at(-1) - designed.profile.at(-1);
-            if (Math.abs(endDepth) <= design.tieTolerance) {
-                break;
-            }
-            lines.push(`The profile ends ${pyFixed(endDepth, 1)} ${units} below the end point - searching with stricter grades`);
+        designed = routeAlignment(plan, topo, design, roads, commandArgs, lines);
+        if (designed === null) {
+            return {'code': 1, 'lines': ['error: no route found (blocked by exclusion areas or the topography boundary?)']};
         }
     } else {
         if (existingOption === null) {
             return {'code': 1, 'lines': [`error: no option named "${commandArgs.name}"`]};
         }
-        const points = existingOption.alignment;
-        const interval = Math.max(design.stationInterval, topo.spacing * 0.5);
-        alignment = resamplePolyline(points.map((point) => point.x), points.map((point) => point.y), interval);
-        designed = designProfile(
-            topo, design, alignment.x, alignment.y, alignment.stations, existingMask(alignment.stations, existingRoads)
-        );
+        designed = profileAlignment(topo, design, existingOption, commandArgs);
     }
-    const {x, y, stations} = alignment;
-    const {profile, ground, sideSlope} = designed;
-    const last = x.length - 1;
+    const {x, y, stations, profile, sideSlope} = designed;
 
     // Structures (the existing roads within the road's length, measured along the option's alignment points as the
     // viewer does - an existing road to the road's end is to its last station, so nothing is placed between them)
     const pointsX = Array.from(x, (value) => pyRound(value, 2));
     const pointsY = Array.from(y, (value) => pyRound(value, 2));
     let length = 0;
-    for (let ix = 0; ix < last; ix++) {
+    for (let ix = 0; ix < x.length - 1; ix++) {
         length += Math.sqrt((pointsX[ix + 1] - pointsX[ix]) ** 2 + (pointsY[ix + 1] - pointsY[ix]) ** 2);
     }
     const alignmentLength = Math.floor(length * 10) / 10;
-    existingRoads = existingRoads.filter(([start]) => start < alignmentLength);
+    const existingRoads = designed.existingRoads.filter(([start]) => start < alignmentLength);
     const structures = designStructures(topo, design, x, y, stations, profile, sideSlope, existingRoads, alignmentLength);
 
     // Create the option
@@ -244,11 +188,96 @@ function routeCommand(command, args, io) {
     } else {
         options.push(option);
     }
-    plan.options = options;
     io.writeFile(commandArgs.plan, planText(orderPlan(plan)));
 
-    // Report (the new road's grades) - the existing roads with the roads' names, the structures' counts, and the
-    // option's cost score and design warnings
+    // Report
+    lines.push(...optionReport(plan, topo, design, roads, option, designed, existingRoads));
+    lines.push(`Wrote ${commandArgs.plan} - run "plan evaluate ${commandArgs.plan}" for the full analysis and cost`);
+    return {'code': 0, lines};
+}
+
+
+// Design a route's alignment and its profile - the least-cost alignment from the plan's start point, through the via
+// points, to its end point. If the profile can't reach the end's elevation within the grade limits, the route is
+// searched again with stricter grade penalties (a line of "lines" reports each). Returns the alignment's "x" and "y"
+// coordinates and "stations", its "profile", "ground", and "sideSlope" (designProfile), and its "existingRoads"
+// ([station, end station] ranges) - or null if there's no route.
+function routeAlignment(plan, topo, design, roads, commandArgs, lines) {
+    // The existing roads are the argument's ranges, or the plan's existing roads that the route follows
+    const followsRoads = !commandArgs.allNew && commandArgs.existingRoads === null;
+    let existingRoads = commandArgs.existingRoads ?? [];
+
+    // Search for the horizontal alignment through the via points - each leg starts with the previous leg's heading.
+    // The legs, and the searches with stricter grades, search one lattice.
+    const waypoints = [[plan.start.x, plan.start.y], ...commandArgs.via, [plan.end.x, plan.end.y]];
+    const routeNodes = routeLattice(topo, design, commandArgs.slopeWeight, followsRoads ? roads : null);
+    const {lattice} = routeNodes;
+    let alignment;
+    let designed;
+    for (const [softBand, gradeMargin] of routeSearches) {
+        const path = [];
+        const existing = [];
+        let heading = null;
+        for (let ixWaypoint = 1; ixWaypoint < waypoints.length; ixWaypoint++) {
+            const leg = routeSearch(
+                routeNodes, design, waypoints[ixWaypoint - 1], waypoints[ixWaypoint], commandArgs.gradeWeight, heading, softBand,
+                gradeMargin
+            );
+            if (leg === null) {
+                return null;
+            }
+            ({heading} = leg);
+            path.push(...(path.length === 0 ? leg.path : leg.path.slice(1)));
+            existing.push(...(existing.length === 0 ? leg.existing : leg.existing.slice(1)));
+        }
+
+        // The route's runs along existing roads are the roads' lines - the rest is smoothed to the minimum radius
+        const interval = Math.max(design.stationInterval, Math.min(lattice, topo.spacing) * 0.5);
+        const followed = followRoads(path, existing, roads, lattice, 2 * design.minRadius, design.minRadius);
+        const smooth = smoothCurves(followed.points, interval, design.minRadius, followed.ranges);
+        alignment = resamplePolyline(smooth.x, smooth.y, interval);
+        if (followsRoads) {
+            existingRoads = smooth.ranges;
+        }
+        designed = designProfile(
+            topo, design, alignment.x, alignment.y, alignment.stations, existingMask(alignment.stations, existingRoads)
+        );
+        const endDepth = designed.ground.at(-1) - designed.profile.at(-1);
+        if (Math.abs(endDepth) <= design.tieTolerance) {
+            break;
+        }
+        lines.push(`The profile ends ${pyFixed(endDepth, 1)} ${plan.units} below the end point - searching with stricter grades`);
+    }
+    return {...alignment, ...designed, existingRoads};
+}
+
+
+// Design the profile of an option's alignment - its existing roads are the argument's ranges, or the option's existing
+// road structures. Returns the alignment and its profile (like routeAlignment).
+function profileAlignment(topo, design, option, commandArgs) {
+    const existingRoads = commandArgs.existingRoads ??
+        (option.structures ?? []).filter((structure) => structure.type === 'existingRoad').map(
+            (structure) => [structure.station, structure.endStation]
+        );
+    const points = option.alignment;
+    const interval = Math.max(design.stationInterval, topo.spacing * 0.5);
+    const alignment = resamplePolyline(points.map((point) => point.x), points.map((point) => point.y), interval);
+    const designed = designProfile(
+        topo, design, alignment.x, alignment.y, alignment.stations, existingMask(alignment.stations, existingRoads)
+    );
+    return {...alignment, ...designed, existingRoads};
+}
+
+
+// Create an option's report lines - its length, the new road's grades and depths, its existing roads (with the roads'
+// names), its structures' counts, its cost score and design warnings, and a warning for each end of its profile that
+// isn't at the ground
+function optionReport(plan, topo, design, roads, option, designed, existingRoads) {
+    const {units} = plan;
+    const {x, y, stations, profile, ground} = designed;
+    const {structures} = option;
+    const last = x.length - 1;
+    const lines = [];
     const mask = existingMask(stations, existingRoads);
     let maxGrade = -Infinity;
     let maxDepth = -Infinity;
@@ -262,7 +291,7 @@ function routeCommand(command, args, io) {
         minDepth = Math.min(minDepth, ground[ix] - profile[ix]);
     }
     lines.push(
-        `Option "${commandArgs.name}": ${pyFixed(stations[last], 0)} ${units} long, ${x.length} alignment points, ` +
+        `Option "${option.name}": ${pyFixed(stations[last], 0)} ${units} long, ${x.length} alignment points, ` +
         `max grade ${pyFixed(maxGrade, 1)}%, max cut ${pyFixed(Math.max(0, maxDepth), 1)}, max fill ${pyFixed(Math.max(0, -minDepth), 1)}`
     );
     for (const structure of structures.filter(({type}) => type === 'existingRoad')) {
@@ -299,8 +328,7 @@ function routeCommand(command, args, io) {
             );
         }
     }
-    lines.push(`Wrote ${commandArgs.plan} - run "plan evaluate ${commandArgs.plan}" for the full analysis and cost`);
-    return {'code': 0, lines};
+    return lines;
 }
 
 

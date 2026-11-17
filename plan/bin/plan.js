@@ -12,13 +12,14 @@
 //        node bin/plan.js describe <plan.json> <descriptions.md>
 //        node bin/plan.js doc [site | plan]
 
+import {existsSync, mkdirSync, readFileSync, writeFileSync} from 'node:fs';
 import {fetchBytes, fetchJson} from '../lib/usgs.js';
-import {mkdirSync, readFileSync, writeFileSync} from 'node:fs';
 import {Resvg} from '@resvg/resvg-js';
 import {cliMain} from '../lib/cli.js';
 import {dirname} from 'node:path';
 import {elevationImage} from '../lib/elevationImage.js';
 import {fromUrl} from 'geotiff';
+import {plotFonts} from '../lib/plot.js';
 import process from 'node:process';
 import {setTimeout as sleep} from 'node:timers/promises';
 
@@ -37,6 +38,12 @@ async function openImage(url) {
 }
 
 
+// Render a plot's SVG markup as a PNG image file's bytes
+function renderPng(svg) {
+    return new Resvg(svg, {'background': 'white', 'font': plotFonts(process.platform, process.env, existsSync)}).render().asPng();
+}
+
+
 // The command line's input and output functions
 process.exitCode = await cliMain(process.argv.slice(2), {
     'readFile': (path) => readFileSync(path, 'utf-8'),
@@ -47,6 +54,6 @@ process.exitCode = await cliMain(process.argv.slice(2), {
     'getJson': (url) => fetchJson(fetch, sleep, url),
     'getBytes': (url) => fetchBytes(fetch, sleep, url),
     sleep,
-    'renderPng': (svg) => new Resvg(svg, {'background': 'white', 'font': {'loadSystemFonts': true}}).render().asPng(),
+    renderPng,
     openImage
 });

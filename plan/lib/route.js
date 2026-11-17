@@ -3,9 +3,9 @@
 // tools', but for the existing roads)
 
 import {
-    crossSection, featurePolygons, featureStreams, groundElevation, groundGradient, pointInPolygons, sectionCut, sectionFill,
-    sectionSlopeWidth, sectionWall, segmentIntersection
+    crossSection, featureStreams, groundElevation, groundGradient, sectionCut, sectionFill, sectionSlopeWidth, sectionWall
 } from './design.js';
+import {featureIndexes, pointInPolygons, segmentIntersect} from '../../viewer/lib/model.js';
 import {hypot, interp, linspace, pyRound} from './numeric.js';
 import {nearestLine, segmentNearest} from './roads.js';
 
@@ -21,30 +21,29 @@ const moves = [
 const headingCount = moves.length + 1;
 
 
-// Search for the least-cost horizontal alignment from a start point to an end point ([x, y] arrays) on a lattice with
-// heading states (so its turns have a radius). A move's cost is its length's road and its earthwork on the ground's
-// side slope, weighted by "slopeWeight", and its climb beyond the design grade, weighted by "gradeWeight" - the climb
-// must be absorbed by earthwork (soft, up to "softBand" over the design grade, less "gradeMargin") or it makes the end
-// unreachable (hard). "startHeading" is the heading at the start (the previous leg's final heading), or null.
+// Create a route search's lattice - the lattice's nodes and the cost of each move from every node. A move's cost is
+// its length's road and its earthwork on the ground's side slope, weighted by "slopeWeight". The lattice doesn't
+// depend on a search's start and end points or its grade penalties, so a route's legs and its searches with stricter
+// grades use one lattice.
 //
 // "roads" is the index of the plan's existing roads (roads.js), or null for an all-new road. A move along an existing
 // road costs its length's upgrade - there's no earthwork, grade limit, or culvert, and the road turns as it does - so
 // the route follows the existing roads where that's cheaper than a new road, and joins and leaves them where it's
 // cheapest.
 //
-// Returns the route's "path" (an array of [x, y] points), its points' "existing" flags (the move to the point is along
-// an existing road), the "lattice" spacing, and the final "heading" - or null if there's no route.
-export function routeSearch(
-    topo, design, start, end, gradeWeight, slopeWeight, startHeading = null, softBand = 0.03, gradeMargin = 0, roads = null
-) {
+// Returns the lattice object for the routeSearch function - the "lattice" spacing, its "nX" by "nY" nodes, and each
+// move's arrays of its cost from every node ("moveCosts" - infinite where there's no move), the ground's grade along it
+// ("moveGrades"), whether it's along an existing road ("moveRoads"), and the number of streams it crosses
+// ("moveCulverts").
+export function routeLattice(topo, design, slopeWeight, roads = null) {
     // The lattice is as fine as the minimum radius' turns allow (a turn is 22.5 degrees a step) - a finer lattice finds
     // a cheaper road, on gentler ground
     const lattice = Math.max(topo.spacing * 0.75, design.minRadius * 0.47);
     const nX = Math.trunc(topo.width / lattice) + 1;
     const nY = Math.trunc(topo.height / lattice) + 1;
     const nodeCount = nX * nY;
-    const exclusions = featurePolygons(topo, 'exclusion');
-    const rocks = featurePolygons(topo, 'rock');
+    const exclusions = featureIndexes(topo, 'exclusion');
+    const rocks = featureIndexes(topo, 'rock');
     const streams = featureStreams(topo);
 
     // The nodes' elevations, and the nodes within the exclusion areas
@@ -83,23 +82,21 @@ export function routeSearch(
     const latticeFirst = (v1, v2) => Math.max(0, Math.floor((Math.min(v1, v2) - margin) / lattice));
     const latticeEnd = (v1, v2, count) => Math.min(count, Math.ceil((Math.max(v1, v2) + margin) / lattice) + 1);
 
-    // Precompute each move's cost from every node - a turning move is limited to the switchback grade
+    // Each move from every node
+    const moveLengths = [];
     const moveCosts = [];
-    const moveTurnCosts = [];
+    const moveGrades = [];
     const moveRoads = [];
+    const moveCulverts = [];
     const section = new Float64Array(6);
     for (const [dx, dy] of moves) {
         const length = Math.sqrt(dx * dx + dy * dy) * lattice;
         const ux = dx * lattice / length;
         const uy = dy * lattice / length;
         const costs = new Float64Array(nodeCount).fill(Infinity);
-        const turnCosts = new Float64Array(nodeCount).fill(Infinity);
+        const grades = new Float64Array(nodeCount);
         const roadMoves = new Uint8Array(nodeCount);
-        const excessCost = (groundGrade, limitGrade) => {
-            const excess = Math.max(0, groundGrade - (limitGrade - gradeMargin)) * length;
-            const soft = Math.min(excess, softBand * length);
-            return gradeWeight * (soft * design.costLength * 15 + (excess - soft) * design.costLength * 300);
-        };
+        const culverts = new Uint8Array(nodeCount);
         for (let row = 0; row < nY; row++) {
             for (let col = 0; col < nX; col++) {
                 // The move's end is within the topography, and neither it nor the node is within an exclusion area?
@@ -120,7 +117,6 @@ export function routeSearch(
                 if (roadNodes[node] && roadNodes[row2 * nX + col2] && isRoadMove(x1, y1, x2, y2)) {
                     roadMoves[node] = 1;
                     costs[node] = length * design.costExisting;
-                    turnCosts[node] = costs[node];
                     continue;
                 }
 
@@ -131,19 +127,15 @@ export function routeSearch(
                 const sideSlope = -uy * gradientX + ux * gradientY;
                 crossSection(0, sideSlope, design.halfWidth, design.cutSlope, design.fillSlope, section);
                 const cutCost = pointInPolygons(midX, midY, rocks) ? design.costRock : design.costCut;
-                const cost = length * (design.costLength + slopeWeight * (
+                costs[node] = length * (design.costLength + slopeWeight * (
                     section[sectionCut] * cutCost + section[sectionFill] * design.costFill +
                     section[sectionSlopeWidth] * design.costArea + section[sectionWall] * design.costWall
                 ));
-
-                // The climb beyond the design grade
-                const groundGrade = Math.abs(groundElevation(topo, x2, y2) - nodeZ[node]) / length;
-                turnCosts[node] = cost + excessCost(groundGrade, design.switchbackGrade);
-                costs[node] = cost + excessCost(groundGrade, design.grade);
+                grades[node] = Math.abs(groundElevation(topo, x2, y2) - nodeZ[node]) / length;
             }
         }
 
-        // Stream crossings need a culvert (a turning move's cost doesn't include it, and an existing road has its own)
+        // The streams the move crosses - each needs a culvert (an existing road has its own)
         for (const {points} of streams) {
             for (let ixPoint = 1; ixPoint < points.length; ixPoint++) {
                 const point1 = points[ixPoint - 1];
@@ -157,17 +149,46 @@ export function routeSearch(
                         const x2 = x1 + dx * lattice;
                         const y2 = y1 + dy * lattice;
                         if (!roadMoves[row * nX + col] &&
-                            segmentIntersection(x1, y1, x2, y2, point1.x, point1.y, point2.x, point2.y) !== null) {
-                            costs[row * nX + col] += design.costCulvert;
+                            segmentIntersect(x1, y1, x2, y2, point1.x, point1.y, point2.x, point2.y) !== null) {
+                            culverts[row * nX + col] += 1;
                         }
                     }
                 }
             }
         }
+        moveLengths.push(length);
         moveCosts.push(costs);
-        moveTurnCosts.push(turnCosts);
+        moveGrades.push(grades);
         moveRoads.push(roadMoves);
+        moveCulverts.push(culverts);
     }
+    return {lattice, nX, nY, moveLengths, moveCosts, moveGrades, moveRoads, moveCulverts};
+}
+
+
+// Search a route lattice (routeLattice) for the least-cost horizontal alignment from a start point to an end point
+// ([x, y] arrays). The lattice's nodes have heading states, so the alignment's turns have a radius. A move's cost is
+// the lattice's and its climb beyond the design grade, weighted by "gradeWeight" - the climb must be absorbed by
+// earthwork (soft, up to "softBand" over the design grade, less "gradeMargin") or it makes the end unreachable (hard).
+// A turning move is limited to the switchback grade, and a move that crosses a stream has a culvert (a turning move's
+// cost doesn't include it). "startHeading" is the heading at the start (the previous leg's final heading), or null.
+//
+// Returns the route's "path" (an array of [x, y] points), its points' "existing" flags (the move to the point is along
+// an existing road), the "lattice" spacing, and the final "heading" - or null if there's no route.
+export function routeSearch(routeNodes, design, start, end, gradeWeight, startHeading = null, softBand = 0.03, gradeMargin = 0) {
+    const {lattice, nX, nY, moveLengths, moveCosts, moveGrades, moveRoads, moveCulverts} = routeNodes;
+    const {costLength, costCulvert} = design;
+    const moveCount = moves.length;
+    const nodeCount = nX * nY;
+
+    // The cost of a move's climb beyond a grade limit
+    const gradeLimit = design.grade - gradeMargin;
+    const turnLimit = design.switchbackGrade - gradeMargin;
+    const excessCost = (groundGrade, limitGrade, length) => {
+        const excess = Math.max(0, groundGrade - limitGrade) * length;
+        const soft = Math.min(excess, softBand * length);
+        return gradeWeight * (soft * costLength * 15 + (excess - soft) * costLength * 300);
+    };
 
     // The nearest nodes to the start and end points
     const nearestNode = ([x, y]) => (
@@ -180,13 +201,14 @@ export function routeSearch(
     const best = new Float64Array(nodeCount * headingCount).fill(Infinity);
     const parent = new Int32Array(nodeCount * headingCount).fill(-1);
     const heap = new StateHeap();
-    const startState = startNode * headingCount + (startHeading ?? moves.length);
-    const turnPenalty = design.costLength * lattice * 0.15;
+    const startState = startNode * headingCount + (startHeading ?? moveCount);
+    const turnPenalty = costLength * lattice * 0.15;
     let finalState = null;
     best[startState] = 0;
     heap.push(0, startState);
     while (heap.count > 0) {
-        const [cost, state] = heap.pop();
+        heap.pop();
+        const {cost, state} = heap;
         if (cost > best[state]) {
             continue;
         }
@@ -199,21 +221,35 @@ export function routeSearch(
 
         // Straight ahead and one direction either side - or from the start, any direction. On an existing road (the
         // move to the node was along it), the next move along it is in any direction - the road turns as it does.
-        const noHeading = heading === moves.length;
+        const noHeading = heading === moveCount;
         const onRoad = !noHeading && moveRoads[heading][node - moves[heading][1] * nX - moves[heading][0]] === 1;
-        const headings = noHeading || onRoad ? moves.keys() :
-            [(heading + moves.length - 1) % moves.length, heading, (heading + 1) % moves.length];
-        for (const nextHeading of headings) {
+        const anyHeading = noHeading || onRoad;
+        const nextCount = anyHeading ? moveCount : 3;
+        for (let ixNext = 0; ixNext < nextCount; ixNext++) {
+            const nextHeading = anyHeading ? ixNext : (heading + moveCount - 1 + ixNext) % moveCount;
             const turn = noHeading ? 0 : Math.min(
-                (nextHeading - heading + moves.length) % moves.length, (heading - nextHeading + moves.length) % moves.length
+                (nextHeading - heading + moveCount) % moveCount, (heading - nextHeading + moveCount) % moveCount
             );
             const roadMove = moveRoads[nextHeading][node] === 1;
             if (turn > 1 && !roadMove) {
                 continue;
             }
-            const moveCost = turn === 0 ? moveCosts[nextHeading][node] : moveTurnCosts[nextHeading][node] + (roadMove ? 0 : turnPenalty);
+            let moveCost = moveCosts[nextHeading][node];
             if (moveCost === Infinity) {
                 continue;
+            }
+            if (!roadMove) {
+                // The climb beyond the design grade - or, for a turning move, the switchback grade
+                const length = moveLengths[nextHeading];
+                const groundGrade = moveGrades[nextHeading][node];
+                if (turn === 0) {
+                    moveCost += excessCost(groundGrade, gradeLimit, length);
+                    for (let culverts = moveCulverts[nextHeading][node]; culverts > 0; culverts--) {
+                        moveCost += costCulvert;
+                    }
+                } else {
+                    moveCost = moveCost + excessCost(groundGrade, turnLimit, length) + turnPenalty;
+                }
             }
             const [dx, dy] = moves[nextHeading];
             const nextState = (node + dy * nX + dx) * headingCount + nextHeading;
@@ -288,27 +324,36 @@ export function followRoads(path, existing, roads, lattice, minLength, transitio
 }
 
 
-// A binary min-heap of route search states, by cost and then by state
+// A binary min-heap of route search states, by cost and then by state - the items are in typed arrays, which grow as
+// they fill
 class StateHeap {
-    constructor() {
-        this.costs = [];
-        this.states = [];
+    constructor(capacity = 1024) {
+        this.costs = new Float64Array(capacity);
+        this.states = new Int32Array(capacity);
         this.count = 0;
-    }
 
-    // Determine if the item at an index is less than a cost and state
-    less(ix, cost, state) {
-        return this.costs[ix] < cost || (this.costs[ix] === cost && this.states[ix] < state);
+        // The item that pop removed
+        this.cost = 0;
+        this.state = 0;
     }
 
     push(cost, state) {
+        if (this.count === this.costs.length) {
+            const costs = new Float64Array(this.count * 2);
+            const states = new Int32Array(this.count * 2);
+            costs.set(this.costs);
+            states.set(this.states);
+            this.costs = costs;
+            this.states = states;
+        }
+
         // Sift the new item up from the end
         const {costs, states} = this;
         let ix = this.count;
         this.count += 1;
         while (ix > 0) {
             const ixParent = (ix - 1) >> 1;
-            if (this.less(ixParent, cost, state)) {
+            if (costs[ixParent] < cost || (costs[ixParent] === cost && states[ixParent] < state)) {
                 break;
             }
             costs[ix] = costs[ixParent];
@@ -319,10 +364,12 @@ class StateHeap {
         states[ix] = state;
     }
 
+    // Remove the first item - it's the heap's "cost" and "state"
     pop() {
-        // Remove the first item, and sift the last item down from the top
+        // Sift the last item down from the top
         const {costs, states} = this;
-        const first = [costs[0], states[0]];
+        [this.cost] = costs;
+        [this.state] = states;
         this.count -= 1;
         const {count} = this;
         const cost = costs[count];
@@ -333,10 +380,12 @@ class StateHeap {
             if (ixChild >= count) {
                 break;
             }
-            if (ixChild + 1 < count && this.less(ixChild + 1, costs[ixChild], states[ixChild])) {
-                ixChild += 1;
+            const ixRight = ixChild + 1;
+            if (ixRight < count &&
+                (costs[ixRight] < costs[ixChild] || (costs[ixRight] === costs[ixChild] && states[ixRight] < states[ixChild]))) {
+                ixChild = ixRight;
             }
-            if (!this.less(ixChild, cost, state)) {
+            if (!(costs[ixChild] < cost || (costs[ixChild] === cost && states[ixChild] < state))) {
                 break;
             }
             costs[ix] = costs[ixChild];
@@ -345,7 +394,6 @@ class StateHeap {
         }
         costs[ix] = cost;
         states[ix] = state;
-        return first;
     }
 }
 

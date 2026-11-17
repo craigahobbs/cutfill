@@ -1,8 +1,9 @@
 // structures.js - the road's structures: culverts, bridges, retaining walls, and turnouts (a port of the Python planning
 // tools')
 
-import {crossSection, featureStreams, groundElevation, sectionWallLeft, sectionWallRight, segmentIntersection} from './design.js';
+import {crossSection, featureStreams, groundElevation, sectionWallLeft, sectionWallRight} from './design.js';
 import {npRound, pyRound} from './numeric.js';
+import {segmentIntersect} from '../../viewer/lib/model.js';
 
 
 // Get the station mask of the existing roads ([station, end station] ranges), with a tolerance for the stations' rounding
@@ -53,7 +54,7 @@ export function designStructures(topo, design, x, y, stations, profile, sideSlop
             const point1 = points[ixPoint - 1];
             const point2 = points[ixPoint];
             for (let ix = 0; ix < count - 1; ix++) {
-                const fraction = segmentIntersection(x[ix], y[ix], x[ix + 1], y[ix + 1], point1.x, point1.y, point2.x, point2.y);
+                const fraction = segmentIntersect(x[ix], y[ix], x[ix + 1], y[ix + 1], point1.x, point1.y, point2.x, point2.y);
                 if (fraction !== null) {
                     const stationValue = stations[ix] + fraction * ds;
                     if (!inExisting(stationValue)) {

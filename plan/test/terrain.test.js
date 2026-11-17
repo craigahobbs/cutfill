@@ -1,10 +1,11 @@
 import {
-    fillHoles, gridLimit, gridSurvey, layoutBox, layoutGeoreference, layoutLatLong, layoutPoint, metersPerFoot, readTile, round,
-    siteLayout, siteTerrain, tileWindow
+    fillHoles, gridLimit, gridSurvey, layoutBox, layoutGeoreference, layoutLatLong, layoutPoint, readTile, siteLayout, siteTerrain,
+    tileWindow
 } from '../lib/terrain.js';
 import {gridUtm, plane, siteEast, siteNorth, testImage, testIo, testSite} from './terrainHelpers.js';
 import {project, transverseMercator} from '../../viewer/lib/geo.js';
 import assert from 'node:assert/strict';
+import {round} from '../../viewer/lib/format.js';
 import test from 'node:test';
 
 
@@ -41,7 +42,6 @@ test('siteLayout', () => {
     // of the 372 meters between them, but at least 150 meters (and at most 600 meters) - and its grid is the finest
     // that's within the limit
     assert.equal(gridLimit, 1000000);
-    assert.equal(metersPerFoot, 0.3048);
     assert.deepEqual(layoutMembers(siteLayout(testSite())), {
         'units': 'meters',
         'scale': 1,
