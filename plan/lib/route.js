@@ -324,6 +324,38 @@ export function followRoads(path, existing, roads, lattice, minLength, transitio
 }
 
 
+// Find the via points that a road turns back at - "x", "y", and "stations" are the road's alignment, "vias" is the via
+// points ([x, y] arrays), and "reach" is the distance along the road, before and after a via point, that's compared: the
+// road turns back where the straight line between its points that far before and after the via point is less than half
+// their distance along the road (a road that only passes a via point gets on with its way). Returns the turn-back
+// objects - the via point's index ("via") and its station on the road ("station").
+export function viaTurnBacks(x, y, stations, vias, reach) {
+    const turnBacks = [];
+    vias.forEach(([viaX, viaY], via) => {
+        // The via point's alignment point, and the points the reach before and after it
+        let ixVia = 0;
+        for (let ix = 1; ix < x.length; ix++) {
+            if (Math.hypot(x[ix] - viaX, y[ix] - viaY) < Math.hypot(x[ixVia] - viaX, y[ixVia] - viaY)) {
+                ixVia = ix;
+            }
+        }
+        let ixBefore = ixVia;
+        while (ixBefore > 0 && stations[ixVia] - stations[ixBefore] < reach) {
+            ixBefore -= 1;
+        }
+        let ixAfter = ixVia;
+        while (ixAfter < x.length - 1 && stations[ixAfter] - stations[ixVia] < reach) {
+            ixAfter += 1;
+        }
+        const chord = Math.hypot(x[ixAfter] - x[ixBefore], y[ixAfter] - y[ixBefore]);
+        if (chord < 0.5 * (stations[ixAfter] - stations[ixBefore])) {
+            turnBacks.push({via, 'station': stations[ixVia]});
+        }
+    });
+    return turnBacks;
+}
+
+
 // A binary min-heap of route search states, by cost and then by state - the items are in typed arrays, which grow as
 // they fill
 export class StateHeap {

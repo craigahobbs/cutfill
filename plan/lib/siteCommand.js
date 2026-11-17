@@ -19,7 +19,8 @@ export const siteUsage = [
     '',
     '  Create a road plan model\'s site from a road site model - its topography, from the USGS 3D Elevation Program\'s',
     '  1 meter elevation models, its georeference, its start and end points, its streams, roads, and exclusion areas,',
-    '  and its topographic map image ("<plan>.png"). An existing plan\'s options are kept.'
+    '  and its topographic map image ("<plan>.png"). An existing plan\'s options are kept, and the features that were',
+    '  added to it (the "feature" and "draws" commands\').'
 ];
 
 
@@ -132,7 +133,7 @@ export async function siteCommand(args, io) {
 
     // An existing plan's options and features are in its coordinates - they're moved to the new grid's
     const georeference = layoutGeoreference(layout);
-    const shifted = shiftPlan(plan, georeference);
+    const {'plan': shifted, moved} = shiftPlan(plan, georeference);
     if (shifted === null) {
         return error([
             `error: The road plan "${planPath}" isn't a plan of this site - its georeference's center isn't the site's. ` +
@@ -145,18 +146,14 @@ export async function siteCommand(args, io) {
     const snapped = snapStreams(layout, streams, (x, y) => planElevation(streamTopo, x, y));
     ({streams} = snapped);
 
-    // The features - the site's streams, roads, trails, and exclusion areas, and the plan's other features
+    // The features - the site's streams, roads, trails, and exclusion areas, and the plan's other features: its rock
+    // outcrops, its exclusion areas that aren't the site's, and the streams, roads, and trails that were added to it
     const exclusions = exclusionFeatures(layout, site);
     const exclusionNames = new Set(exclusions.map(({name}) => name));
-    const features = [
-        ...streams,
-        ...roads,
-        ...trails,
-        ...exclusions,
-        ...(shifted.topography?.features ?? []).filter(
-            ({type, name}) => type === 'rock' || (type === 'exclusion' && !exclusionNames.has(name))
-        )
-    ];
+    const kept = (shifted.topography?.features ?? []).filter(({type, name, added = false}) => (
+        type === 'rock' || (type === 'exclusion' ? !exclusionNames.has(name) : added)
+    ));
+    const features = [...streams, ...roads, ...trails, ...exclusions, ...kept];
 
     // Update the plan
     const {start, end} = layout;
@@ -205,6 +202,16 @@ export async function siteCommand(args, io) {
         lines.push(`Streams: moved to the lowest ground within ${Math.round(snapDistance / layout.scale)} ${units} across them - ` +
             `a median of ${snapped.median.toFixed(1)} ${units}`);
     }
+    if (kept.length > 0) {
+        const counts = Object.entries(featureNames).map(([type, name]) => [kept.filter((feature) => feature.type === type), name]);
+        lines.push(
+            'Kept the plan\'s other features: ' +
+            `${counts.filter(([typeFeatures]) => typeFeatures.length > 0).map((count) => featureCount(...count)).join(', ')}`
+        );
+    }
+    if (moved.some((distance) => distance !== 0)) {
+        lines.push(`The plan's coordinates moved ${moved.join(', ')} ${units} - its options and other features moved with them`);
+    }
     if (image !== null) {
         lines.push(`Topographic map image: ${imagePath}`);
     }
@@ -218,6 +225,10 @@ export async function siteCommand(args, io) {
     lines.push(`Wrote ${planPath}`);
     return {'code': 0, lines};
 }
+
+
+// The feature types' names, in the report's order
+const featureNames = {'stream': 'stream', 'road': 'road', 'trail': 'trail', 'rock': 'rock outcrop', 'exclusion': 'exclusion area'};
 
 
 // Describe a count of features
@@ -238,14 +249,15 @@ export function rangeContourInterval(range, units) {
 
 
 // Move an existing plan to a new grid's coordinates - its features' and options' points are shifted by the grids'
-// origins' difference. Returns the plan, or null if its georeference's center isn't the new georeference's.
+// origins' difference. Returns the plan ("plan" - null if its georeference's center isn't the new georeference's) and
+// the distances its coordinates moved ("moved").
 function shiftPlan(plan, georeference) {
     const planGeoreference = plan.georeference ?? null;
     if (planGeoreference === null) {
-        return 'topography' in plan ? null : plan;
+        return {'plan': 'topography' in plan ? null : plan, 'moved': [0, 0]};
     }
     if (planGeoreference.latitude !== georeference.latitude || planGeoreference.longitude !== georeference.longitude) {
-        return null;
+        return {'plan': null, 'moved': [0, 0]};
     }
     const dx = georeference.x - planGeoreference.x;
     const dy = georeference.y - planGeoreference.y;
@@ -260,5 +272,5 @@ function shiftPlan(plan, georeference) {
     if ('options' in plan) {
         shifted.options = plan.options.map((option) => ({...option, 'alignment': option.alignment.map(shift)}));
     }
-    return shifted;
+    return {'plan': shifted, 'moved': [round(dx, 2), round(dy, 2)]};
 }

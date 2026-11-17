@@ -3,6 +3,7 @@ import {cliMain} from '../lib/cli.js';
 import {fixturePlan} from '../../viewer/test/fixture.js';
 import {cliMain as roadieMain} from '../../viewer/lib/cli.js';
 import test from 'node:test';
+import {testIo} from './terrainHelpers.js';
 
 
 // Run the command line - returns the exit code and the output
@@ -19,11 +20,13 @@ usage: plan site <site.json> <plan.json>
        plan plot <plan.json> <plot.png> [--box X1,Y1,X2,Y2]
        plan locate <plan.json> [--xy] <latitude,longitude | x,y>...
        plan feature <plan.json> TYPE [-n NAME] X,Y X,Y...
-       plan draws <plan.json> [--add NUMBER -n NAME]
+       plan draws <plan.json> [--add NUMBER]...
+       plan options <plan.json> [options]
        plan route <plan.json> -n NAME [-v X,Y]... [options]
        plan profile <plan.json> -n NAME [options]
        plan evaluate <plan.json> [--detail]
        plan keep <plan.json> NAME...
+       plan draft <plan.json> <descriptions.md>
        plan describe <plan.json> <descriptions.md>
        plan doc [site | plan]
 
@@ -34,15 +37,19 @@ usage: plan site <site.json> <plan.json>
   feature   Add a topographic feature to a road plan model, or remove its features of a name
   draws     List a road plan model's draws - the valleys of its terrain that aren't along its streams - or add
             one as a stream
+  options   Engineer a road plan model's standard options - the road that follows its existing roads, and an
+            all-new road
   route     Engineer a road option - its alignment (following existing roads where that costs less), profile,
             and structures
   profile   Re-design an existing option's profile and structures
   evaluate  Print a road plan model's analysis and cost (--detail adds each option's station table)
   keep      Keep a road plan model's named options, in cost score order, and remove its others
+  draft     Write a draft of a road plan model's descriptions - the plan's and its options' facts
   describe  Set a road plan model's and its options' descriptions from a Markdown file
   doc       Print the road site model documentation - or the road plan model documentation
 
-Each command's usage is its "-h" argument's output.
+Each command's usage is its "-h" argument's output. The commands that change a plan are logged, in order, in
+its work directory ("<plan>.work/commands.txt").
 `;
 
 
@@ -93,6 +100,30 @@ test('cliMain evaluate', async () => {
     assert.deepEqual(await run(['evaluate']), {'code': 1, 'output': usage});
     assert.deepEqual(await run(['evaluate', 'road.json', 'other.json']), {'code': 1, 'output': usage});
     assert.deepEqual(await run(['evaluate', '--detail', '--summary']), {'code': 1, 'output': usage});
+});
+
+
+test('cliMain, the command log', async () => {
+    // The commands that change a plan are logged in its work directory, in order - an argument that isn't plain is quoted
+    const io = testIo({'files': {'plans/road.json': JSON.stringify(fixturePlan()), 'text.md': '# Plan\n\nA road.\n'}});
+    assert.equal(await cliMain(['feature', 'plans/road.json', 'stream', '-n', 'Bob\'s Creek', '10,10', '50,50'], io), 0);
+    assert.equal(await cliMain(['keep', 'plans/road.json', 'Direct'], io), 0);
+    assert.equal(await cliMain(['describe', 'plans/road.json', 'text.md'], io), 0);
+    assert.equal(io.files['plans/road.work/commands.txt'], `\
+plan.js feature plans/road.json stream -n 'Bob'\\''s Creek' 10,10 50,50
+plan.js keep plans/road.json Direct
+plan.js describe plans/road.json text.md
+`);
+
+    // A command that fails, or that doesn't change the plan, isn't logged
+    assert.equal(await cliMain(['keep', 'plans/road.json', 'Unknown'], io), 1);
+    assert.equal(await cliMain(['draws', 'plans/road.json'], io), 0);
+    assert.equal(await cliMain(['draft', 'plans/road.json', 'draft.md'], io), 0);
+    assert.equal(await cliMain(['evaluate', 'plans/road.json'], io), 0);
+    assert.equal(io.files['plans/road.work/commands.txt'].split('\n').length, 4);
+    assert.deepEqual(io.written.filter((path) => path !== 'plans/road.json'), [
+        'plans/road.work/commands.txt', 'plans/road.work/commands.txt', 'plans/road.work/commands.txt', 'draft.md'
+    ]);
 });
 
 

@@ -13,9 +13,10 @@ SUBMAKE = @$(MAKE) --no-print-directory -C $(1) $(2)$(if $(FILE), FILE="$(abspat
 
 .PHONY: help
 help:
-	@echo "usage: make [clean|commit|doc|evaluate|gh-pages|lint|plan|run|site|superclean|test|update]"
+	@echo "usage: make [auto|clean|commit|doc|evaluate|gh-pages|lint|plan|run|site|superclean|test|update]"
 	@echo ""
 	@echo "  make plan FILE=<plan>.site.json [OUTPUT=<plan.json>]  Engineer road plan options for a road site (Claude Code)"
+	@echo "  make auto FILE=<plan>.site.json [OUTPUT=<plan.json>]  Engineer a road site's standard options - the tools alone"
 	@echo "  make update FILE=<plan.json>               Update a road plan model with review feedback (Claude Code)"
 	@echo "    (plan and update accept MODEL=<model> [default: opus] and EFFORT=<effort> [default: high],"
 	@echo "     OLLAMA=1 to launch Claude Code with an Ollama model - MODEL then names the Ollama model,"
@@ -44,9 +45,9 @@ run:
 
 # Engineer road plan options for a road site (a road site model - the road's start and end points and its planning
 # notes), and update an existing road plan model with review feedback (Claude Code or Grok) - see plan/Makefile and
-# plan/PLAN.md
-.PHONY: plan update
-plan update:
+# plan/PLAN.md. "auto" engineers a road site's standard options with the planning tools alone.
+.PHONY: plan update auto
+plan update auto:
 	$(call SUBMAKE,plan,$@)
 
 

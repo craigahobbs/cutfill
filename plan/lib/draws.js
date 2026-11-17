@@ -12,19 +12,21 @@ import {simplifyLine} from './features.js';
 // The "draws" command's usage text lines
 export const drawsUsage = [
     'usage: plan draws <plan.json> [--area AREA]',
-    '       plan draws <plan.json> [--area AREA] --add NUMBER [-n NAME] [--end X,Y]',
+    '       plan draws <plan.json> [--area AREA] --add NUMBER... [-n NAME] [--end X,Y]',
     '',
     '  List a road plan model\'s draws - the valleys of its terrain that drain at least an area, and aren\'t along its',
     '  streams - each with its number, its drainage area, its length, and where it starts and ends. With --add, add a',
-    '  draw to the plan as a stream (a road that crosses it needs a culvert).',
+    '  draw to the plan as a stream (a road that crosses it needs a culvert) - or several draws, with an --add each.',
     '',
     'options:',
     '  --area AREA      the least drainage area of a draw, in acres - or hectares, for a meters plan (default is 3 acres /',
-    '                   1.2 hectares). A draw\'s number is its number at this area.',
-    '  --add NUMBER     add the draw of this number as a stream',
-    '  -n, --name NAME  the added stream\'s name',
-    '  --end X,Y        end the added stream at the draw\'s point nearest this point - where it leaves the hillside for a',
-    '                   street, say'
+    '                   1.2 hectares). A draw\'s number is its number at this area, and its area is the site\'s ground',
+    '                   that drains to it.',
+    '  --add NUMBER     add the draw of this number as a stream (may be repeated - a draw\'s number doesn\'t change',
+    '                   when another draw is added)',
+    '  -n, --name NAME  the added stream\'s name, for one draw (default is "Draw NUMBER")',
+    '  --end X,Y        end the added stream at the draw\'s point nearest this point, for one draw - where it leaves the',
+    '                   hillside for a street, say'
 ];
 
 
@@ -187,7 +189,7 @@ export function topoDraws(topo, minArea) {
 // The command's options
 const commandOptions = {
     'area': {'type': 'string'},
-    'add': {'type': 'string'},
+    'add': {'type': 'string', 'multiple': true},
     'name': {'type': 'string', 'short': 'n'},
     'end': {'type': 'string'}
 };
@@ -203,38 +205,15 @@ function lineLength(points) {
 }
 
 
-// The "draws" command - "io" is the tools' input and output functions. Returns the command's exit code and its
-// output text lines, or null if its arguments are invalid.
-export function drawsCommand(args, io) {
-    let parsed;
-    try {
-        parsed = parseArgs({args, 'options': commandOptions, 'allowPositionals': true});
-    } catch {
-        return null;
-    }
-    const {values, positionals} = parsed;
-    const area = 'area' in values ? Number(values.area) : null;
-    const add = 'add' in values ? Number(values.add) : null;
-    const end = 'end' in values ? values.end.split(',').map(Number) : null;
-    if (positionals.length !== 1 || (area !== null && !(area > 0)) || (add !== null && !(Number.isInteger(add) && add > 0)) ||
-        (add === null && ('name' in values || end !== null)) || values.name === '' || (end !== null && !rPoint.test(values.end))) {
-        return null;
-    }
-    const [planPath] = positionals;
-
-    // Read the road plan model
-    const {plan, error} = readPlan(io, planPath);
-    if (error !== undefined) {
-        return {'code': 1, 'lines': error};
-    }
-    const {units} = plan;
-    const topo = planTopo(plan);
+// Get a plan's unmapped draws - the draws of its terrain that drain at least an area (in acres or hectares - null is
+// the default area) and aren't along its streams. Each is a draw's part that isn't along one of the plan's streams,
+// from its head down to the stream, and the area that drains to each of its points (at the stream, the area above it).
+// A draw's number is its place among the terrain's draws, so it's the same once another draw is a stream. Returns the
+// "draws", by the area their parts drain (the largest first) - each draw's "number", "area" (in acres or hectares),
+// "points" ([x, y] arrays), points' "areas", and "length" - and the least area, "minArea".
+export function planDraws(topo, units, area = null) {
     const areaUnit = areaUnits[units];
     const minArea = area ?? areaUnit.minArea;
-
-    // The draws - each draw's part that isn't along one of the plan's streams, from its head down to the stream, and
-    // the area that drains to each of its points (at the stream, the area above it). A draw's number is its place among
-    // the terrain's draws, so it's the same once another draw is a stream - they're listed by the area their parts drain.
     const streamDistance = Math.max(3 * topo.spacing, areaUnit.minLength * 0.5);
     const streams = lineIndex(topo.features, 'stream', streamDistance);
     const draws = topoDraws(topo, minArea * areaUnit.area).map((draw, ixDraw) => {
@@ -247,10 +226,71 @@ export function drawsCommand(args, io) {
         }
         return {'number': ixDraw + 1, 'area': areas.at(-1), points, areas, 'length': lineLength(points)};
     }).filter(({length}) => length >= areaUnit.minLength).sort((draw1, draw2) => draw2.area - draw1.area || draw1.number - draw2.number);
-    const areaText = (value) => `${Number(value.toFixed(value < 1 ? 2 : 1))} ${areaUnit.name}`;
+    return {draws, minArea};
+}
+
+
+// Format a draw's drainage area, in acres or hectares
+export function drawAreaText(units, value) {
+    return `${Number(value.toFixed(value < 1 ? 2 : 1))} ${areaUnits[units].name}`;
+}
+
+
+// Find the unmapped draws (planDraws) that a road crosses - "x", "y", and "stations" are the road's alignment (its
+// stations are evenly spaced), and "existing" is its existing roads' station mask (an existing road has its own
+// culverts). A road crosses a draw where one of its stations is within half the stations' interval of the draw's line.
+// Returns the crossing objects, in station order - the draw's "number", the "area" it drains, and the "station" and
+// point ("x" and "y") of the road's first crossing of it.
+export function drawCrossings(topo, units, x, y, stations, existing) {
+    const {draws} = planDraws(topo, units);
+    const tolerance = (stations[1] - stations[0]) * 0.505;
+    const lines = lineIndex(draws.map(({number, points}) => (
+        {'type': 'draw', 'name': number, 'points': points.map(([drawX, drawY]) => ({'x': drawX, 'y': drawY}))}
+    )), 'draw', 4 * topo.spacing);
+    const crossings = [];
+    for (let ix = 0; ix < x.length; ix++) {
+        const number = existing[ix] ? null : nearestLine(lines, x[ix], y[ix], tolerance)?.name ?? null;
+        if (number !== null && !crossings.some((crossing) => crossing.number === number)) {
+            const {area} = draws.find((draw) => draw.number === number);
+            crossings.push({number, area, 'station': stations[ix], 'x': x[ix], 'y': y[ix]});
+        }
+    }
+    return crossings;
+}
+
+
+// The "draws" command - "io" is the tools' input and output functions. Returns the command's exit code and its
+// output text lines, or null if its arguments are invalid.
+export function drawsCommand(args, io) {
+    let parsed;
+    try {
+        parsed = parseArgs({args, 'options': commandOptions, 'allowPositionals': true});
+    } catch {
+        return null;
+    }
+    const {values, positionals} = parsed;
+    const area = 'area' in values ? Number(values.area) : null;
+    const adds = (values.add ?? []).map(Number);
+    const end = 'end' in values ? values.end.split(',').map(Number) : null;
+    if (positionals.length !== 1 || (area !== null && !(area > 0)) || !adds.every((add) => Number.isInteger(add) && add > 0) ||
+        new Set(adds).size !== adds.length || (adds.length !== 1 && ('name' in values || end !== null)) || values.name === '' ||
+        (end !== null && !rPoint.test(values.end))) {
+        return null;
+    }
+    const [planPath] = positionals;
+
+    // Read the road plan model
+    const {plan, error} = readPlan(io, planPath);
+    if (error !== undefined) {
+        return {'code': 1, 'lines': error};
+    }
+    const {units} = plan;
+    const topo = planTopo(plan);
+    const {draws, minArea} = planDraws(topo, units, area);
+    const areaText = (value) => drawAreaText(units, value);
 
     // List the draws?
-    if (add === null) {
+    if (adds.length === 0) {
         if (draws.length === 0) {
             return {'code': 0, 'lines': [`No draws drain at least ${areaText(minArea)} (but for those along the plan's streams)`]};
         }
@@ -263,40 +303,45 @@ export function drawsCommand(args, io) {
             lines.push(`... and ${draws.length - listLimit} smaller draws`);
         }
         lines.push(
-            `Add each draw that a road might cross as a stream - "plan draws ${planPath} --add NUMBER -n NAME" (--end X,Y ends it there)`
+            `Add each draw that a road crosses as a stream - "plan draws ${planPath} --add NUMBER..." (-n NAME names one, and --end ` +
+                'X,Y ends it there)'
         );
         return {'code': 0, lines};
     }
 
-    // Add the draw as a stream - to its point nearest the end point, if there is one
-    const draw = draws.find(({number}) => number === add) ?? null;
-    if (draw === null) {
-        return {'code': 1, 'lines': [`error: no draw ${add} - run "plan draws ${planPath}" for the plan's draws`]};
-    }
-    let {points, 'area': streamArea} = draw;
-    if (end !== null) {
-        const distance = ([x, y]) => Math.hypot(x - end[0], y - end[1]);
-        let ixEnd = 0;
-        for (let ix = 1; ix < points.length; ix++) {
-            if (distance(points[ix]) < distance(points[ixEnd])) {
-                ixEnd = ix;
-            }
+    // Add the draws as streams - a draw to its point nearest the end point, if there is one
+    const lines = [];
+    const streams = [];
+    for (const add of adds) {
+        const draw = draws.find(({number}) => number === add) ?? null;
+        if (draw === null) {
+            return {'code': 1, 'lines': [`error: no draw ${add} - run "plan draws ${planPath}" for the plan's draws`]};
         }
-        points = points.slice(0, ixEnd + 1);
-        streamArea = draw.areas[ixEnd];
+        let {points, 'area': streamArea} = draw;
+        if (end !== null) {
+            const distance = ([x, y]) => Math.hypot(x - end[0], y - end[1]);
+            let ixEnd = 0;
+            for (let ix = 1; ix < points.length; ix++) {
+                if (distance(points[ix]) < distance(points[ixEnd])) {
+                    ixEnd = ix;
+                }
+            }
+            points = points.slice(0, ixEnd + 1);
+            streamArea = draw.areas[ixEnd];
+        }
+        points = simplifyLine(points, topo.spacing * 0.75);
+        if (points.length < 2) {
+            return {'code': 1, 'lines': [`error: draw ${add} ends at its head at ${values.end}`]};
+        }
+        const name = values.name ?? `Draw ${add}`;
+        streams.push({'type': 'stream', name, 'points': points.map(([x, y]) => ({x, y})), 'added': true});
+        lines.push(
+            `Added stream "${name}": draw ${add} (drains ${areaText(streamArea)}), ${points.length} points, ` +
+            `${Math.round(lineLength(points))} ${units} long, from ${points[0].join(',')} to ${points.at(-1).join(',')}`
+        );
     }
-    points = simplifyLine(points, topo.spacing * 0.75);
-    if (points.length < 2) {
-        return {'code': 1, 'lines': [`error: draw ${add} ends at its head at ${values.end}`]};
-    }
-    const name = values.name ?? null;
-    plan.topography.features = [
-        ...topo.features, {'type': 'stream', ...(name !== null ? {name} : {}), 'points': points.map(([x, y]) => ({x, y}))}
-    ];
+    plan.topography.features = [...topo.features, ...streams];
     io.writeFile(planPath, planText(orderPlan(plan)));
-    return {'code': 0, 'lines': [
-        `Added stream${name !== null ? ` "${name}"` : ''}: draw ${add} (drains ${areaText(streamArea)}), ${points.length} points, ` +
-            `${Math.round(lineLength(points))} ${units} long, from ${points[0].join(',')} to ${points.at(-1).join(',')}`,
-        `Wrote ${planPath} - plot it to check the stream against the terrain`
-    ]};
+    lines.push(`Wrote ${planPath} - plot it to check the stream${adds.length === 1 ? '' : 's'} against the terrain`);
+    return {'code': 0, lines};
 }

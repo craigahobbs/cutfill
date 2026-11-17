@@ -27,7 +27,8 @@ Wrote road.json - plot it to check the feature against the terrain
     const wetland = {
         'type': 'exclusion',
         'name': 'Wetland',
-        'points': [{'x': 100, 'y': 50}, {'x': 300, 'y': 50}, {'x': 300, 'y': 150.5}, {'x': 100, 'y': 150.5}]
+        'points': [{'x': 100, 'y': 50}, {'x': 300, 'y': 50}, {'x': 300, 'y': 150.5}, {'x': 100, 'y': 150.5}],
+        'added': true
     };
     assert.deepEqual(plan.topography.features, [...features, wetland]);
     assert.equal(written, planText(plan));
@@ -42,7 +43,7 @@ Wrote road.json - plot it to check the feature against the terrain
 `]);
     assert.deepEqual(
         rock.plan.topography.features.at(-1),
-        {'type': 'rock', 'points': [{'x': 0, 'y': 0}, {'x': 200, 'y': 0}, {'x': 0, 'y': 400}]}
+        {'type': 'rock', 'points': [{'x': 0, 'y': 0}, {'x': 200, 'y': 0}, {'x': 0, 'y': 400}], 'added': true}
     );
 });
 
@@ -58,7 +59,7 @@ Added stream "North Draw": 3 points, 150 feet long, x 30 to 60, y 40 to 180
 Wrote road.json - plot it to check the feature against the terrain
 `]);
     assert.deepEqual(plan.topography.features, [
-        {'type': 'stream', 'name': 'North Draw', 'points': [{'x': 30, 'y': 40}, {'x': 60, 'y': 80}, {'x': 60, 'y': 180}]}
+        {'type': 'stream', 'name': 'North Draw', 'points': [{'x': 30, 'y': 40}, {'x': 60, 'y': 80}, {'x': 60, 'y': 180}], 'added': true}
     ]);
     assert.deepEqual(plan.options, []);
 
@@ -107,7 +108,7 @@ usage: plan feature <plan.json> TYPE [-n NAME] X,Y X,Y...
 
   Add a topographic feature to a road plan model - a "stream", "road", or "trail" line, or a "rock" or "exclusion"
   area polygon, of points in the plan's coordinates - or remove its features of a name. To correct a feature,
-  remove it and add it again.
+  remove it and add it again. An added feature is kept when the plan's site is created again.
 `;
     for (const args of [
         [],

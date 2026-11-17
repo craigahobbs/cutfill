@@ -69,7 +69,8 @@ async function draws(args, plan = valleyPlan()) {
 
 
 // The draws list's last line
-const addLine = 'Add each draw that a road might cross as a stream - "plan draws road.json --add NUMBER -n NAME" (--end X,Y ends it there)';
+const addLine = 'Add each draw that a road crosses as a stream - "plan draws road.json --add NUMBER..." (-n NAME names one, and --end ' +
+    'X,Y ends it there)';
 
 
 test('topoDraws', () => {
@@ -180,7 +181,9 @@ test('draws, add a draw', async () => {
 Added stream "Draw": draw 1 (drains 1.3 acres), 2 points, 270 feet long, from 100,270 to 100,0
 Wrote road.json - plot it to check the stream against the terrain
 `]);
-    assert.deepEqual(plan.topography.features, [{'type': 'stream', 'name': 'Draw', 'points': [{'x': 100, 'y': 270}, {'x': 100, 'y': 0}]}]);
+    assert.deepEqual(plan.topography.features, [
+        {'type': 'stream', 'name': 'Draw', 'points': [{'x': 100, 'y': 270}, {'x': 100, 'y': 0}], 'added': true}
+    ]);
     assert.equal(added.written, planText(plan));
     assert.deepEqual({...plan, 'topography': {'spacing': 10, 'elevations': plan.topography.elevations}}, valleyPlan());
 
@@ -193,19 +196,39 @@ Wrote road.json - plot it to check the stream against the terrain
         'code': 1, 'output': 'error: no draw 1 - run "plan draws road.json" for the plan\'s draws\n', 'written': null, 'plan': null
     });
 
-    // A stream without a name, to the draw's point nearest an end point - it drains the area above that point
+    // A stream without a name argument is named for its draw. It's to the draw's point nearest an end point, and it drains
+    // the area above that point.
     ({code, output, plan} = await draws(['--area', '0.1', '--add', '1', '--end', '90,205']));
     assert.deepEqual([code, output], [0, `\
-Added stream: draw 1 (drains 0.39 acres), 2 points, 60 feet long, from 100,270 to 100,210
+Added stream "Draw 1": draw 1 (drains 0.39 acres), 2 points, 60 feet long, from 100,270 to 100,210
 Wrote road.json - plot it to check the stream against the terrain
 `]);
-    assert.deepEqual(plan.topography.features, [{'type': 'stream', 'points': [{'x': 100, 'y': 270}, {'x': 100, 'y': 210}]}]);
+    assert.deepEqual(plan.topography.features, [
+        {'type': 'stream', 'name': 'Draw 1', 'points': [{'x': 100, 'y': 270}, {'x': 100, 'y': 210}], 'added': true}
+    ]);
+
+    // Several draws are added at once - each is named for its draw
+    ({code, output, plan} = await draws(['--area', '0.07', '--add', '3', '--add', '1'], valleysPlan()));
+    assert.deepEqual([code, output.split('\n').map((line) => line.replace(/\(drains .*$/, ''))], [0, [
+        'Added stream "Draw 3": draw 3 ',
+        'Added stream "Draw 1": draw 1 ',
+        'Wrote road.json - plot it to check the streams against the terrain',
+        ''
+    ]]);
+    assert.deepEqual(plan.topography.features.map(({name}) => name), ['Draw 3', 'Draw 1']);
+
+    // A draw's number doesn't change when another draw is added - the added draws, and those beside them, aren't listed
+    const listed = async (listPlan) => (await draws(['--area', '0.07'], listPlan)).output.split('\n').filter((line) => /^\d+: /.test(line));
+    const before = await listed(valleysPlan());
+    const after = await listed(plan);
+    assert.deepEqual([before.length, after.length, after[0]], [20, 20, '5: drains 0.27 acres - 210 feet long, from 200,210 to 200,0']);
+    assert.deepEqual(after.filter((line) => before.includes(line)), after.slice(0, 16));
 
     // A draw above a stream is added down to the stream - after the plan's features
     ({plan} = await draws(['--area', '0.1', '--add', '1', '-n', 'Upper Creek'], streamPlan([[100, 100], [100, 0]])));
     assert.deepEqual(plan.topography.features, [
         {'type': 'stream', 'points': [{'x': 100, 'y': 100}, {'x': 100, 'y': 0}], 'name': 'Creek'},
-        {'type': 'stream', 'name': 'Upper Creek', 'points': [{'x': 100, 'y': 270}, {'x': 100, 'y': 150}]}
+        {'type': 'stream', 'name': 'Upper Creek', 'points': [{'x': 100, 'y': 270}, {'x': 100, 'y': 150}], 'added': true}
     ]);
 
     // A draw that isn't one of the plan's, and an end point at the draw's head
@@ -241,7 +264,8 @@ test('draws, usage', async () => {
     for (const args of [
         [], ['other.json'], ['--area', '0'], ['--area', 'big'], ['--add', '0'], ['--add', '1.5'], ['--add', 'one'], ['-n', 'Draw'],
         ['--end', '10,10'], ['--add', '1', '-n', ''], ['--add', '1', '--end', '10'], ['--add', '1', '--end', '10,ten'],
-        ['--add', '1', '--end', ','], ['--unknown']
+        ['--add', '1', '--end', ','], ['--add', '1', '--add', '1'], ['--add', '1', '--add', '2', '-n', 'Draw'],
+        ['--add', '1', '--add', '2', '--end', '10,10'], ['--unknown']
     ]) {
         const invalid = testIo({'files': {'road.json': JSON.stringify(valleyPlan())}});
         const argv = args.length === 0 ? ['draws'] : ['draws', 'road.json', ...args];

@@ -26,6 +26,7 @@ make commit                       # the pre-commit gate: the subprojects' tests 
 make test [TEST=name]             # the viewer's unit tests (TEST runs one) and the planning tools' unit tests
 make lint                         # ESLint (the viewer and the planning tools)
 make plan FILE=<plan>.site.json   # plan a road (a Claude Code session)
+make auto FILE=<plan>.site.json   # engineer a road site's standard options - the planning tools alone
 make evaluate FILE=<plan.json> [DETAIL=1]   # a plan's analysis and cost from the command line
 make doc                          # the road plan model documentation
 make run FILE=<plan.json>         # view a plan in the browser
@@ -50,10 +51,14 @@ Run `make` in `viewer/` or `plan/` for a subproject's own targets (e.g.
   (`plan/test/terrainHelpers.js`). To check the tools against the real services, plan a site in the scratchpad
   (`node plan/bin/plan.js site <site.json> <plan.json>`, then `route` and `plot`).
 - The planning tools, not the planning session's model, do the plan's engineering and write the plan file
-  (`route` follows existing roads, `draws` finds the terrain's draws, and `feature`, `keep`, and `describe` edit the
-  plan) - so that sessions on different models get the same roads, with fewer tokens. When a session writes code for
-  something every plan needs, make it a tool, and keep the tools' reports short (they're a session's context). Keep
-  PLAN.md and the session's allowed commands (`plan/Makefile`) in step with the tools.
+  (`options` engineers the standard options, `route` follows existing roads, `draws` finds the terrain's draws,
+  `draft` writes the descriptions' facts, and `feature`, `keep`, and `describe` edit the plan) - so that sessions on
+  different models get the same roads, with fewer tokens. When a session writes code for something every plan needs,
+  make it a tool, and keep the tools' reports short (they're a session's context). Keep PLAN.md and the session's
+  allowed commands (`plan/Makefile`) in step with the tools.
+- PLAN.md's steps are **actions** for the planning session's model - each says what to look at, what to decide (with
+  a default), and the command to run - so that a smaller model can follow them. A step that needs no judgment is a
+  tool's, not an action.
 - The road site model is defined and validated with Schema Markdown, like the road plan model (`plan/lib/site.js`).
 - Keep the README's viewer section and key table in sync with the viewer's controls.
 - `FILE` and `OUTPUT` paths are relative to the directory `make` runs in - the top-level makefile makes them absolute

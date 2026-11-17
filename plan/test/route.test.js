@@ -1,5 +1,6 @@
 import {
-    alignmentPolyline, followRoads, polylineStations, resamplePolyline, routeLattice, routeSearch, smoothCurves, turnRadius
+    alignmentPolyline, followRoads, polylineStations, resamplePolyline, routeLattice, routeSearch, smoothCurves, turnRadius,
+    viaTurnBacks
 } from '../lib/route.js';
 import {blockedPlan, designArgs, expected, hillPlan, plain, planePlan, roadPlan} from './roadFixtures.js';
 import assert from 'node:assert/strict';
@@ -156,6 +157,30 @@ test('smoothCurves, existing roads', () => {
 
     // An existing road that's less than two of the polyline's points isn't kept
     assert.deepEqual(smoothCurves(points, 5, 30, [[21, 24], [400, 500], [52, 49]]).ranges, []);
+});
+
+
+test('viaTurnBacks', () => {
+    // A road east for 1,000 feet, then back west 20 feet to its north - at a 5 foot interval
+    const x = [];
+    const y = [];
+    for (let ix = 0; ix <= 200; ix++) {
+        x.push(ix * 5);
+        y.push(0);
+    }
+    for (let ix = 0; ix <= 200; ix++) {
+        x.push(1000 - ix * 5);
+        y.push(20);
+    }
+    const stations = x.map((unused, ix) => (ix <= 200 ? ix * 5 : 1020 + (ix - 201) * 5));
+
+    // The road passes its first via point, and turns back at its second - the 500 feet before and after it end 20 feet
+    // apart. It passes its third.
+    assert.deepEqual(viaTurnBacks(x, y, stations, [[400, 3], [1010, 10], [600, 25]], 500), [{'via': 1, 'station': 1000}]);
+
+    // Within a shorter reach of the first via point, the road's ends - the road before and after it is compared
+    assert.deepEqual(viaTurnBacks(x, y, stations, [[5, 0], [5, 20]], 2500), [{'via': 0, 'station': 5}, {'via': 1, 'station': 2015}]);
+    assert.deepEqual(viaTurnBacks(x, y, stations, [], 500), []);
 });
 
 

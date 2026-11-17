@@ -65,8 +65,10 @@ Wrote plans/road.json
         'plans/road.work/terrain/USGS_1M_13_x47y443_CO_New_2020.f32',
         'plans/road.work/terrain/USGS_1M_13_x47y443_CO_New_2020.json',
         'plans/road.png',
-        'plans/road.json'
+        'plans/road.json',
+        'plans/road.work/commands.txt'
     ]);
+    assert.equal(io.files['plans/road.work/commands.txt'], 'plan.js site site.json plans/road.json\n');
     assert.deepEqual(io.files['plans/road.png'], mapBytes);
 
     // The plan - the elevation model is a plane that rises 5 meters per grid column to the east and 2.5 meters per grid
@@ -167,10 +169,10 @@ start: "Gate" (60, 60) at 40.00000, -105.28000, ground 5510.7
 end: "House" (1040.56, 788.57) at 40.00200, -105.27650, ground 5645.2
 Wrote road.JSON
 `);
-    assert.deepEqual(io.written.slice(-4, -2), [
+    assert.deepEqual(io.written.slice(-5, -3), [
         'road.work/terrain/USGS_1M_13_x47y443_CO_New_2020.f32', 'road.work/terrain/USGS_1M_13_x47y443_CO_New_2020.json'
     ]);
-    assert.deepEqual(io.written.slice(-2), ['road.png', 'road.JSON']);
+    assert.deepEqual(io.written.slice(-3), ['road.png', 'road.JSON', 'road.work/commands.txt']);
     const plan = JSON.parse(io.files['road.JSON']);
     assert.deepEqual(Object.keys(plan), [
         'title', 'image', 'units', 'georeference', 'topography', 'start', 'end', 'criteria', 'costRates', 'options'
@@ -293,8 +295,11 @@ test('site, an existing plan', async () => {
         {'type': 'stream', 'name': 'Old Creek', 'points': [{'x': 100, 'y': 0}, {'x': 120.5, 'y': 300}]},
         {'type': 'road', 'name': 'Old Rd', 'points': [{'x': 0, 'y': 100}, {'x': 300, 'y': 100}]},
         {'type': 'trail', 'name': 'Old Trail', 'points': [{'x': 0, 'y': 150}, {'x': 300, 'y': 150}]},
+        {'type': 'stream', 'name': 'Draw', 'points': [{'x': 50, 'y': 0}, {'x': 60.5, 'y': 200}], 'added': true},
+        {'type': 'road', 'points': [{'x': 0, 'y': 50}, {'x': 300, 'y': 50}], 'added': true},
+        {'type': 'trail', 'name': 'Old Trail', 'points': [{'x': 0, 'y': 200}, {'x': 300, 'y': 200}], 'added': false},
         {'type': 'rock', 'name': 'Outcrop', 'points': [{'x': 100, 'y': 100}, {'x': 120.5, 'y': 100}, {'x': 120, 'y': 130}]},
-        {'type': 'exclusion', 'name': 'Barn', 'points': [{'x': 10, 'y': 10}, {'x': 20, 'y': 10}, {'x': 20, 'y': 20}]},
+        {'type': 'exclusion', 'name': 'Barn', 'points': [{'x': 10, 'y': 10}, {'x': 20, 'y': 10}, {'x': 20, 'y': 20}], 'added': true},
         {'type': 'exclusion', 'name': 'Pond', 'points': [{'x': 200, 'y': 200}, {'x': 220, 'y': 200}, {'x': 220, 'y': 220}]},
         {'type': 'exclusion', 'points': [{'x': 300, 'y': 200}, {'x': 320, 'y': 200}, {'x': 320, 'y': 220}]}
     ];
@@ -320,7 +325,13 @@ test('site, an existing plan', async () => {
         ]})
     });
     assert.equal(io.code, 0);
-    assert.deepEqual(io.output.join('').split('\n').slice(0, 1), ['Grid: 9 x 8 at 50 meters spacing (400 x 350 meters)']);
+    const lines = io.output.join('').split('\n');
+    assert.deepEqual(lines.slice(0, 1), ['Grid: 9 x 8 at 50 meters spacing (400 x 350 meters)']);
+    assert.deepEqual(lines.filter((line) => line.startsWith('Features:') || line.includes('plan\'s')), [
+        'Features: 1 stream, 0 roads, 0 trails, 1 exclusion area',
+        'Kept the plan\'s other features: 1 stream, 1 road, 1 rock outcrop, 2 exclusion areas',
+        'The plan\'s coordinates moved 20, 20 meters - its options and other features moved with them'
+    ]);
     const wider = JSON.parse(io.files['plans/road.json']);
     assert.deepEqual(Object.keys(wider), [
         'title', 'description', 'image', 'units', 'georeference', 'topography', 'start', 'end', 'criteria', 'options'
@@ -331,11 +342,13 @@ test('site, an existing plan', async () => {
     assert.deepEqual(Object.keys(wider.topography), ['spacing', 'elevations', 'contourInterval', 'sources', 'features']);
     assert.deepEqual([wider.topography.elevations.length, wider.topography.elevations[0].length], [8, 9]);
 
-    // The streams, roads, trails, and the site's exclusion areas are the site's - the plan's rock outcrops and its other
-    // exclusion areas are kept, in the new grid's coordinates
+    // The streams, roads, trails, and the site's exclusion areas are the site's - the plan's rock outcrops, its other
+    // exclusion areas, and the streams and roads that were added to it are kept, in the new grid's coordinates
     assert.deepEqual(wider.topography.features, [
         {'type': 'stream', 'name': 'New Creek', 'points': [{'x': 150, 'y': 100}, {'x': 150, 'y': 200}]},
         {'type': 'exclusion', 'name': 'Barn', 'points': [{'x': 25, 'y': 25}, {'x': 45, 'y': 25}, {'x': 45, 'y': 45}]},
+        {'type': 'stream', 'name': 'Draw', 'points': [{'x': 70, 'y': 20}, {'x': 80.5, 'y': 220}], 'added': true},
+        {'type': 'road', 'points': [{'x': 20, 'y': 70}, {'x': 320, 'y': 70}], 'added': true},
         {'type': 'rock', 'name': 'Outcrop', 'points': [{'x': 120, 'y': 120}, {'x': 140.5, 'y': 120}, {'x': 140, 'y': 150}]},
         {'type': 'exclusion', 'name': 'Pond', 'points': [{'x': 220, 'y': 220}, {'x': 240, 'y': 220}, {'x': 240, 'y': 240}]},
         {'type': 'exclusion', 'points': [{'x': 320, 'y': 220}, {'x': 340, 'y': 220}, {'x': 340, 'y': 240}]}
@@ -438,7 +451,8 @@ usage: plan site <site.json> <plan.json>
 
   Create a road plan model's site from a road site model - its topography, from the USGS 3D Elevation Program's
   1 meter elevation models, its georeference, its start and end points, its streams, roads, and exclusion areas,
-  and its topographic map image ("<plan>.png"). An existing plan's options are kept.
+  and its topographic map image ("<plan>.png"). An existing plan's options are kept, and the features that were
+  added to it (the "feature" and "draws" commands').
 `;
     for (const args of [[], ['site.json'], ['site.json', 'road.json', 'extra'], ['-x', 'road.json'], ['site.json', '--plan']]) {
         const io = testIo();

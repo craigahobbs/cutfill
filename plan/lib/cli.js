@@ -1,11 +1,12 @@
 // cli.js - the Roadie planning tools' command line (see bin/plan.js)
 
 import {describeCommand, describeUsage, keepCommand, keepUsage} from './options.js';
+import {draftCommand, draftUsage} from './draft.js';
 import {drawsCommand, drawsUsage} from './draws.js';
 import {featureCommand, featureUsage} from './featureCommand.js';
 import {locateCommand, locateUsage} from './locate.js';
+import {optionsUsage, routeCommands, routeUsage} from './routeCli.js';
 import {plotCommand, plotUsage} from './plot.js';
-import {routeCommands, routeUsage} from './routeCli.js';
 import {siteCommand, siteUsage} from './siteCommand.js';
 import {cliMain as roadieMain} from '../../viewer/lib/cli.js';
 import {roadieTypes} from '../../viewer/lib/model.js';
@@ -19,11 +20,13 @@ const usage = [
     '       plan plot <plan.json> <plot.png> [--box X1,Y1,X2,Y2]',
     '       plan locate <plan.json> [--xy] <latitude,longitude | x,y>...',
     '       plan feature <plan.json> TYPE [-n NAME] X,Y X,Y...',
-    '       plan draws <plan.json> [--add NUMBER -n NAME]',
+    '       plan draws <plan.json> [--add NUMBER]...',
+    '       plan options <plan.json> [options]',
     '       plan route <plan.json> -n NAME [-v X,Y]... [options]',
     '       plan profile <plan.json> -n NAME [options]',
     '       plan evaluate <plan.json> [--detail]',
     '       plan keep <plan.json> NAME...',
+    '       plan draft <plan.json> <descriptions.md>',
     '       plan describe <plan.json> <descriptions.md>',
     '       plan doc [site | plan]',
     '',
@@ -34,15 +37,19 @@ const usage = [
     '  feature   Add a topographic feature to a road plan model, or remove its features of a name',
     '  draws     List a road plan model\'s draws - the valleys of its terrain that aren\'t along its streams - or add',
     '            one as a stream',
+    '  options   Engineer a road plan model\'s standard options - the road that follows its existing roads, and an',
+    '            all-new road',
     '  route     Engineer a road option - its alignment (following existing roads where that costs less), profile,',
     '            and structures',
     '  profile   Re-design an existing option\'s profile and structures',
     '  evaluate  Print a road plan model\'s analysis and cost (--detail adds each option\'s station table)',
     '  keep      Keep a road plan model\'s named options, in cost score order, and remove its others',
+    '  draft     Write a draft of a road plan model\'s descriptions - the plan\'s and its options\' facts',
     '  describe  Set a road plan model\'s and its options\' descriptions from a Markdown file',
     '  doc       Print the road site model documentation - or the road plan model documentation',
     '',
-    'Each command\'s usage is its "-h" argument\'s output.'
+    'Each command\'s usage is its "-h" argument\'s output. The commands that change a plan are logged, in order, in',
+    'its work directory ("<plan>.work/commands.txt").'
 ];
 
 
@@ -77,22 +84,56 @@ const commands = {
     'locate': [locateCommand, locateUsage],
     'feature': [featureCommand, featureUsage],
     'draws': [drawsCommand, drawsUsage],
+    'options': [routeCommands.options, optionsUsage],
     'route': [routeCommands.route, routeUsage],
     'profile': [routeCommands.profile, routeUsage],
     'evaluate': [evaluateCommand, usage],
     'keep': [keepCommand, keepUsage],
+    'draft': [draftCommand, draftUsage],
     'describe': [describeCommand, describeUsage],
     'doc': [docCommand, usage]
 };
 
 
+// The commands that change a road plan model - they're logged in the plan's work directory
+const planCommands = ['site', 'feature', 'draws', 'options', 'route', 'profile', 'keep', 'describe'];
+
+
+// The plan's work directory's log of the commands that changed the plan
+const commandLog = 'commands.txt';
+
+
+// A command argument that needs no quotes in the command log
+const rPlainArg = /^[\w@%+=:,./-]+$/;
+
+
 // The command line's main entry point - "io" is the command line's input and output functions. Its "write" function
 // writes the output text. Returns the process exit code.
+//
+// A command that changes a road plan model is logged in the plan's work directory ("<plan>.work/commands.txt") - the
+// commands that made the plan, in order, for the plan's update.
 export async function cliMain(argv, io) {
     const [name, ...args] = argv;
     const [command, commandUsage] = Object.hasOwn(commands, name) ? commands[name] : [() => null, usage];
     const help = argv.includes('-h') || argv.includes('--help');
-    const result = help ? {'code': 0, 'lines': commandUsage} : await command(args, io) ?? {'code': 1, 'lines': commandUsage};
+    const written = [];
+    const commandIo = {...io, 'writeFile': (path, text) => {
+        written.push(path);
+        io.writeFile(path, text);
+    }};
+    const result = help ? {'code': 0, 'lines': commandUsage} : await command(args, commandIo) ?? {'code': 1, 'lines': commandUsage};
+    if (result.code === 0 && planCommands.includes(name) && written.length > 0) {
+        // The plan is the last file a command writes - its work directory is the site command's
+        const logPath = `${written.at(-1).replace(/\.json$/i, '')}.work/${commandLog}`;
+        let log = '';
+        try {
+            log = io.readFile(logPath);
+        } catch {
+            // The plan's first command
+        }
+        const line = ['plan.js', ...argv].map((arg) => (rPlainArg.test(arg) ? arg : `'${arg.replaceAll('\'', '\'\\\'\'')}'`)).join(' ');
+        io.writeFile(logPath, `${log}${line}\n`);
+    }
     io.write(`${result.lines.join('\n')}\n`);
     return result.code;
 }

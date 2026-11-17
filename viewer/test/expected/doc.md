@@ -93,11 +93,12 @@ An elevation data source
 
 A topographic feature
 
-| Name   | Type                             | Attributes                 | Description                                                               |
-|--------|----------------------------------|----------------------------|---------------------------------------------------------------------------|
-| type   | [FeatureType](#enum-featuretype) |                            | The feature type                                                          |
-| points | [Point](#struct-point) []        | len(array) > 1             | The feature's polyline (stream, road) or polygon (rock, exclusion) points |
-| name   | string                           | optional<br>len(value) > 0 | The feature name                                                          |
+| Name   | Type                             | Attributes                 | Description                                                                                                                                                                |
+|--------|----------------------------------|----------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| type   | [FeatureType](#enum-featuretype) |                            | The feature type                                                                                                                                                           |
+| points | [Point](#struct-point) []        | len(array) > 1             | The feature's polyline (stream, road) or polygon (rock, exclusion) points                                                                                                  |
+| name   | string                           | optional<br>len(value) > 0 | The feature name                                                                                                                                                           |
+| added  | bool                             | optional                   | If true, the planning session added the feature - it isn't one of the site's (the USGS's streams, roads, and trails) - and it's kept when the plan's site is created again |
 
 ### enum FeatureType
 

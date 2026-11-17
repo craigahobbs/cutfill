@@ -13,7 +13,7 @@ export const featureUsage = [
     '',
     '  Add a topographic feature to a road plan model - a "stream", "road", or "trail" line, or a "rock" or "exclusion"',
     '  area polygon, of points in the plan\'s coordinates - or remove its features of a name. To correct a feature,',
-    '  remove it and add it again.'
+    '  remove it and add it again. An added feature is kept when the plan\'s site is created again.'
 ];
 
 
@@ -65,7 +65,7 @@ export function featureCommand(args, io) {
             const [x, y] = arg.split(',').map(Number);
             return {x, y};
         });
-        plan.topography.features = [...features, {type, ...(name !== null ? {name} : {}), points}];
+        plan.topography.features = [...features, {type, ...(name !== null ? {name} : {}), points, 'added': true}];
         const {units} = plan;
         const xs = points.map((point) => point.x);
         const ys = points.map((point) => point.y);

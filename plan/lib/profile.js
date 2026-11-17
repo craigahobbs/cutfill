@@ -40,7 +40,9 @@ const depthLimits = [1, 4, Infinity];
 // Design the vertical profile of an alignment (its "x" and "y" coordinate arrays and their evenly-spaced "stations") by
 // dynamic programming - the minimum earthwork cost within the grade limits. Within an existing road (the "existing"
 // station mask, or null), the profile follows the ground. Returns the "profile" (the grade elevations), the "ground"
-// elevations, and the ground's "sideSlope" (its rise per unit of offset to the left) at the stations.
+// elevations, and the ground's "sideSlope" (its rise per unit of offset to the left) at the stations - and the index
+// of the first existing road station that the grade limits can't reach ("unreachable" - the profile breaks grade
+// there), or null. A profile that the grade limits can't take to the end's ground ends at the nearest level they can.
 export function designProfile(topo, design, x, y, stations, existing = null) {
     // The profile is within the maximum cut and fill depth of the ground - its design's work is the stations times the
     // depth, not times the site's relief. Where the grade limits can't keep it there, it's designed with a deeper limit.
@@ -131,10 +133,12 @@ function designProfileDepth(topo, design, x, y, stations, existing, depthLimit) 
 
     // Find the least-cost profile for a cut and fill balance price - a positive balance makes fill more expensive and
     // cut cheaper (to reduce borrow), and a negative balance the reverse. Returns the profile's true cost and its
-    // levels' indexes - or null, if the grade limits can't keep the profile within the depth limit.
+    // levels' indexes - or null, if the grade limits can't keep the profile within the depth limit (or reach an
+    // existing road within it).
     const back = new Int32Array(cells[count]);
     const queue = new Int32Array(levelCount);
     const totals = [new Float64Array(levelCount).fill(Infinity), new Float64Array(levelCount).fill(Infinity)];
+    let unreachable = null;
     const solve = (balance) => {
         // A station's cost at a level - an existing road is at the ground, with no earthwork
         const stationCost = (ix, level) => {
@@ -197,9 +201,14 @@ function designProfileDepth(topo, design, x, y, stations, existing, depthLimit) 
                 total[level] = previous[levelMin] + stationCost(ix, level);
             }
 
-            // The grade limit can't reach the existing road's ground? Break grade at the junction.
+            // The grade limit can't reach the existing road's ground? Within a depth limit, a deeper limit may - with no
+            // limit, the profile breaks grade at the junction (it's the profile's unreachable station).
             const level = groundLevel[ix];
             if (isExisting[ix] && total[level] === Infinity) {
+                if (depthLimit !== Infinity) {
+                    return null;
+                }
+                unreachable = unreachable === null ? ix : unreachable;
                 back[cell + level] = ixMin;
                 total[level] = previous[ixMin] + stationCost(ix, level);
             }
@@ -292,5 +301,5 @@ function designProfileDepth(topo, design, x, y, stations, existing, depthLimit) 
             profile[ix] = ground[ix];
         }
     }
-    return {profile, ground, sideSlope};
+    return {profile, ground, sideSlope, unreachable};
 }

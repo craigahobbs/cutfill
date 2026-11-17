@@ -12,6 +12,9 @@ terrain, and views the resulting road grading plans in 3D.
 - **`make update FILE=<plan.json>`** launches a Claude Code session that
   updates an existing road plan model with review feedback (from the city or county, a surveyor, or
   the owner, for example).
+- **`make auto FILE=<plan>.site.json [OUTPUT=<plan.json>]`** engineers a road site's standard options
+  with the planning tools alone - no Claude Code session. It's a first look: the site's notes aren't
+  read, and the site isn't checked.
 - **`make run FILE=<plan.json>`** opens the road plan model in the Roadie viewer, a JavaScript web
   application.
 
@@ -259,7 +262,7 @@ average bid prices and low-volume road references):
   surfacing, and ditches
 - **Mobilization** (10%)
 
-A plan can override any unit rate (`costRates`) for local prices. See [PLAN.md](plan/PLAN.md#appendix-the-cost-score)
+A plan can override any unit rate (`costRates`) for local prices. See [PLAN.md](plan/PLAN.md#reference-the-cost-score)
 for the default rates.
 
 
@@ -301,9 +304,12 @@ start and end points (`margin`), and its topography grid's spacing (`spacing`). 
 make plan FILE=driveway.site.json
 ```
 
-The Claude Code session follows [PLAN.md](plan/PLAN.md), which covers reading and verifying the site,
-design criteria, road engineering principles, generating and refining options, and finalizing the
-model. It uses these tools:
+The planning tools do the engineering - they build the site, find, design, and cost the roads, and
+draft their descriptions. The Claude Code session follows [PLAN.md](plan/PLAN.md) for what the tools
+can't do: it applies the site's notes, checks the site against its plots (and adds what the USGS's
+maps lack - a building to avoid, an unmapped road or draw), chooses any other corridors worth
+comparing, and explains the result. Its steps are a few defined actions - what to look at, what to
+decide, and the command to run - so that a smaller model can follow them. It uses these tools:
 
 - `plan/bin/plan.js` - the planning tools:
   - `site` creates the plan's site from the road site model. Its topography is the USGS 3D Elevation
@@ -312,23 +318,46 @@ model. It uses these tools:
     plan's coordinates, a map projection centered on the site. It adds the site's streams (the USGS
     National Hydrography Dataset's), its roads and trails and its topographic map image (the USGS
     National Map's), and its exclusion areas. A site the USGS has no 1 meter elevation models of
-    can't be planned.
+    can't be planned. A plan's site can be created again - for a larger site, say: its options and
+    the features that were added to it are kept.
   - `plot` plots the plan - its shaded terrain, contours, features, and options - for the session to
     study (all of it, or a part of it for a closer look), `locate` converts latitudes and
     longitudes to the plan's coordinates, `feature` adds and removes the plan's features, and `draws`
     finds the unmapped draws of the terrain (the valleys that need a culvert where a road crosses
     them) and adds them as streams.
+  - `options` engineers the plan's standard options - the least-cost road that follows the site's
+    existing roads ("Existing Roads"), and the least-cost all-new road ("New Road") - and puts the
+    plan's options in cost score order.
   - `route` and `profile` engineer a road option. `route` finds the least-cost horizontal alignment
     with a lattice search (radius-constrained turns, grade, side slope, stream crossing, rock, and
     exclusion costs), designs the vertical profile by dynamic programming (minimum earthwork within
     the grade limits, with flatter switchbacks), and places culverts, retaining walls, bridges, and
     turnouts. The route follows the site's existing roads where upgrading them costs less than a new
     road, and joins and leaves them where that's cheapest - so the least-cost option is the tools',
-    not the session's guess.
+    not the session's guess. The search is run with three weights of its penalty for ground steeper
+    than the design grade, and the road is the one with the lowest cost score. A road is within its grade limit: where no road on a corridor can be,
+    `route` reports an error and doesn't write an option. `route` notes a road that runs along the
+    site's edge (the site may be too small for it), a via point that the road turns back at, and the
+    unmapped draws that the road crosses.
   - `evaluate` is the viewer's own analysis and cost score (`--detail` adds a station-by-station
     table), so the planner optimizes the same cost the viewer shows. `keep` keeps the best options,
-    in cost score order, and `describe` sets the plan's and its options' descriptions.
+    in cost score order, `draft` writes a draft of the plan's and its options' descriptions - their
+    facts, for the session to add to - and `describe` sets the descriptions.
+  - The commands that change a plan are logged, in order, in its work directory (`commands.txt`).
 - `make evaluate FILE=<plan.json> [DETAIL=1]` - the same analysis and cost score, from `make`
+
+To engineer the site's standard options without a session - the plan the tools can make from the
+site's data alone:
+
+```
+make auto FILE=driveway.site.json
+```
+
+It creates the site, engineers the standard options (`ARGS` are the `options` command's arguments -
+`ARGS="--width 16 --surface asphalt"`, say), sets their drafted descriptions, and plots the plan
+(`driveway.work/plan.png`). Nothing a planning session does is done: the site's notes aren't read,
+and the site isn't checked - a building in the way, an unmapped road, or a draw that needs a culvert
+isn't in the plan (the tools note the unmapped draws its roads cross).
 
 The session writes `driveway.json` (and the site's topographic map image, `driveway.png`), with
 intermediate files in `driveway.work/`. Use `OUTPUT` to write the model elsewhere - for example, to
