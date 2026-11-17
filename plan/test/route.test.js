@@ -159,6 +159,40 @@ test('smoothCurves, existing roads', () => {
 });
 
 
+test('smoothCurves, a sharp junction with an existing road', () => {
+    // A new road turns 110 degrees onto an existing road, at a 5 foot interval and a 50 foot minimum radius - the turn
+    // passes (400) don't widen the junction's curve to the minimum radius, so the points near it are smoothed until
+    // it is
+    const turn = (degrees) => [[0, 0], [600, 0], [600 + 600 * Math.cos(degrees * Math.PI / 180), 600 * Math.sin(degrees * Math.PI / 180)]];
+    const {x, y, ranges} = smoothCurves(turn(110), 5, 50, [[600, 1200]]);
+    const stations = polylineStations(x, y);
+    const radius = turnRadius(x, y);
+    const ixExisting = stations.findIndex((stationValue) => stationValue >= ranges[0][0] - 1e-6);
+    assert.ok(Math.min(...radius.slice(2, ixExisting)) >= 55);
+    assert.ok(Math.min(...radius.slice(2, ixExisting)) < 56);
+
+    // The junction's curve is new road - 35 points (175 feet) of the existing road's 121, of the 40 it may be
+    assert.equal(ranges.length, 1);
+    assert.equal(x.length - ixExisting, 121 - 35);
+    assert.equal(ranges[0][1], stations.at(-1));
+
+    // Only the points near the curve moved - the new road's first 300 feet (to a thousandth of a foot) and the
+    // existing road's last 400 feet are where they were
+    assert.ok(x.slice(0, 61).every((value, ix) => Math.abs(value - ix * 5) < 1e-3));
+    assert.ok(y.slice(0, 61).every((value) => Math.abs(value) < 1e-3));
+    const [, , [endX, endY]] = turn(110);
+    assert.deepEqual([x.at(-1), y.at(-1)], [endX, endY]);
+    assert.ok(Math.abs(x.at(-81) - (600 + 200 * Math.cos(110 * Math.PI / 180))) < 1e-9);
+    assert.ok(Math.abs(y.at(-81) - 200 * Math.sin(110 * Math.PI / 180)) < 1e-9);
+
+    // A junction too sharp to smooth to the minimum radius keeps a tight curve - it needs a switchback
+    const hairpin = smoothCurves(turn(170), 5, 50, [[600, 1200]]);
+    const hairpinRadius = turnRadius(hairpin.x, hairpin.y);
+    assert.ok(Math.min(...hairpinRadius.slice(2, 200)) < 50);
+    assert.ok(hairpin.y.slice(0, 41).every((value) => Math.abs(value) < 1e-3));
+});
+
+
 test('smoothCurves, a junction with an existing road', () => {
     // A new road meets an existing road at a right angle - the corner is the junction's curve, so the existing road
     // starts where the curve ends (the curve is new road, 33 feet of it along the existing road)

@@ -19,6 +19,7 @@ usage: plan site <site.json> <plan.json>
        plan plot <plan.json> <plot.png> [--box X1,Y1,X2,Y2]
        plan locate <plan.json> [--xy] <latitude,longitude | x,y>...
        plan feature <plan.json> TYPE [-n NAME] X,Y X,Y...
+       plan draws <plan.json> [--add NUMBER -n NAME]
        plan route <plan.json> -n NAME [-v X,Y]... [options]
        plan profile <plan.json> -n NAME [options]
        plan evaluate <plan.json> [--detail]
@@ -31,6 +32,8 @@ usage: plan site <site.json> <plan.json>
   plot      Plot a road plan model - its terrain, features, and options
   locate    Convert latitudes and longitudes to a road plan model's coordinates, and back
   feature   Add a topographic feature to a road plan model, or remove its features of a name
+  draws     List a road plan model's draws - the valleys of its terrain that aren't along its streams - or add
+            one as a stream
   route     Engineer a road option - its alignment (following existing roads where that costs less), profile,
             and structures
   profile   Re-design an existing option's profile and structures

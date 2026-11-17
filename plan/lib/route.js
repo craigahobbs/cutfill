@@ -326,7 +326,7 @@ export function followRoads(path, existing, roads, lattice, minLength, transitio
 
 // A binary min-heap of route search states, by cost and then by state - the items are in typed arrays, which grow as
 // they fill
-class StateHeap {
+export class StateHeap {
     constructor(capacity = 1024) {
         this.costs = new Float64Array(capacity);
         this.states = new Int32Array(capacity);
@@ -475,6 +475,16 @@ export function turnRadius(x, y) {
 }
 
 
+// The passes of a polyline's smoothing. The route search's turns are a lattice step at a time, which the "turnPasses"
+// smooth - every point of the polyline. A new road joins an existing road at any angle, though, and a sharp junction's
+// curve takes many more passes to widen to the minimum radius at a fine station interval (the passes a corner needs
+// grow with its angle, and as the interval shrinks). So after the turn passes, up to "smoothPasses" in all smooth only
+// the points near the curves that are still too tight - the rest of the polyline stays where the route search found
+// it. A junction sharper than about 130 degrees isn't smoothed to the minimum radius - it needs a switchback.
+const turnPasses = 400;
+const smoothPasses = 5000;
+
+
 // Resample a polyline (an array of [x, y] points) and smooth it (keeping the endpoints) until its curves meet the
 // minimum radius. The polyline's existing roads (the "ranges" of its stations - [station, end station] arrays) are
 // kept as they are - an existing road's curves are its own. Where a new road meets an existing road's end at a
@@ -498,7 +508,7 @@ export function smoothCurves(points, interval, minRadius, ranges = []) {
     }
     const junctionLimit = Math.ceil(4 * minRadius / interval);
 
-    for (let ixSmooth = 0; ixSmooth < 400; ixSmooth++) {
+    for (let ixSmooth = 0; ixSmooth < smoothPasses; ixSmooth++) {
         const radius = turnRadius(x, y);
 
         // An existing road's end at a corner with the new road is the junction's curve
@@ -523,8 +533,21 @@ export function smoothCurves(points, interval, minRadius, ranges = []) {
         if (radiusMin >= minRadius * 1.1) {
             break;
         }
+
+        // After the turn passes, only the points near a curve that's still too tight are smoothed
+        const smoothed = new Uint8Array(x.length);
+        if (ixSmooth < turnPasses) {
+            smoothed.fill(1);
+        } else {
+            for (let ix = 2; ix < radius.length - 2; ix++) {
+                if (!fixed[ix] && radius[ix] < minRadius * 1.1) {
+                    smoothed.fill(1, Math.max(0, ix - junctionLimit), ix + junctionLimit + 1);
+                }
+            }
+        }
         const smooth = (values) => values.map((value, ix) => (
-            ix === 0 || ix === values.length - 1 || fixed[ix] ? value : (values[ix - 1] + 2 * value + values[ix + 1]) * 0.25
+            ix === 0 || ix === values.length - 1 || fixed[ix] || !smoothed[ix] ? value :
+                (values[ix - 1] + 2 * value + values[ix + 1]) * 0.25
         ));
         x = smooth(x);
         y = smooth(y);

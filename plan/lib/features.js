@@ -133,7 +133,7 @@ function clipLine(points, width, height) {
 
 // Simplify a line - remove its points that are within a distance of the line between the points kept
 // (Douglas-Peucker), and its repeated points
-function simplifyLine(points, tolerance) {
+export function simplifyLine(points, tolerance) {
     const keep = new Array(points.length).fill(false);
     keep[0] = true;
     keep[points.length - 1] = true;

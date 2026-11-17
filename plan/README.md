@@ -10,6 +10,7 @@ node bin/plan.js site <site.json> <plan.json>    # create a plan's site from a r
 node bin/plan.js plot <plan.json> <plot.png>     # plot a plan - its terrain, features, and options
 node bin/plan.js locate <plan.json> <lat,long>   # a latitude and longitude's plan coordinates (--xy: the reverse)
 node bin/plan.js feature <plan.json> TYPE X,Y... # add a topographic feature (--remove NAME: remove a name's)
+node bin/plan.js draws <plan.json>               # the terrain's unmapped draws (--add NUMBER: add one as a stream)
 node bin/plan.js route <plan.json> -n NAME       # engineer a road option - its alignment, profile, and structures
 node bin/plan.js profile <plan.json> -n NAME     # re-design an option's profile and structures
 node bin/plan.js evaluate <plan.json>            # a plan's analysis and cost (the viewer's)
@@ -40,6 +41,12 @@ its trails are for reference.
 `plot` draws a plan for the planning session to study: its terrain, shaded (lit from the northwest) with contours,
 its features, each option's line with its stations and structures, and the plan's coordinates along its sides.
 `--box X1,Y1,X2,Y2` plots a part of the plan, for a closer look - with the contour interval of its elevations.
+
+`draws` finds the site's draws - the valleys of its terrain that carry water in a storm, which a road crosses with a
+culvert (`lib/draws.js`). The terrain's hollows are filled (a road's fill across a valley is one - its culvert isn't
+in the terrain), each grid point drains to its steepest neighbor below it, and a draw is the line of points that drain
+at least an area - 3 acres (1.2 hectares) by default. The draws that aren't along the plan's streams are listed,
+and `--add NUMBER` adds one as a stream.
 
 `route` searches for the least-cost horizontal alignment on a lattice with heading states (so its turns have the
 minimum radius), designs the vertical profile by dynamic programming (the minimum earthwork cost within the grade

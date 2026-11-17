@@ -26,6 +26,7 @@ given there, with its full path, so it runs from any directory; don't change dir
 | `plan.js plot PLAN.json OUT.png [--box X1,Y1,X2,Y2]` | Plot the plan's terrain (shaded, with contours), features, and options, with the plan's coordinates along its sides - with `--box`, a part of the plan, for a closer look |
 | `plan.js locate PLAN.json [--xy] POINT...` | Convert latitudes and longitudes (`LATITUDE,LONGITUDE`) to the plan's coordinates - or, with `--xy`, the plan's coordinates (`X,Y`) to latitudes and longitudes - with the ground elevation there, and the nearest road and stream |
 | `plan.js feature PLAN.json TYPE [-n NAME] X,Y X,Y...` | Add a topographic feature - a `stream`, `road`, or `trail` line, or a `rock` or `exclusion` area polygon - or, with `--remove NAME`, remove the features of a name |
+| `plan.js draws PLAN.json [--add NUMBER -n NAME]` | List the site's draws - the valleys of its terrain that drain 3 acres (1.2 hectares) or more and aren't along its streams - or, with `--add`, add one as a stream |
 | `plan.js route PLAN.json -n NAME [-v X,Y]... [options]` | Engineer an option: least-cost alignment search (it follows the plan's existing roads where that costs less than a new road), profile design, and structures |
 | `plan.js profile PLAN.json -n NAME [options]` | Re-design an existing option's profile and structures (after you edit its alignment) |
 | `plan.js evaluate PLAN.json [--detail]` | Validate the model and compute each option's earthwork, structures, cost score, and design warnings |
@@ -114,29 +115,35 @@ features with `feature` (in the plan's coordinates - to correct a feature, remov
    (30 meters) of the USGS's line - a stream that was mapped farther from its valley is still off it.
    On the plot, each stream must lie along the bottom of its valley (the contours' V's). Where a stream
    is off its valley's bottom by more than a road width near any place a road might cross it, correct
-   its points to follow the valley's bottom. Add a `stream` for every unmapped draw that carries water
-   in a storm (a valley of contour V's that drains more than a few acres) and that a road might cross -
-   it needs a culvert there.
-3. **The roads.** The `road` features are existing roads: `route` follows them where that costs less
+   its points to follow the valley's bottom.
+3. **The draws.** An unmapped draw - a valley of contour V's that carries water in a storm - needs a
+   culvert where a road crosses it. `draws PLAN.json` lists the site's draws that drain 3 acres
+   (1.2 hectares) or more and aren't along its streams: each draw's number, the area it drains, its
+   length, and where it starts and ends (`--area AREA` lists smaller draws, too). Find each draw on the
+   plot, and add those a road might cross: `draws PLAN.json --add NUMBER -n NAME` adds the draw as a
+   stream - `--end X,Y` ends it at its point nearest there, where it leaves the hillside for a street
+   or a house lot. A draw's number is its number at the list's `--area`.
+4. **The roads.** The `road` features are existing roads: `route` follows them where that costs less
    than a new road (Step 5). The `trail` features are for reference - a road doesn't follow a trail.
    Remove a `road` the notes rule out (a private drive, a closed road), and add a `road` for an
    existing road the USGS roads lack, where the terrain's shading shows its bench and the road could
    follow it.
-4. **The exclusion areas.** The site's exclusion areas are in the plan. Add `exclusion` polygons for
+5. **The exclusion areas.** The site's exclusion areas are in the plan. Add `exclusion` polygons for
    everything else the notes or the map say the road must avoid - buildings, wetlands, a neighbor's
    land, setbacks. Add a `rock` polygon only for rock that the notes or the topographic map identify
    (a labeled outcrop, cliff, or quarry). Don't infer rock from steep ground, and don't search the
    terrain for it: the route search and the cost score already charge steep side slopes for their
    earthwork and walls.
-5. **The site's extent.** Every reasonable route must fit in the grid, with room for switchbacks. If one
+6. **The site's extent.** Every reasonable route must fit in the grid, with room for switchbacks. If one
    doesn't, set the site model's `margin` (the distance the site extends beyond the start and end
-   points, in the plan's units) and run `site` again - it keeps the plan's options and other features.
-   A finer or coarser grid is the site model's `spacing`.
+   points, in the plan's units) and run `site` again - it keeps the plan's options and the rock and
+   exclusion areas you added, but its streams and roads are the USGS's again: add your draws and
+   roads again. A finer or coarser grid is the site model's `spacing`.
 
-`feature` reports the size and extent of a feature it adds - check that they're what you meant. Plot
-the site again after correcting its features (`plot --box` around each one you added), and Read the
-plot. **Do not proceed until the plan's points and features match the terrain.** A site that needs no
-corrections is common - don't add features to have added some.
+`feature` and `draws` report the size and extent of a feature they add - check that they're what you
+meant. Plot the site again after correcting its features (`plot --box` around each one you added), and
+Read the plot. **Do not proceed until the plan's points and features match the terrain.** A site that
+needs no corrections is common - don't add features to have added some.
 
 
 ## Step 3: Set the design criteria
