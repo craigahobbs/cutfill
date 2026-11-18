@@ -17,8 +17,19 @@ The back end (`src/roadie/app.py`) is a [chisel](https://github.com/craigahobbs/
 by [waitress](https://github.com/Pylons/waitress#readme) to this computer only (`127.0.0.1`). For now, it's only the
 front end's statics (and chisel's API documentation, `/doc/`) - the front end does the rest in the browser.
 
-The front end is the package's `static` directory (it isn't in the repository) - `make static` copies the viewer's
-staged application there, with the planning tools' modules (`plan/lib/`) and the GeoTIFF reader's script.
+The front end is the package's `static` directory - `make static` copies the viewer's staged application there, with
+the planning tools' modules (`plan/lib/`) and the GeoTIFF reader's script (and its license). It's committed, so the
+package is installed from the repository without Node.js:
+
+```sh
+python3 -m venv roadie-venv
+roadie-venv/bin/pip install "git+https://github.com/craigahobbs/roadie.git#subdirectory=app"
+```
+
+The app adds the front end's files at creation (package resources), and the page loads nothing from the internet but
+the USGS's site data - the application runs offline otherwise. The tests stage the front end first, so the pre-commit
+gate keeps the committed copy the sources', and they check that the package has every file the page loads, and that
+the front end's only web addresses are the USGS's, Ollama's (on this computer), and text.
 
 The application's home page opens a plan - with the browser's open dialog (its file handle is kept, so the plan is
 saved to its file) or file input, or dropped on the page - or makes a new one (`#var.vEdit='new'`). The files stay on

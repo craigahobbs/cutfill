@@ -4,5 +4,4 @@
 /dist/
 /pylintrc
 /src/*.egg-info/
-/src/roadie/static/
 __pycache__/

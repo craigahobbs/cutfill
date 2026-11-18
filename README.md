@@ -3,7 +3,8 @@
 Roadie engineers low-volume roads (driveways, rural access roads, and forest roads) on USGS lidar
 terrain, and views the resulting road grading plans in 3D.
 
-- **`make run`** runs the Roadie application, in your web browser. Open a plan, or make a new one -
+- **`roadie`** (or **`make run`**, in a clone of the repository) runs the Roadie application, in your
+  web browser. Open a plan, or make a new one -
   its config is the road's start and end points (their latitudes and longitudes) and its planning
   notes. Run the plan to engineer its road options - the planning tools build the site from the USGS
   3D Elevation Program's 1 meter lidar terrain and engineer the roads, and an
@@ -27,15 +28,39 @@ terrain, and views the resulting road grading plans in 3D.
 
 Roadie has three parts: the **viewer** ([viewer/](viewer/)) and the **planning tools and
 instructions** (`plan/`) - both JavaScript - and the **application** (`app/`), a Python package whose
-command line serves the viewer, with the planning tools. It requires `make` and Node.js 22 or later -
-Python 3.11 or later for the application - and [Claude Code](https://claude.com/claude-code) to plan
-and update roads (see [Installing](#installing)).
+command line serves the viewer, with the planning tools. The application needs only Python 3.11 or
+later. The command line planning sessions need a clone of the repository, `make`, Node.js 22 or
+later, and [Claude Code](https://claude.com/claude-code) (see [Installing](#installing)).
 A site must be in the United States, where the USGS has 1 meter lidar terrain.
 
 
 ## Installing
 
-Roadie runs from a clone of its repository, on macOS, Linux, and Windows. It needs:
+### The Roadie application
+
+The application is a Python package - it needs [Python](https://www.python.org/downloads/) 3.11 or
+later, and `git`. Install it in a virtual environment, from the repository's main branch:
+
+```
+python3 -m venv roadie-venv
+roadie-venv/bin/pip install "git+https://github.com/craigahobbs/roadie.git#subdirectory=app"
+roadie-venv/bin/roadie
+```
+
+On Windows, the virtual environment's commands are `roadie-venv\Scripts\pip` and
+`roadie-venv\Scripts\roadie` (and `py -m venv roadie-venv` makes it). `roadie` opens the application
+in your web browser (Ctrl-C stops it - `roadie -h` lists its options). To update it, run the same
+`pip install` with `--force-reinstall`.
+
+The application runs offline - its page and its planning tools are the package's - except for the
+USGS's site data, which a plan's first run (or a run after its site's points, units, margin, or
+spacing change) fetches, and Ollama, on this computer (an Ollama cloud model uses the internet).
+
+
+### Planning sessions and development
+
+The command line planning sessions (`make plan`, `make update`, and `make auto`), and Roadie's
+development, run from a clone of its repository, on macOS, Linux, and Windows. They need:
 
 - `make`, `git`, and `curl` (or `wget`)
 - [Node.js](https://nodejs.org/en/download) 22 or later
@@ -46,7 +71,7 @@ Roadie runs from a clone of its repository, on macOS, Linux, and Windows. It nee
 The first `make` command downloads the build's files and npm packages, so it takes a minute.
 
 
-### macOS
+#### macOS
 
 1. Install the Xcode Command Line Tools - they have `make` and `git`:
 
@@ -69,7 +94,7 @@ The first `make` command downloads the build's files and npm packages, so it tak
    ```
 
 
-### Linux
+#### Linux
 
 1. Install `make`, `git`, and `curl` with your distribution's package manager - for example,
    `sudo apt install make git curl` (Debian and Ubuntu) or `sudo dnf install make git curl` (Fedora).
@@ -91,7 +116,7 @@ The first `make` command downloads the build's files and npm packages, so it tak
 Subsystem for Linux), open the URL that `make run` prints.
 
 
-### Windows
+#### Windows
 
 Roadie's `make` commands need a Unix shell. On Windows, that's [MSYS2](https://www.msys2.org/) - run
 every Roadie command in its terminal.
@@ -136,7 +161,7 @@ The MSYS2 terminal starts in its own home folder, `C:\msys64\home\<your name>`. 
 are under `/c/` there - `cd /c/Users/<your name>/Documents`, for example.
 
 
-### Checking the installation
+#### Checking the installation
 
 In a new terminal, each of these prints a version:
 
@@ -184,7 +209,8 @@ Or skip the session: `make run`, make a new plan with the road's start and end p
 
 ## The Roadie application
 
-`make run` runs the application, and opens it in your web browser (`Ctrl-C` stops it). Its home page:
+`roadie` runs the application (or `make run`, in a clone of the repository), and opens it in your web
+browser (`Ctrl-C` stops it). Its home page:
 
 - **Open Plan** - choose or drop a plan's JSON file (and its source map image, to show it in the
   report). The files stay on your computer - they're kept in the browser's storage, and the home

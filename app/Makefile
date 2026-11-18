@@ -41,12 +41,15 @@ help:
 
 
 clean:
-	rm -rf Makefile.base pylintrc src/roadie/static
+	rm -rf Makefile.base pylintrc
 
 
 # Stage the front end in the package - the viewer's application, the planning tools' modules ("plan/lib/" - the
-# application's page maps their imports), and the GeoTIFF reader's script
+# application's page maps their imports), and the GeoTIFF reader's script and its license. The staged front end is
+# committed - the package is installed from the repository (pip) without Node.js - so the tests stage it first: the
+# pre-commit gate keeps it the sources'.
 .PHONY: static
+test cover: static
 static:
 	@$(MAKE) --no-print-directory -C $(VIEWER) app
 	@$(MAKE) --no-print-directory -C $(PLAN) build/npm.build
@@ -55,6 +58,7 @@ static:
 	cp -R $(VIEWER)/build/app/. $(STATIC)/
 	cp -R $(PLAN)/lib $(STATIC)/plan/
 	cp $(PLAN)/node_modules/geotiff/dist-browser/geotiff.js $(STATIC)/
+	cp $(PLAN)/node_modules/geotiff/LICENSE $(STATIC)/geotiff.LICENSE.txt
 
 
 # Run the application

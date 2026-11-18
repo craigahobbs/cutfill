@@ -7,6 +7,7 @@ name = "roadie"
 version = "0.1.0"
 description = "Roadie engineers low-volume roads on USGS lidar terrain and views the resulting road plans"
 readme = "README.md"
+requires-python = ">=3.11"
 keywords = ["road", "grading", "lidar", "civil engineering"]
 authors = [
     {name = "Craig A. Hobbs"}
