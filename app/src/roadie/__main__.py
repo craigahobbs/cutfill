@@ -1,0 +1,9 @@
+"""
+The roadie command-line script's module entry point
+"""
+
+from .main import main
+
+
+if __name__ == '__main__': # pragma: no cover
+    main()

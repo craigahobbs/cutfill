@@ -13,8 +13,8 @@ const fixtureFiles = {'plans/fixture.json': fixtureText};
 const storage = {'roadieCellCost': '1'};
 
 
-// The home page's HTML, with its recent plans' HTML and its documentation link's URL
-function homeHtml(recentHtml = '', docURL = '#var.vDoc=true') {
+// The home page's HTML, with its recent plans' HTML, its documentation link's URL, and its back end's roads' HTML
+function homeHtml(recentHtml = '', docURL = '#var.vDoc=true', roadsHtml = '') {
     return [
         '<h1>Roadie</h1>',
         '<p>Roadie is a 3D viewer for road grading plan models. A road grading plan model contains the site topography, ' +
@@ -25,6 +25,7 @@ function homeHtml(recentHtml = '', docURL = '#var.vDoc=true') {
         '<p>Select or drop a road plan model JSON file - and its source map image, to show it in the report. ' +
             'The files stay on your computer.</p>',
         '</div>',
+        `<div id="roadie-roads">${roadsHtml}</div>`,
         `<div id="roadie-recent">${recentHtml}</div>`,
         '<p>To view a road plan model URL, use the "file" argument: <code>#var.vFile=\'plan.json\'</code></p>',
         '<hr>',
@@ -94,7 +95,7 @@ test('the home page', async (context) => {
     assert.deepEqual(indexedDB.requests, [['files', 'readonly', 'getAll', null]]);
 
     // Nothing is fetched, logged, or drawn
-    assert.deepEqual(browser.fetches, []);
+    assert.deepEqual(browser.fetches, ['getRoads']);
     assert.deepEqual(browser.logs, []);
     assert.equal(browser.clock.timeouts.size, 0);
     assert.equal(browser.clock.frames.size, 0);
@@ -122,13 +123,71 @@ test('the home page with an example road plan', async (context) => {
     await startApp(browser);
     const exampleLink = '<p><a href="#var.vFile=\'plans%2Ffixture.json\'">View the example road plan</a></p>';
     assert.equal(main.innerHTML, homeHtml().replace('<p>To view a road plan', `${exampleLink}\n<p>To view a road plan`));
-    assert.deepEqual(browser.fetches, []);
+    assert.deepEqual(browser.fetches, ['getRoads']);
 
     // The link opens the example's report
     browser.window.location.hash = main.querySelector('a[href*="vFile"]').getAttribute('href');
     await flush();
-    assert.deepEqual(browser.fetches, ['plans/fixture.json']);
+    assert.deepEqual(browser.fetches, ['getRoads', 'plans/fixture.json']);
     assert.equal(browser.document.title, 'Fixture Plan');
+});
+
+
+test('the home page lists the back end\'s roads', async (context) => {
+    // The Roadie application's back end has its directory's roads - a road's plan is a link to it, with the page's
+    // other arguments
+    const roads = [
+        {'name': 'creek', 'site': 'creek.site.json'},
+        {'name': 'hill & dale', 'plan': 'hill & dale.json', 'site': 'hill & dale.site.json'},
+        {'name': 'ridge', 'plan': 'ridge.json'},
+        {'name': 5}
+    ];
+    const files = {'getRoads': JSON.stringify({'directory': '/roads', roads}), 'files/ridge.json': fixtureText};
+    const browser = fakeBrowser(context, {files, storage, 'hash': '#var.vOption=1'});
+    await startApp(browser);
+    assert.deepEqual(browser.fetches, ['getRoads']);
+    assert.equal(browser.main.innerHTML, homeHtml(
+        '',
+        '#var.vDoc=true&amp;var.vOption=1',
+        '<h2 id="roads">Roads</h2><ul>' +
+            '<li><p>creek - a road site that isn\'t planned yet</p></li>' +
+            '<li><p><a href="#var.vFile=\'files%2Fhill%20%26%20dale.json\'&amp;var.vOption=1">hill &amp; dale</a></p></li>' +
+            '<li><p><a href="#var.vFile=\'files%2Fridge.json\'&amp;var.vOption=1">ridge</a></p></li>' +
+            '</ul>'
+    ));
+
+    // A road's link opens its plan - the back end's file
+    browser.window.location.hash = browser.main.querySelector('#roadie-roads li:last-child a').getAttribute('href');
+    await flush();
+    assert.equal(browser.document.title, 'Fixture Plan');
+    assert.deepEqual(browser.fetches, ['getRoads', 'files/ridge.json']);
+});
+
+
+test('the home page without a back end', async (context) => {
+    // The back end has no roads, it doesn't answer with roads, or there's no back end - the home page has no roads
+    for (const response of [JSON.stringify({'directory': '/roads', 'roads': []}), '{"roads": 5}', '<html>', null, undefined]) {
+        const browser = fakeBrowser(context, {'files': {'getRoads': response}});
+        await startApp(browser);
+        assert.deepEqual(browser.fetches, ['getRoads']);
+        assert.equal(browser.main.innerHTML, homeHtml());
+    }
+});
+
+
+test('the home page, left before its roads are listed', async (context) => {
+    let answer;
+    const files = {...fixtureFiles, 'getRoads': new Promise((resolve) => {
+        answer = resolve;
+    })};
+    const browser = fakeBrowser(context, {files, storage});
+    await startApp(browser);
+    browser.window.location.hash = '#var.vFile=\'plans%2Ffixture.json\'';
+    await flush();
+    assert.equal(browser.document.title, 'Fixture Plan');
+    answer(JSON.stringify({'roads': [{'name': 'ridge', 'plan': 'ridge.json'}]}));
+    await flush();
+    assert.equal(browser.document.getElementById('roads'), null);
 });
 
 
@@ -431,7 +490,7 @@ test('a page left while its plan loads', async (context) => {
     await flush();
     assert.equal(document.title, 'Fixture Plan');
     assert.deepEqual(headings(browser), directHeadings);
-    assert.deepEqual(browser.fetches, ['plans/fixture.json']);
+    assert.deepEqual(browser.fetches, ['plans/fixture.json', 'getRoads']);
 });
 
 
@@ -467,7 +526,7 @@ test('opening a local plan', async (context) => {
     assert.deepEqual(indexedDB.records('files'), [{'name': 'plan.json', 'type': 'application/json', 'blob': planFile, 'time': 1500}]);
     assert.equal(indexedDB.records('files')[0].blob, planFile);
     assert.deepEqual(indexedDB.requests, [['files', 'readonly', 'getAll', null], ['files', 'readwrite', 'put', 'plan.json']]);
-    assert.deepEqual(browser.fetches, []);
+    assert.deepEqual(browser.fetches, ['getRoads']);
 
     // The report's links are the local plan's
     assert.equal(main.querySelector('table a').getAttribute('href'), "#var.vFile='local%3Aplan.json'&var.vOption=1");
@@ -560,7 +619,7 @@ test('opening a local plan, then its source map image', async (context) => {
     await flush();
     await dropFiles(browser, [localFile(browser, 'other.png', 'PNG', 'image/png')]);
     assert.equal(document.title, 'Fixture Plan');
-    assert.deepEqual(browser.fetches, ['plans/fixture.json']);
+    assert.deepEqual(browser.fetches, ['getRoads', 'plans/fixture.json']);
 });
 
 

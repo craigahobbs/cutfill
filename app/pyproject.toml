@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "roadie"
+version = "0.1.0"
+description = "Roadie engineers low-volume roads on USGS lidar terrain and views the resulting road plans"
+readme = "README.md"
+keywords = ["road", "grading", "lidar", "civil engineering"]
+authors = [
+    {name = "Craig A. Hobbs"}
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: End Users/Desktop",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering"
+]
+dependencies = [
+    "chisel >= 2.5.0, < 2.6.0",
+    "waitress >= 3.0.0"
+]
+
+[project.urls]
+Homepage = "https://github.com/craigahobbs/roadie"
+
+[project.scripts]
+roadie = "roadie.main:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+packages = ["roadie"]
+
+[tool.setuptools.package-data]
+roadie = ["static/**/*"]

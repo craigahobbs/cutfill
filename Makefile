@@ -1,7 +1,8 @@
-# Roadie's top-level makefile - it delegates to the project's two subprojects:
+# Roadie's top-level makefile - it delegates to the project's subprojects:
 #
 #   viewer/  The Roadie viewer - a JavaScript web application (javascript-build)
 #   plan/    The planning tools and instructions - JavaScript (javascript-build)
+#   app/     The Roadie application - a Python package that serves the viewer and a directory's roads (python-build)
 
 .DEFAULT_GOAL := help
 
@@ -13,7 +14,7 @@ SUBMAKE = @$(MAKE) --no-print-directory -C $(1) $(2)$(if $(FILE), FILE="$(abspat
 
 .PHONY: help
 help:
-	@echo "usage: make [auto|clean|commit|doc|evaluate|gh-pages|lint|plan|run|site|superclean|test|update]"
+	@echo "usage: make [app|auto|clean|commit|doc|evaluate|gh-pages|lint|plan|run|site|superclean|test|update]"
 	@echo ""
 	@echo "  make plan FILE=<plan>.site.json [OUTPUT=<plan.json>]  Engineer road plan options for a road site (Claude Code)"
 	@echo "  make auto FILE=<plan>.site.json [OUTPUT=<plan.json>]  Plan a road by procedure - the tools, and an Ollama model's answers"
@@ -22,20 +23,29 @@ help:
 	@echo "    (plan and update accept MODEL=<model> [default: opus] and EFFORT=<effort> [default: high],"
 	@echo "     OLLAMA=1 to launch Claude Code with an Ollama model - MODEL then names the Ollama model,"
 	@echo "     and GROK=1 to launch the Grok CLI instead - MODEL then names the Grok model)"
+	@echo "  make app [DIR=<directory>]                 Serve the Roadie application - a directory's roads, in the browser"
 	@echo "  make run [FILE=<plan.json>]                View a road plan model in the browser"
 	@echo "  make evaluate FILE=<plan.json> [DETAIL=1]  Print a road plan model's analysis and cost"
 	@echo "  make doc                                   Print the road plan model documentation"
-	@echo "  make commit                                Run the viewer's and the planning tools' tests and lint"
+	@echo "  make commit                                Run the viewer's, the planning tools', and the application's tests and lint"
 	@echo "  make site                                  Stage the project's web site (build/gh-pages/)"
 	@echo "  make gh-pages                              Update the project's gh-pages branch checkout (../roadie.gh-pages)"
 
 
-# The pre-commit gate, and its parts - the viewer's (tests, lint, documentation, and 100% coverage) and the planning
-# tools' (tests and lint)
+# The pre-commit gate, and its parts - the viewer's (tests, lint, documentation, and 100% coverage), the planning
+# tools' (tests and lint), and the application's (tests, lint, and 100% coverage)
 .PHONY: commit test lint
 commit test lint:
 	$(call SUBMAKE,viewer,$@)
 	$(call SUBMAKE,plan,$@)
+	$(call SUBMAKE,app,$@)
+
+
+# Serve the Roadie application - a directory's road sites and road plans, in the browser (the current directory's,
+# by default)
+.PHONY: app
+app:
+	@$(MAKE) --no-print-directory -C app run ARGS="$(abspath $(if $(DIR),$(DIR),.))"
 
 
 # View a road plan model in the browser (the viewer)
@@ -104,4 +114,5 @@ gh-pages: commit
 clean superclean:
 	$(call SUBMAKE,viewer,$@)
 	$(call SUBMAKE,plan,$@)
+	$(call SUBMAKE,app,$@)
 	rm -rf build/

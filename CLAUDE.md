@@ -3,7 +3,7 @@
 Roadie engineers low-volume roads on USGS lidar terrain and views the resulting road plan models in
 a printable report with 3D views. See [README.md](README.md) for the user-facing overview.
 
-The project is two subprojects, and the top-level makefile delegates to them:
+The project is three subprojects, and the top-level makefile delegates to them:
 
 - **The viewer** (`viewer/`, JavaScript, [javascript-build](https://github.com/craigahobbs/javascript-build#readme)) -
   the web application (report, plan and profile views, 3D views, and 3D explorer), the road plan model (its Schema
@@ -15,6 +15,13 @@ The project is two subprojects, and the top-level makefile delegates to them:
   planning notes): the tools build the site from the USGS 3D Elevation Program's 1 meter lidar terrain, and engineer
   its road options. **Planning a road** (`make plan`, `make update`) follows PLAN.md - when asked to plan or update
   a road, follow PLAN.md exactly. The planning session runs in `plan/`. See [plan/README.md](plan/README.md).
+
+- **The application** (`app/`, Python, [python-build](https://github.com/craigahobbs/python-build#readme)) - the
+  `roadie` package: its command line (`roadie [DIRECTORY]`, `make app DIR=<directory>`) serves the front end (the
+  viewer's application, which `make -C app static` stages in the package) and a
+  [chisel](https://github.com/craigahobbs/chisel#readme) back end (`app/src/roadie/app.py`) that lists a directory's
+  roads (`getRoads`) and reads and writes its files (`/files/...`). The back end is thin - the engineering is the
+  planning tools' JavaScript, which runs in the browser. See [app/README.md](app/README.md).
 
 `example/` is the example - a road site model (`example.site.json`) and the plan a planning session made from it
 (`example.json`, and its USGS topographic map image). `index.html` renders this project's README on its web site.
@@ -30,6 +37,7 @@ make auto FILE=<plan>.site.json [OLLAMA_MODEL=<model>]   # plan a road by proced
 make evaluate FILE=<plan.json> [DETAIL=1]   # a plan's analysis and cost from the command line
 make doc                          # the road plan model documentation
 make run FILE=<plan.json>         # view a plan in the browser
+make app [DIR=<directory>]        # serve the application - the viewer, with a directory's roads
 make site                         # stage the web site (build/gh-pages/): README, example, and viewer/
 ```
 
@@ -38,8 +46,8 @@ Run `make` in `viewer/` or `plan/` for a subproject's own targets (e.g.
 
 ## Conventions
 
-- Run `make commit` before committing; it must pass - the viewer and the planning tools (`plan/`) with 100% coverage
-  and every lint clean.
+- Run `make commit` before committing; it must pass - the viewer, the planning tools (`plan/`), and the application
+  (`app/`) with 100% coverage and every lint clean.
 - Commit directly on `main`. Commit messages: a short imperative subject, then a body of bullets
   (or a paragraph) explaining what changed and why.
 - The road plan model stays defined, validated, and documented with Schema Markdown (see viewer/CLAUDE.md), and the
