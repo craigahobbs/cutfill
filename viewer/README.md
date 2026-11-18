@@ -18,7 +18,7 @@ The viewer is built with [javascript-build](https://github.com/craigahobbs/javas
 
 ```sh
 make run [FILE=<plan.json>]   # stage the application, then view a road plan in the browser
-make commit                   # the pre-commit gate: test, lint, doc, cover, and app
+make commit                   # the pre-commit gate: test, lint, doc, and cover
 make test [TEST=name]         # the unit tests (node --test)
 make lint                     # ESLint
 make cover                    # the unit tests, with 100% coverage required
@@ -29,12 +29,14 @@ The source is ES modules in `lib/`, loaded by `index.html`:
 
 | Module | Contents |
 | --- | --- |
-| `app.js` | The application - routing on the URL hash, plan loading (URLs and local files), the pages |
-| `model.js` | The road plan model - its schema and validation, and the earthwork, structure, and cost analysis |
+| `app.js` | The application - routing on the URL hash, plan loading (URLs and local files), the local files, and the loaded plan |
+| `homePage.js`, `form.js` | The home page - open or make a plan, and view, edit, run, save, and close the loaded plan - the plan config editor page, and its form (made from the model's types) |
+| `viewPages.js` | The report page and the 3D explorer page |
+| `model.js` | The road plan model and the road site model (a plan's config) - their schema and validation, a plan file's text, and the earthwork, structure, and cost analysis |
 | `report.js`, `tables.js`, `planView.js`, `view3d.js` | The report, its cost and structures tables, the plan and profile views, and the 3D views |
 | `explore.js`, `canvas.js` | The 3D explorer, and the 3D views' drawing operations - painted on a canvas, or converted to SVG markup |
 | `doc.js`, `schemaDoc.js` | The model documentation page, generated from the model's schema |
-| `args.js`, `format.js`, `draw.js`, `markdown.js`, `planData.js`, `smoothing.js` | URL arguments, formatting, drawing helpers, Markdown, a loaded plan's cached analyses and drawings, and the 3D drawings' time budget |
+| `args.js`, `format.js`, `geo.js`, `draw.js`, `markdown.js`, `planData.js`, `smoothing.js` | URL arguments, formatting, the map projection, drawing helpers, Markdown, a loaded plan's cached analyses and drawings, and the 3D drawings' time budget |
 | `cli.js` | The command line (`bin/roadie.js`) - not part of the web application |
 
 The road plan model is defined with [Schema Markdown](https://craigahobbs.github.io/schema-markdown-js/language/) (in
@@ -85,8 +87,9 @@ Where the time goes:
 - **The report** renders its text, tables, plan view, and profile first, then draws the 3D views one per task (the
   visible ones first), so the page is readable at once and stays responsive. With canvas 3D views, the 4 mile road's
   whole report is drawn in about 150 ms in headless Chrome.
-- **Each plan's analyses, finished grade, report views, and drawings are cached**, so switching options and returning
-  from the explorer don't recompute them.
+- **Each plan's analyses, finished grade, report views, and plan and profile drawings are cached**, so switching
+  options and returning from the explorer don't recompute them. (A canvas 3D drawing is drawn each time - its detail
+  follows the computer's measured speed.)
 - **The 3D drawings are canvases.** An SVG drawing of a large plan is tens of thousands of elements - most of its time
   was the browser building, styling, laying out, and painting them, not computing them. A 3D drawing is an array of
   drawing operations, painted directly (the command line's SVG drawings are the same operations, as markup). The

@@ -232,7 +232,7 @@ and criteria), and what can be done with it:
   default). The planning tools run in the page: the run's steps are shown as it goes, with its time,
   and its result and report when it's done. **Stop** stops it, when its current step's work is done -
   and its work is thrown away. The road options it engineers are the plan's - a plan that's run
-  again keeps its other options and features, and its site's data (its terrain, streams, roads, and
+  again keeps the features that were added to it, and its site's data (its terrain, streams, roads, and
   map), so the USGS isn't asked for it again - unless its points, units, margin, or spacing changed,
   or "Fetch the site's data from the USGS again" is checked. **Clear Road Options** clears them - the
   plan keeps its site's data.

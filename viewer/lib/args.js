@@ -97,6 +97,10 @@ export function parseLiteral(text) {
 }
 
 
+// The local file URL argument prefix - local files are opened from the user's computer and kept in IndexedDB
+export const localPrefix = 'local:';
+
+
 // Validate an argument value's type - an invalid value is null
 function validateValue(value, type) {
     if (value === null || value === undefined) {

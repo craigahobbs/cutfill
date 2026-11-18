@@ -136,7 +136,6 @@ export function projection(topo, args, width, maxHeight) {
     view.xc = xc;
     view.yc = yc;
     view.zc = zc;
-    view.fullHeight = maxHeight;
 
     // A fill view (the 3D explorer) is the maximum height, with the view center at its middle
     if (args.fill) {
@@ -930,7 +929,7 @@ export function view3DParts(plan, topo, rows, ixOption, analysis, view, limits =
     }
 
     const label = `3D view of the ${option.name} road plan option`;
-    return {width, 'height': viewHeight, label, ops, smooth, step, pointLimited};
+    return {width, 'height': viewHeight, label, ops, 'cells': cellCount, smooth, step, pointLimited};
 }
 
 
