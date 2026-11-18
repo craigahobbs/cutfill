@@ -1,7 +1,7 @@
 import {analyzeOption, elevation, planTopo, validatePlan} from '../lib/model.js';
 import {complexPlan, countOf, ridgesPlan, simplePlan} from './viewFixtures.js';
 import {
-    finishedRows, maxZoom, project, projection, reportViews, smoothLimitsCanvas, unproject, view3D, view3DParts
+    finishedRows, maxZoom, project, projection, reportViews, smoothLimitsCanvas, unproject, view3D, view3DParts, visibleCells
 } from '../lib/view3d.js';
 import assert from 'node:assert/strict';
 import {fixturePlan} from './fixture.js';
@@ -89,7 +89,7 @@ test('projection', () => {
     // A top view - the site's center is the view's center, and higher points are nearer
     let view = projection(topo, {'azimuth': 0, 'tilt': 90, 'exaggeration': 1}, 100, 100);
     assert.equal(round6(view.scale), 1.244486);
-    assert.deepEqual([view.width, view.height, view.cy, view.fullHeight, view.zoom, view.smooth], [100, 100, 50, 100, 1, false]);
+    assert.deepEqual([view.width, view.height, view.cy, view.zoom, view.smooth], [100, 100, 50, 1, false]);
     assert.deepEqual(round6(project(view, 20, 20, 102)), [50, 50, 5.3]);
     assert.deepEqual(round6(project(view, 40, 40, 104)), [74.889727, 25.110273, 3.3]);
 
@@ -112,7 +112,7 @@ test('projection', () => {
     // The view's height fits the topography (a low tilt), up to the maximum height (a top view) - the view's center is raised
     // half the marker poles' height
     view = projection(topo, {'azimuth': 30, 'tilt': 10, 'exaggeration': 1.5}, 400, 300);
-    assert.deepEqual([view.height, view.cy, view.fullHeight], [240, 120, 300]);
+    assert.deepEqual([view.height, view.cy], [240, 120]);
     assert.deepEqual(round6([view.xc, view.yc, view.zc]), [20, 20, 107.2]);
     view = projection(topo, {'azimuth': 30, 'tilt': 90, 'exaggeration': 1.5}, 400, 300);
     assert.equal(view.height, 300);
@@ -562,7 +562,11 @@ test('view3DParts, the terrain grid step', () => {
     assert.equal(elementCounts(svg.elements.slice(0, -7)).cells, 125);
 
     // With the canvas terrain limits, the terrain is every grid cell, if the point limit allows
-    const cellCount = (drawing) => drawing.ops.filter((op) => op.t === 0).length;
+    const cellCount = (drawing) => {
+        const count = drawing.ops.filter((op) => op.t === 0).length;
+        assert.equal(drawing.cells, count);
+        return count;
+    };
     let canvas = draw(long, {...topArgs, 'smooth': true}, 1000, 400, smoothLimitsCanvas);
     assert.deepEqual([canvas.step, canvas.smooth, canvas.pointLimited, cellCount(canvas)], [1, 1, false, 498]);
     canvas = draw(long, {...topArgs, 'smooth': true}, 1000, 400, {...smoothLimitsCanvas, 'points': 300});
@@ -649,7 +653,7 @@ test('reportViews', () => {
 
     // The view's width is the report's, and its maximum height is three-quarters of it
     views = planReportViews(simplePlan(), 0, 400);
-    assert.deepEqual([views[0].view.width, views[0].view.height, views[0].view.fullHeight], [400, 286, 300]);
+    assert.deepEqual([views[0].view.width, views[0].view.height], [400, 286]);
 
     // A narrow road adds views of equal road segments, from the start to the end, in the overview's orientation - each
     // zoomed in on its segment
@@ -751,4 +755,23 @@ test('reportViews, the road segment views', () => {
         [230, 40, 324, 432, true],
         [230, 40, 432, 540, true]
     ]);
+});
+
+
+test('visibleCells', () => {
+    // The simple plan - a 5 x 5 grid, 10 meters apart, rising to the north
+    const {plan} = validatePlan(simplePlan());
+    const topo = planTopo(plan);
+
+    // The whole site's top view sees every cell
+    let view = projection(topo, {'azimuth': 0, 'tilt': 90, 'exaggeration': 1}, 400, 400);
+    assert.deepEqual(visibleCells(view, topo, topo.rows, 0, 4, 0, 4), [0, 4, 0, 4]);
+
+    // Zoomed in on the northwest corner, only its cell is visible - extended by a cell on each side
+    view = projection(topo, {'azimuth': 0, 'tilt': 90, 'exaggeration': 1, 'zoom': 4, 'x': 0, 'y': 40}, 400, 400);
+    assert.deepEqual(visibleCells(view, topo, topo.rows, 0, 4, 0, 4), [0, 2, 0, 2]);
+
+    // High above the terrain, no cell is visible
+    view = projection(topo, {'azimuth': 0, 'tilt': 45, 'exaggeration': 1, 'zoom': 4, 'z': 100000, 'fill': true}, 400, 400);
+    assert.equal(visibleCells(view, topo, topo.rows, 0, 4, 0, 4), null);
 });

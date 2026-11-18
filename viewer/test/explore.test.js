@@ -144,8 +144,8 @@ test('Explorer.render', () => {
     assert.deepEqual(
         {...drawing, 'ops': null},
         {
-            'width': 400, 'height': 300, 'label': '3D view of the Flat road plan option', 'ops': null, 'smooth': 4, 'step': 1,
-            'pointLimited': false
+            'width': 400, 'height': 300, 'label': '3D view of the Flat road plan option', 'ops': null, 'cells': 256, 'smooth': 4,
+            'step': 1, 'pointLimited': false
         }
     );
     assert.equal(drawing.ops.filter((op) => op.t === 0).length, 16 * 16);

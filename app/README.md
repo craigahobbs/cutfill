@@ -28,8 +28,8 @@ roadie-venv/bin/pip install "git+https://github.com/craigahobbs/roadie.git#subdi
 
 The app adds the front end's files at creation (package resources), and the page loads nothing from the internet but
 the USGS's site data - the application runs offline otherwise. The tests stage the front end first, so the pre-commit
-gate keeps the committed copy the sources', and they check that the package has every file the page loads, and that
-the front end's only web addresses are the USGS's, Ollama's (on this computer), and text.
+gate keeps the committed copy the sources', and they check that the package has every module the page imports (and
+no others), and that the front end's only web addresses are the USGS's, Ollama's (on this computer), and text.
 
 The application's home page opens a plan - with the browser's open dialog (its file handle is kept, so the plan is
 saved to its file) or file input, or dropped on the page - or makes a new one (`#var.vEdit='new'`). The files stay on
@@ -46,15 +46,15 @@ The members the form doesn't edit - the exclusion areas - are kept as they are. 
 
 The home page shows the loaded plan - its config - and its actions: view it (its road options' report), edit its
 config, run it (its steps - the planning tools' `autoSteps` - and its time are shown as it goes, and its result and
-report when it's done; it's stopped with an abort signal, when its current step's work is done, and its work is thrown away; the last
-model chosen is remembered; a plan's site's data is kept, unless the site changed or it's fetched again), clear its
-road options (its site's data is kept), save it (to its file, or another - the browser's save dialog, or a download), and close it (the user is
-asked first, if it has changes that aren't saved). A plan with road options is one file: it keeps its config and its
-map image (a data URL). The recent files are listed - a file is opened, or removed (but for the loaded plan's road
-options' file).
+report when it's done; it's stopped with an abort signal, when its current step's work is done, and its work is
+thrown away; the last model chosen is remembered; a plan's site's data is kept, unless the site changed or it's
+fetched again), clear its road options (its site's data is kept), save it (to its file, or another - the browser's
+save dialog, or a download), and close it (the user is asked first, if it has changes that aren't saved). A plan with
+road options is one file: it keeps its config and its map image (a data URL). The recent files are listed - a file is
+opened, or removed (but for the loaded plan's road options' file).
 
 The engineering isn't the back end's: a plan is run in the browser, by the planning tools' `auto` command
-(`../plan/lib/browser/io.js`) - with one of Ollama's models, or none - and the run's report is shown as it's made.
+(`../plan/lib/browser/io.js`) - with one of Ollama's models, or none - and the run's report is shown when it's done.
 The tools' files are in the browser's memory. The terrain cache and the model's saved answers are kept from one run
 to the next, so a plan that's run again doesn't fetch its terrain or ask the model again. The USGS's services and
 Ollama answer other sites' pages, so the browser fetches them itself. The page's import map has the tools' Node

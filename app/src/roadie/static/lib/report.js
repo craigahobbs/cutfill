@@ -122,10 +122,7 @@ export function buildReport(data, globals, args, width, canvasViews = false) {
                 `style="${svgStyle}" data-view="${ixView}"></canvas>`);
             views3D.push({
                 view,
-                'render': (limits) => data.drawing(
-                    `3d/${ixOption}/${width}/${ixView}/${limits.points}`,
-                    () => view3DParts(plan, topo, data.rows(ixOption), ixOption, analysis, smoothView, limits)
-                )
+                'render': (limits) => view3DParts(plan, topo, data.rows(ixOption), ixOption, analysis, smoothView, limits)
             });
         } else {
             html.push(view3D(plan, topo, data.rows(ixOption), ixOption, analysis, view));

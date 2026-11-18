@@ -1,4 +1,4 @@
-import {siteTypes, validateSite} from '../lib/site.js';
+import {roadieTypes, validateSite} from '../lib/model.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
@@ -114,14 +114,14 @@ test('validateSite, invalid sites', () => {
 });
 
 
-test('siteTypes', () => {
+test('roadieTypes, the road site model', () => {
     // The road site model, and the road plan model's types it shares
     assert.deepEqual(
-        ['RoadSite', 'SitePoint', 'SiteArea', 'LatLong', 'Units', 'DesignCriteria', 'CostRates'].filter((name) => !(name in siteTypes)),
+        ['RoadSite', 'SitePoint', 'SiteArea', 'LatLong', 'Units', 'DesignCriteria', 'CostRates'].filter((name) => !(name in roadieTypes)),
         []
     );
     assert.deepEqual(
-        siteTypes.RoadSite.struct.members.map((member) => `${member.name}${member.optional ? '?' : ''}`),
+        roadieTypes.RoadSite.struct.members.map((member) => `${member.name}${member.optional ? '?' : ''}`),
         ['title', 'units', 'start', 'end', 'notes?', 'exclusions?', 'criteria?', 'costRates?', 'margin?', 'spacing?']
     );
 });

@@ -1,4 +1,6 @@
+import json
 import os
+import posixpath
 import re
 import unittest
 
@@ -67,6 +69,44 @@ class TestApp(unittest.TestCase):
         for url in ('/plan/lib/browser/io.js', '/plan/lib/auto.js', '/schema-markdown/lib/schema.js', '/geotiff.js',
                     '/geotiff.LICENSE.txt'):
             self.assertIn(url, urls)
+
+
+    def test_statics_modules(self):
+        # Every module the front end imports is the package's, and every module of the package is imported - from the
+        # page's module, by its import map (the planning tools' Node modules, and their imports of the viewer's)
+        app = Roadie()
+        urls = {url for request in app.requests.values() if request.doc_group == 'Statics' for _, url in request.urls}
+        page = app.request('GET', '/')[2].decode('utf-8')
+        import_map = json.loads(re.search(r'<script type="importmap">(.*?)</script>', page, re.DOTALL).group(1))['imports']
+        url_map = {posixpath.normpath(posixpath.join('/', key)) + ('/' if key.endswith('/') else ''): value
+                   for key, value in import_map.items() if key.startswith('.')}
+
+        def resolve(base, specifier):
+            for prefix, target in import_map.items():
+                if not prefix.startswith('.') and (specifier == prefix or (prefix.endswith('/') and specifier.startswith(prefix))):
+                    return posixpath.normpath(posixpath.join('/', target + specifier[len(prefix):]))
+            url = posixpath.normpath(posixpath.join(posixpath.dirname(base), specifier))
+            for prefix, target in url_map.items():
+                if url.startswith(prefix):
+                    return posixpath.normpath(posixpath.join('/', target + url[len(prefix):]))
+            return url
+
+        modules = set()
+        missing = set()
+        pending = [resolve('/index.html', specifier) for specifier in re.findall(r"from '([^']+)'", page)]
+        self.assertListEqual(pending, ['/lib/app.js'])
+        while pending:
+            url = pending.pop()
+            if url in urls and url not in modules:
+                modules.add(url)
+                text = app.request('GET', url)[2].decode('utf-8')
+                pending.extend(resolve(url, specifier) for specifier in re.findall(r"(?:from |import\()'([^']+)'", text))
+            missing.update({url} - urls)
+        self.assertSetEqual(missing, set())
+        self.assertIn('/plan/lib/browser/zlib.js', modules)
+
+        # The GeoTIFF reader is a script, not a module - the planning tools load it when they read an elevation model
+        self.assertSetEqual({url for url in urls if url.endswith('.js')} - modules, {'/geotiff.js'})
 
 
     def test_statics_offline(self):

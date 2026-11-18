@@ -1,5 +1,7 @@
 // geo.js - the transverse Mercator map projection, and a road plan's georeference
 
+import {unitScale} from './model.js';
+
 
 // The GRS 80 ellipsoid (NAD 83's - within a millimeter of WGS 84's) - its equatorial radius, in meters, and its
 // third flattening
@@ -94,7 +96,7 @@ export function planLatLong(plan, x, y) {
     if (georeference === null) {
         return null;
     }
-    const scale = plan.units === 'feet' ? 0.3048 : 1;
+    const scale = unitScale(plan);
     const projection = transverseMercator(georeference.latitude, georeference.longitude);
     return unproject(projection, (x - georeference.x) * scale, (y - georeference.y) * scale);
 }
@@ -103,4 +105,16 @@ export function planLatLong(plan, x, y) {
 // Format a latitude and longitude, in degrees, to about a meter
 export function latLongText([latitude, longitude]) {
     return `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+}
+
+
+// Compute the distance between two points on the Earth (objects with a "latitude" and a "longitude", in degrees), in
+// meters - the great circle's (the haversine formula)
+export function latLongDistance(point1, point2) {
+    const radians = Math.PI / 180;
+    const sinLatitude = Math.sin((point2.latitude - point1.latitude) * radians / 2);
+    const sinLongitude = Math.sin((point2.longitude - point1.longitude) * radians / 2);
+    const chord = sinLatitude * sinLatitude +
+        Math.cos(point1.latitude * radians) * Math.cos(point2.latitude * radians) * sinLongitude * sinLongitude;
+    return 2 * 6371008.8 * Math.asin(Math.sqrt(chord));
 }

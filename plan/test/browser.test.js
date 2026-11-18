@@ -316,11 +316,9 @@ test('planRoad', async () => {
     const site = testSite({'margin': 150, 'spacing': 10, 'notes': ['Stay off the barn.']});
     const window = fakeWindow();
     const files = new Map([['other.json', '{}'], ['plan.work/plan.png', Uint8Array.from([1])]]);
-    const progressLines = [];
     const statuses = [];
     const result = await planRoad(window, {site}, {
         'model': 'test-model',
-        'progress': (lines) => progressLines.push(...lines),
         'status': (text) => Promise.resolve(statuses.push(text)),
         files
     });
@@ -328,9 +326,8 @@ test('planRoad', async () => {
     assert.deepEqual(result.lines.filter((line) => /^Notes|^Option \d|^Wrote/.test(line)), [
         'Notes: avoid "Barn" - an exclusion area from x 300 to 380, y 60 to 120',
         'Option 0: "New Road" - cost score 72.6, design warnings: 0',
-        'Wrote plan.json - its descriptions are "plan.work/descriptions.md", and its plots are in "plan.work/"'
+        'Wrote plan.json - its descriptions are "plan.work/descriptions.md"'
     ]);
-    assert.deepEqual(progressLines, result.lines);
     assert.deepEqual([statuses[0], statuses.at(-1)], [
         'Creating the site - its terrain, streams, roads, and map are the USGS\'s', 'Writing the descriptions and the plots'
     ]);
@@ -384,10 +381,16 @@ test('planRoad, failures', async () => {
     const invalid = await planRoad(fakeWindow(), {'site': {}});
     assert.deepEqual([invalid.code, invalid.lines[0], invalid.plan], [1, 'error: The road site "site.json" is invalid:', null]);
 
-    // A plan that fails - its map image can't be drawn
+    // A plan that fails - its question's plot can't be drawn
     const site = testSite({'margin': 150, 'spacing': 10});
-    const failed = await planRoad(fakeWindow({'imageLoads': false}), {site});
-    assert.deepEqual(failed, {'code': 1, 'lines': ['error: Could not draw a plot'], 'plan': null});
+    const notesSite = {...site, 'notes': ['Stay off the barn.']};
+    const failed = await planRoad(fakeWindow({'imageLoads': false}), {'site': notesSite}, {'model': 'test-model'});
+    assert.deepEqual([failed.code, failed.lines.at(-1), failed.plan], [1, 'error: Could not draw a plot', null]);
+
+    // A plan config that isn't one, with a plan - the plan isn't the site's
+    const {plan} = await planRoad(fakeWindow(), {site});
+    const invalidSite = await planRoad(fakeWindow(), {'site': {}, plan});
+    assert.deepEqual([invalidSite.code, invalidSite.lines[0]], [1, 'error: The road site "site.json" is invalid:']);
 
     // A plan without a map image keeps its image
     const noMap = await planRoad(fakeWindow({'mapType': 'text/html'}), {site});

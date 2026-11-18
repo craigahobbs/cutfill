@@ -16,12 +16,14 @@ async function run(argv) {
 
 // The command line's usage
 const usage = `\
-usage: plan auto <site.json> <plan.json> [--model MODEL]
-       plan site <site.json> <plan.json>
-       plan plot <plan.json> <plot.png> [--box X1,Y1,X2,Y2]
+usage: plan auto <site.json> <plan.json> [--model MODEL] [--fresh] [--fetch] [--no-plots] [options]
+       plan site <site.json> <plan.json> [--fetch]
+       plan plot <plan.json> <plot.png> [--box X1,Y1,X2,Y2] [--map]
        plan locate <plan.json> [--xy] <latitude,longitude | x,y>...
        plan feature <plan.json> TYPE [-n NAME] X,Y X,Y...
-       plan draws <plan.json> [--add NUMBER]...
+       plan feature <plan.json> --remove NAME
+       plan draws <plan.json> [--area AREA]
+       plan draws <plan.json> [--area AREA] --add NUMBER... [-n NAME] [--end X,Y]
        plan options <plan.json> [options]
        plan route <plan.json> -n NAME [-v X,Y]... [options]
        plan profile <plan.json> -n NAME [options]

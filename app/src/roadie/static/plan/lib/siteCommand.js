@@ -3,14 +3,15 @@
 // (the USGS National Map's streams, roads, and trails, and the site's exclusion areas), and its topographic map image
 
 import {elevationModels, roadLines, streamLines, topoMapImageUrl, trailLines} from './usgs.js';
-import {exclusionFeatures, lineFeatures, snapDistance, snapStreams} from './features.js';
-import {layoutBox, layoutGeoreference, layoutLatLong, layoutSize, readTile, siteLayout, siteTerrain} from './terrain.js';
-import {orderPlan, planText} from './planFile.js';
-import {elevation as planElevation, planTopo} from '../../viewer/lib/model.js';
+import {exclusionFeatures, exclusionNames, lineFeatures, snapDistance, snapStreams} from './features.js';
+import {
+    isLayoutGrid, isLayoutPlan, layoutBox, layoutGeoreference, layoutLatLong, layoutSize, readTile, siteLayout, siteTerrain
+} from './terrain.js';
+import {elevation as planElevation, planTopo, validateSite} from '../../viewer/lib/model.js';
 import {latLongText} from '../../viewer/lib/geo.js';
 import {nearestText} from './roads.js';
 import {round} from '../../viewer/lib/format.js';
-import {validateSite} from './site.js';
+import {writePlan} from './planFile.js';
 
 
 // The "site" command's usage text lines
@@ -20,9 +21,10 @@ export const siteUsage = [
     '  Create a road plan model\'s site from a road site model - its topography, from the USGS 3D Elevation Program\'s',
     '  1 meter elevation models, its georeference, its start and end points, its streams, roads, and exclusion areas,',
     '  and its topographic map image ("<plan>.png"). An existing plan\'s options are kept, and the features that were',
-    '  added to it (the "feature" and "draws" commands\'). If the existing plan\'s site is the site - the same points,',
+    '  added to it (the "feature" and "draws" commands\'). If the existing plan\'s grid is the site\'s - the same points,',
     '  units, margin, and spacing - its site\'s data (its terrain, streams, roads, trails, and map) is kept, and the',
-    '  USGS\'s services aren\'t asked for it again, unless "--fetch" is given.'
+    '  USGS\'s services aren\'t asked for it again, unless "--fetch" is given. A plan\'s design criteria and cost rates',
+    '  are the site\'s. If there\'s no site file, it\'s written from the plan\'s own site model.'
 ];
 
 
@@ -44,12 +46,40 @@ export async function siteCommand(args, io) {
     }
     const [sitePath, planPath] = positionals;
     const error = (lines) => ({'code': 1, 'lines': lines});
+    const readText = (path) => {
+        try {
+            return io.readFile(path);
+        } catch {
+            return null;
+        }
+    };
 
-    // Load and validate the road site model
-    let siteValue;
+    // The existing plan, if any
+    let plan = {};
+    const planFile = readText(planPath);
+    if (planFile !== null) {
+        try {
+            plan = JSON.parse(planFile);
+        } catch {
+            return error([`error: Could not load the road plan "${planPath}"`]);
+        }
+    }
+
+    // Load and validate the road site model - if there's no file, it's written from the plan's own site model
+    const siteLines = [];
+    let siteFile = readText(sitePath);
+    if (siteFile === null && (plan?.site ?? null) !== null) {
+        siteFile = `${JSON.stringify(plan.site, null, 4)}\n`;
+        io.writeFile(sitePath, siteFile);
+        siteLines.push(`Wrote ${sitePath} - the plan's road site model`);
+    }
+    let siteValue = null;
     try {
-        siteValue = JSON.parse(io.readFile(sitePath));
+        siteValue = JSON.parse(siteFile);
     } catch {
+        // The file isn't JSON
+    }
+    if (siteFile === null || siteValue === null) {
         return error([`error: Could not load the road site "${sitePath}"`]);
     }
     const validated = validateSite(siteValue);
@@ -59,26 +89,20 @@ export async function siteCommand(args, io) {
     const {site} = validated;
     const {units} = site;
 
-    // The existing plan, if any
-    let plan = {};
-    let planFile = null;
-    try {
-        planFile = io.readFile(planPath);
-    } catch {
-        // There is no plan yet
-    }
-    if (planFile !== null) {
-        try {
-            plan = JSON.parse(planFile);
-        } catch {
-            return error([`error: Could not load the road plan "${planPath}"`]);
-        }
+    // An existing plan is the site's - its projection center and its units are the site's
+    const layout = siteLayout(site);
+    const isSited = plan !== null && typeof plan === 'object' && 'topography' in plan;
+    if (isSited && !isLayoutPlan(layout, plan)) {
+        return error([
+            `error: The road plan "${planPath}" isn't a plan of this site - its georeference's center, or its units, aren't the ` +
+                'site\'s. Plan the site again (remove the plan), or restore its start and end points and its units.'
+        ]);
     }
 
-    // The plan's site data is kept, if its site is the site - unless it's fetched again
-    const layout = siteLayout(site);
-    if (!isFetch && isPlanSite(plan, site)) {
-        return keepSite(io, planPath, plan, site, layout);
+    // The plan's site data is kept, if its grid is the site's - unless it's fetched again
+    if (!isFetch && isSited && isLayoutGrid(layout, plan)) {
+        const kept = keepSite(io, planPath, plan, site, layout);
+        return {...kept, 'lines': [...siteLines, ...kept.lines]};
     }
 
     // The topography - the site's elevation model tiles are cached in the plan's work directory - and the streams
@@ -143,12 +167,6 @@ export async function siteCommand(args, io) {
     // An existing plan's options and features are in its coordinates - they're moved to the new grid's
     const georeference = layoutGeoreference(layout);
     const {'plan': shifted, moved} = shiftPlan(plan, georeference);
-    if (shifted === null) {
-        return error([
-            `error: The road plan "${planPath}" isn't a plan of this site - its georeference's center isn't the site's. ` +
-                'Plan the site again (remove the plan), or restore its start and end points.'
-        ]);
-    }
 
     // The streams are moved to the bottoms of the terrain's valleys
     const streamTopo = planTopo({'topography': {spacing, elevations}});
@@ -158,14 +176,13 @@ export async function siteCommand(args, io) {
     // The features - the site's streams, roads, trails, and exclusion areas, and the plan's other features: its rock
     // outcrops, its exclusion areas that aren't the site's, and the streams, roads, and trails that were added to it
     const exclusions = exclusionFeatures(layout, site);
-    const exclusionNames = new Set(exclusions.map(({name}) => name));
+    const siteNames = siteExclusionNames(plan, site);
     const kept = (shifted.topography?.features ?? []).filter(({type, name, added = false}) => (
-        type === 'rock' || (type === 'exclusion' ? !exclusionNames.has(name) : added)
+        type === 'rock' || (type === 'exclusion' ? !siteNames.has(name) : added)
     ));
     const features = [...streams, ...roads, ...trails, ...exclusions, ...kept];
 
     // Update the plan
-    const {start, end} = layout;
     const topography = {
         ...shifted.topography,
         spacing,
@@ -176,26 +193,14 @@ export async function siteCommand(args, io) {
         })),
         features
     };
-    plan = orderPlan({
-        ...shifted,
-        'title': site.title,
-        ...(image !== null ? {image} : {}),
-        units,
-        georeference,
-        topography,
-        start,
-        end,
-        ...('criteria' in site ? {'criteria': site.criteria} : {}),
-        ...('costRates' in site ? {'costRates': site.costRates} : {}),
-        'options': shifted.options ?? [],
-        site
-    });
-    io.writeFile(planPath, planText(plan));
+    plan = sitePlan(shifted, site, layout, {...(image !== null ? {image} : {}), units, georeference, topography});
+    writePlan(io, planPath, plan);
 
     // Report
     const lines = [
+        ...siteLines,
         `Grid: ${nCols} x ${nRows} at ${spacing} ${units} spacing ` +
-            `(${layoutSize(layout).map(Math.round).join(' x ')} ${units})`,
+            `(${layoutSize(layout).map(Math.round).join(' x ')} ${units}), a margin of ${Math.round(layout.margin)} ${units}`,
         `Elevations: ${minZ.toFixed(1)} to ${maxZ.toFixed(1)} ${units}, contours every ${topography.contourInterval} ${units}`
     ];
     for (const {name, date} of terrain.surveys) {
@@ -242,38 +247,41 @@ function pointLines(plan, layout) {
 }
 
 
-// Is a plan's site the site - the same points, units, margin, and spacing? Its site's data is the site's, then.
-function isPlanSite(plan, site) {
-    const planSite = plan.site ?? null;
-    const isSamePoint = (point1, point2) => point1.latitude === point2.latitude && point1.longitude === point2.longitude;
-    return planSite !== null && 'topography' in plan && 'georeference' in plan && planSite.units === site.units &&
-        isSamePoint(planSite.start, site.start) && isSamePoint(planSite.end, site.end) && planSite.margin === site.margin &&
-        planSite.spacing === site.spacing;
+// Get the names of the exclusion areas that are a site's - the site's, and those of the site that the plan was made
+// from. A plan's other exclusion areas are its own.
+function siteExclusionNames(plan, site) {
+    return new Set([...exclusionNames(plan.site ?? {}), ...exclusionNames(site)]);
+}
+
+
+// Set a plan's members that are its site's - its title, its points, its design criteria and cost rates (the site's,
+// or none), and its site model - with the plan's other "members"
+function sitePlan(plan, site, layout, members) {
+    const sited = {
+        ...plan, ...members, 'title': site.title, 'start': layout.start, 'end': layout.end, 'options': plan.options ?? [], site
+    };
+    for (const member of ['criteria', 'costRates']) {
+        if (member in site) {
+            sited[member] = site[member];
+        } else {
+            delete sited[member];
+        }
+    }
+    return sited;
 }
 
 
 // Keep a plan's site data - its terrain, streams, roads, trails, and map - for the site: its title, points' labels,
 // exclusion areas, criteria, and cost rates are the site's. Returns the command's result.
 function keepSite(io, planPath, plan, site, layout) {
-    // The site's exclusion areas replace the plan's site's
     const exclusions = exclusionFeatures(layout, site);
-    const exclusionNames = new Set([...exclusionFeatures(layout, plan.site), ...exclusions].map(({name}) => name));
-    const features = (plan.topography.features ?? []).filter(({type, name}) => type !== 'exclusion' || !exclusionNames.has(name));
-    const keptPlan = orderPlan({
-        ...plan,
-        'title': site.title,
-        'topography': {...plan.topography, 'features': [...features, ...exclusions]},
-        'start': layout.start,
-        'end': layout.end,
-        ...('criteria' in site ? {'criteria': site.criteria} : {}),
-        ...('costRates' in site ? {'costRates': site.costRates} : {}),
-        'options': plan.options ?? [],
-        site
-    });
-    io.writeFile(planPath, planText(keptPlan));
+    const siteNames = siteExclusionNames(plan, site);
+    const features = (plan.topography.features ?? []).filter(({type, name}) => type !== 'exclusion' || !siteNames.has(name));
+    const keptPlan = sitePlan(plan, site, layout, {'topography': {...plan.topography, 'features': [...features, ...exclusions]}});
+    writePlan(io, planPath, keptPlan);
     return {'code': 0, 'lines': [
-        'Site: the plan\'s site data is kept - its terrain, streams, roads, trails, and map (its site has the same points, ' +
-            'units, margin, and spacing - fetch them again with --fetch)',
+        'Site: the plan\'s site data is kept - its terrain, streams, roads, trails, and map (its grid is the site\'s - fetch ' +
+            'them again with --fetch)',
         `Features: ${featureCount(exclusions, 'exclusion area')} from the site`,
         ...pointLines(keptPlan, layout),
         `Wrote ${planPath}`
@@ -302,16 +310,13 @@ export function rangeContourInterval(range, units) {
 }
 
 
-// Move an existing plan to a new grid's coordinates - its features' and options' points are shifted by the grids'
-// origins' difference. Returns the plan ("plan" - null if its georeference's center isn't the new georeference's) and
-// the distances its coordinates moved ("moved").
+// Move an existing plan (a plan of the site) to a new grid's coordinates - its features' and options' points are
+// shifted by the grids' origins' difference. Returns the plan ("plan") and the distances its coordinates moved
+// ("moved"). A plan that isn't sited yet has no coordinates.
 function shiftPlan(plan, georeference) {
     const planGeoreference = plan.georeference ?? null;
     if (planGeoreference === null) {
-        return {'plan': 'topography' in plan ? null : plan, 'moved': [0, 0]};
-    }
-    if (planGeoreference.latitude !== georeference.latitude || planGeoreference.longitude !== georeference.longitude) {
-        return {'plan': null, 'moved': [0, 0]};
+        return {plan, 'moved': [0, 0]};
     }
     const dx = georeference.x - planGeoreference.x;
     const dy = georeference.y - planGeoreference.y;

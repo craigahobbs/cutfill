@@ -103,6 +103,25 @@ export function layoutGeoreference(layout) {
 }
 
 
+// Is a plan a plan of a site's layout - the same projection center, in the same units? Its coordinates are the
+// layout's, then, but for their origin (the grid's southwest corner).
+export function isLayoutPlan(layout, plan) {
+    const georeference = plan.georeference ?? null;
+    return georeference !== null && plan.units === layout.units &&
+        georeference.latitude === layout.latitude && georeference.longitude === layout.longitude;
+}
+
+
+// Is a plan's topography grid a site's layout's - a plan of the layout, with its origin, spacing, and size? Its
+// site's data (its terrain, and its features) is the layout's, then.
+export function isLayoutGrid(layout, plan) {
+    const {x, y} = layoutGeoreference(layout);
+    const {spacing = null, elevations = []} = plan.topography;
+    return isLayoutPlan(layout, plan) && plan.georeference.x === x && plan.georeference.y === y && spacing === layout.spacing &&
+        elevations.length === layout.nRows && elevations[0].length === layout.nCols;
+}
+
+
 // Get a plan point's latitude and longitude, in degrees ([latitude, longitude])
 export function layoutLatLong(layout, x, y) {
     return unproject(layout.projection, layout.west + x * layout.scale, layout.south + y * layout.scale);

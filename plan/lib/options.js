@@ -2,7 +2,7 @@
 // options
 
 import {analyzeOption, planTopo} from '../../viewer/lib/model.js';
-import {orderPlan, planText, readPlan} from './planFile.js';
+import {readPlan, writePlan} from './planFile.js';
 import {number} from '../../viewer/lib/format.js';
 
 
@@ -76,7 +76,7 @@ export function describeCommand(args, io) {
     if (sections.length === 0) {
         return {'code': 1, 'lines': [`error: The descriptions "${textPath}" have no "# Plan" or "# Option: NAME" heading`]};
     }
-    io.writeFile(planPath, planText(orderPlan(plan)));
+    writePlan(io, planPath, plan);
     lines.push(`Wrote ${planPath}`);
     return {'code': 0, lines};
 }
@@ -118,7 +118,7 @@ export function keepCommand(args, io) {
         sort((first, second) => first.analysis.score - second.analysis.score);
     const removed = optionNames.filter((name) => !names.includes(name));
     plan.options = kept.map(({option}) => option);
-    io.writeFile(planPath, planText(orderPlan(plan)));
+    writePlan(io, planPath, plan);
     return {
         'code': 0,
         'lines': [

@@ -7,10 +7,11 @@
 // the browser: they answer other sites' pages.
 
 import {fetchBytes, fetchJson} from '../usgs.js';
+import {isLayoutPlan, siteLayout} from '../terrain.js';
+import {ollamaAsk, ollamaHostDefault} from '../ollama.js';
 import {Buffer} from 'node:buffer';
 import {autoCommand} from '../auto.js';
 import {elevationImage} from '../elevationImage.js';
-import {ollamaAsk} from '../ollama.js';
 
 
 // The steps of a plan - the page shows them as the plan is made - and a site's default margin and grid spacing (the
@@ -19,8 +20,11 @@ export {autoSteps} from '../auto.js';
 export {siteDefaults} from '../terrain.js';
 
 
-// The default Ollama host, and the GeoTIFF reader's script (it defines "GeoTIFF")
-export const ollamaHostDefault = 'http://127.0.0.1:11434';
+// The default Ollama host - the page asks it for its models
+export {ollamaHostDefault} from '../ollama.js';
+
+
+// The GeoTIFF reader's script (it defines "GeoTIFF")
 const geotiffUrl = 'geotiff.js';
 
 
@@ -134,31 +138,29 @@ function geotiffReader(window) {
 }
 
 
-// Is a plan's site the plan config's - the same start and end points, in the same units? A plan is made again from
-// its site - its other options and features are kept - only if it is.
-function isPlanSite(plan, site) {
-    const planSite = plan.site ?? null;
-    const samePoint = (point1, point2) => point1.latitude === point2.latitude && point1.longitude === point2.longitude;
-    return planSite !== null && planSite.units === site.units && samePoint(planSite.start, site.start) &&
-        samePoint(planSite.end, site.end);
+// Is a plan a plan of the plan config's site - the same projection center and units? A plan is made again from its
+// site only if it is - it's a new plan, otherwise.
+function isSitePlan(plan, site) {
+    try {
+        return isLayoutPlan(siteLayout(site), plan);
+    } catch {
+        return false;
+    }
 }
 
 
 // Plan a road in the browser (the "auto" command) - "site" is the plan config (a road site model), and "plan" is the
-// road plan made from it before, or null. A plan of the same site is made again - its other options and features are
-// kept. "model" is the Ollama model to ask what the site's notes ask for (or null), "progress" is a function of the
-// plan's report's lines as they're made, and "status" is a function of what the plan is doing (each may return a
-// promise - the page's are drawn before the plan goes on). "files" are the files of the page's earlier plans - their
-// terrain cache and the model's saved answers are kept, so a plan made again doesn't fetch its terrain or ask the
-// model again. Returns the plan's exit code, its report's lines, and the road plan model - its map image is a data
-// URL (null if the plan failed). A plan of the same site keeps its site's data (its terrain, streams, roads, and map),
-// unless "fetch" is true - the USGS's services are asked for it again. "signal" is an abort signal that stops the plan
-// (or null) - the plan stops when its current step's computation is done, its result is "stopped", and its work is
-// thrown away: the files are the files before it.
+// road plan made from it before, or null. A plan of the same site is made again - its site's data, and the features
+// that were added to it, are kept (its options are the run's) - unless "fetch" is true: the USGS's services are asked
+// for its site's data again. "model" is the Ollama model to ask what the site's notes ask for (or null), and "status"
+// is a function of what the plan is doing - its text, and its step's key (it may return a promise - the page's status
+// is drawn before the plan goes on). "files" are the files of the page's earlier plans - their terrain cache and the
+// model's saved answers are kept, so a plan made again doesn't fetch its terrain or ask the model again. "signal" is
+// an abort signal that stops the plan (or null) - the plan stops when its current step's computation is done, its
+// result is "stopped", and its work is thrown away: the files are the files before it. Returns the plan's exit code,
+// its report's lines, and the road plan model - its map image is a data URL (null if the plan failed).
 export async function planRoad(window, {site, plan = null}, options = {}) {
-    const {
-        model = null, ollamaHost = ollamaHostDefault, progress = null, status = null, files = new Map(), signal = null, fetch = false
-    } = options;
+    const {model = null, ollamaHost = ollamaHostDefault, status = null, files = new Map(), signal = null, fetch = false} = options;
 
     // The plan's files - the plan config, the plan, and the files kept from the page's earlier plans
     for (const path of [...files.keys()]) {
@@ -168,14 +170,13 @@ export async function planRoad(window, {site, plan = null}, options = {}) {
     }
     const keptFiles = new Map(files);
     files.set(sitePath, JSON.stringify(site));
-    if (plan !== null && isPlanSite(plan, site)) {
+    if (plan !== null && isSitePlan(plan, site)) {
         files.set(planPath, JSON.stringify(plan));
     }
 
     // Plan the road
     const io = {
         ...browserIo(window, ollamaHost, files, signal),
-        progress,
         'status': (text, step) => {
             signal?.throwIfAborted();
             return status?.(text, step);
@@ -183,7 +184,7 @@ export async function planRoad(window, {site, plan = null}, options = {}) {
     };
     let result;
     try {
-        const args = [...(model !== null ? ['--model', model] : []), ...(fetch ? ['--fetch'] : [])];
+        const args = ['--no-plots', ...(model !== null ? ['--model', model] : []), ...(fetch ? ['--fetch'] : [])];
         result = await autoCommand([sitePath, planPath, ...args], io);
     } catch ({message}) {
         result = {'code': 1, 'lines': [`error: ${message}`]};

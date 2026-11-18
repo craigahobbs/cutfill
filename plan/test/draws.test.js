@@ -1,8 +1,7 @@
 import {drawsUsage, topoDraws} from '../lib/draws.js';
+import {planText, planTopo} from '../../viewer/lib/model.js';
 import assert from 'node:assert/strict';
 import {cliMain} from '../lib/cli.js';
-import {planText} from '../lib/planFile.js';
-import {planTopo} from '../../viewer/lib/model.js';
 import test from 'node:test';
 import {testIo} from './terrainHelpers.js';
 

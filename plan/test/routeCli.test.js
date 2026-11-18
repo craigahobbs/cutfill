@@ -1,9 +1,8 @@
 import {bestRoad, optionsUsage, routeCommands, routeUsage} from '../lib/routeCli.js';
 import {blockedPlan, expected, hillPlan, planePlan, roadPlan} from './roadFixtures.js';
+import {planText, validatePlan} from '../../viewer/lib/model.js';
 import assert from 'node:assert/strict';
-import {planText} from '../lib/planFile.js';
 import test from 'node:test';
-import {validatePlan} from '../../viewer/lib/model.js';
 
 
 // Run a route or profile command on a plan ("plan.json") - returns the command's result (null for a usage error) and
@@ -94,7 +93,9 @@ test('routeUsage', () => {
     assert.deepEqual(Object.keys(routeCommands), ['route', 'profile', 'options']);
     assert.equal(optionsUsage[0], 'usage: plan options <plan.json> [options]');
     assert.ok(optionsUsage.every((line) => line.length <= 120));
-    assert.deepEqual(optionsUsage.slice(-10), routeUsage.slice(15, 25));
+    assert.deepEqual(optionsUsage.slice(-12, -2), routeUsage.slice(15, 25));
+    assert.ok(optionsUsage.at(-2).startsWith('  --rule-out NAME '));
+    assert.ok(routeUsage.some((line) => line.startsWith('  --rule-out NAME ')));
 });
 
 
@@ -406,6 +407,35 @@ test('options', () => {
     ]);
     assert.deepEqual(again.plan.options.map(({section}) => section.width), [14, 20, 20]);
     assert.deepEqual(again.plan.options[1].section, {'width': 20, 'cutSlope': 1, 'fillSlope': 1.5, 'surface': 'asphalt'});
+});
+
+
+test('options and route, an existing road that\'s ruled out', () => {
+    // The roads don't follow a road that's ruled out (by its name, in any case) - it's the plan's road still. There's no
+    // "Existing Roads" option, and the route is the all-new road's.
+    const {result, plan} = run(roadPlan(), ['options', 'plan.json', '--rule-out', 'mill rd']);
+    assert.deepEqual(result.lines.slice(0, -1), [
+        'Option "New Road": 418 feet long, 85 alignment points, max grade 4.3%, max cut 0.2, max fill 0.0',
+        'Structures: 1 turnout',
+        'Cost score: 21.1, design warnings: 0',
+        'Option 0: "New Road" - cost score 21.1, design warnings: 0'
+    ]);
+    assert.deepEqual(plan.topography.features.filter(({type}) => type === 'road').map(({name}) => name), ['Mill Rd']);
+    const routed = (args) => run(roadPlan(), ['route', 'plan.json', '-n', 'Road', ...args]).plan.options[0];
+    assert.deepEqual(routed(['--rule-out', 'Mill Rd']), routed(['--all-new']));
+
+    // A road that isn't the plan's can't be ruled out - nor can a road without a name
+    for (const command of [['options', 'plan.json'], ['route', 'plan.json', '-n', 'Road']]) {
+        for (const name of ['Nope Rd', '']) {
+            const unknown = run(roadPlan(), [...command, '--rule-out', 'Mill Rd', '--rule-out', name]);
+            assert.deepEqual([unknown.result, unknown.written], [
+                {'code': 1, 'lines': [`error: The plan has no existing road named "${name}" to rule out`]}, null
+            ]);
+        }
+    }
+
+    // The profile command has no roads to rule out
+    assert.equal(run(roadPlan(), ['profile', 'plan.json', '-n', 'Road', '--rule-out', 'Mill Rd']).result, null);
 });
 
 

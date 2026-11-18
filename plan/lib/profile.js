@@ -37,18 +37,24 @@ function argMinLevels(totals, first, end) {
 const depthLimits = [1, 4, Infinity];
 
 
+// The most station level cells whose cross sections a profile's design keeps (four numbers each - 192 MB, for a
+// road of about a mile)
+const sectionCellLimit = 6000000;
+
+
 // Design the vertical profile of an alignment (its "x" and "y" coordinate arrays and their evenly-spaced "stations") by
 // dynamic programming - the minimum earthwork cost within the grade limits. Within an existing road (the "existing"
 // station mask, or null), the profile follows the ground. Returns the "profile" (the grade elevations), the "ground"
 // elevations, and the ground's "sideSlope" (its rise per unit of offset to the left) at the stations - and the index
 // of the first existing road station that the grade limits can't reach ("unreachable" - the profile breaks grade
 // there), or null. A profile that the grade limits can't take to the end's ground ends at the nearest level they can.
-export function designProfile(topo, design, x, y, stations, existing = null) {
+// "cellLimit" is the most station level cells whose cross sections the design keeps (it's faster, and the same).
+export function designProfile(topo, design, x, y, stations, existing = null, cellLimit = sectionCellLimit) {
     // The profile is within the maximum cut and fill depth of the ground - its design's work is the stations times the
     // depth, not times the site's relief. Where the grade limits can't keep it there, it's designed with a deeper limit.
     let result = null;
     for (const depthLimit of depthLimits) {
-        result = designProfileDepth(topo, design, x, y, stations, existing, depthLimit);
+        result = designProfileDepth(topo, design, x, y, stations, existing, depthLimit, cellLimit);
         if (result !== null) {
             break;
         }
@@ -59,7 +65,7 @@ export function designProfile(topo, design, x, y, stations, existing = null) {
 
 // Design the vertical profile within a depth limit of the ground (a multiple of the design's maximum depth) -
 // returns null if the grade limits can't keep the profile within it
-function designProfileDepth(topo, design, x, y, stations, existing, depthLimit) {
+function designProfileDepth(topo, design, x, y, stations, existing, depthLimit, cellLimit) {
     const count = x.length;
     const last = count - 1;
     const ds = stations[1] - stations[0];
@@ -131,6 +137,25 @@ function designProfileDepth(topo, design, x, y, stations, existing, depthLimit) 
         crossSection(ground[ix] - levels[level], sideSlope[ix], design.halfWidth, cutSlope[ix], design.fillSlope, section);
     };
 
+    // The stations' cross sections at their levels are the same for every balance price, so they're computed once and
+    // kept (a cell's first four section values) - if they fit: the largest profiles' are computed for each price.
+    // "sectionValues" are the kept cross sections, or the cross section that was just computed.
+    const isKept = cells[count] <= cellLimit;
+    const sectionValues = isKept ? new Float64Array(4 * cells[count]) : section;
+    if (isKept) {
+        for (let ix = 0; ix < count; ix++) {
+            if (!isExisting[ix]) {
+                for (let level = levelFirst[ix], cell = 4 * cells[ix]; level < levelEnd[ix]; level++, cell += 4) {
+                    stationSection(ix, level);
+                    sectionValues[cell + sectionCut] = section[sectionCut];
+                    sectionValues[cell + sectionFill] = section[sectionFill];
+                    sectionValues[cell + sectionSlopeWidth] = section[sectionSlopeWidth];
+                    sectionValues[cell + sectionWall] = section[sectionWall];
+                }
+            }
+        }
+    }
+
     // Find the least-cost profile for a cut and fill balance price - a positive balance makes fill more expensive and
     // cut cheaper (to reduce borrow), and a negative balance the reverse. Returns the profile's true cost and its
     // levels' indexes - or null, if the grade limits can't keep the profile within the depth limit (or reach an
@@ -145,10 +170,16 @@ function designProfileDepth(topo, design, x, y, stations, existing, depthLimit) 
             if (isExisting[ix]) {
                 return level === groundLevel[ix] ? 0 : Infinity;
             }
-            stationSection(ix, level);
+            let cell = 0;
+            if (isKept) {
+                cell = 4 * (cells[ix] - levelFirst[ix] + level);
+            } else {
+                stationSection(ix, level);
+            }
             return ds * (
-                section[sectionCut] * (cutUnit[ix] - balance * design.shrink) + section[sectionFill] * (design.costFill + balance) +
-                section[sectionSlopeWidth] * design.costArea + section[sectionWall] * design.costWall
+                sectionValues[cell + sectionCut] * (cutUnit[ix] - balance * design.shrink) +
+                sectionValues[cell + sectionFill] * (design.costFill + balance) +
+                sectionValues[cell + sectionSlopeWidth] * design.costArea + sectionValues[cell + sectionWall] * design.costWall
             );
         };
 

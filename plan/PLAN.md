@@ -168,10 +168,12 @@ grade (SITE.json's `criteria`), which is their decision.
 
 **Action 3.2 - `NOTE: the road is ... from the site's edge`.** The site may be too small for the best
 road. *Do:* set SITE.json's `margin` (the distance the site extends beyond the points, in the plan's
-units - `site`'s output has the site's size) to half again what it is, and run `site` and then
+units - `site`'s output has the site's size and its margin) to half again what it is, and run `site` and then
 `options` again - at most twice. `site` keeps the plan's options and the features you added, and
 reports how far the plan's coordinates moved (coordinates in your notes are stale). The USGS's roads
-and streams are the site's again: remove again those you removed.
+and streams are the site's again: remove again those you removed. (When the site's size and spacing
+don't change - its criteria or cost rates do, say - `site` keeps the plan's site data, and what you
+removed stays removed.)
 
 **Action 3.3 - `NOTE: the road crosses ... unmapped draws`.** A draw is a valley that carries water
 in a storm - a road that crosses one needs a culvert there, and the plan only has culverts at its
@@ -279,9 +281,11 @@ plan JSON file and its work directory. Ask the user for the feedback (pasted tex
 before making any changes.
 
 1. **Read the current plan.** Run `evaluate PLAN.json` to record every option's length, maximum
-   grade, earthwork, warnings, and cost score, and plot it (`plot`). Read the road site model
-   (the plan's `site` member - a plan made before plans kept their site models doesn't have it), and
-   in the work directory, `descriptions.md` (the plan's
+   grade, earthwork, warnings, and cost score, and plot it (`plot`). The road site model, SITE.json,
+   is `WORK/site.json`: run `site WORK/site.json PLAN.json` - if the file isn't there, `site` writes
+   it from the plan's own site model (and keeps the plan's site as it is). If `site` can't load the
+   road site, the plan was made before plans kept their site models: ask the user for its file. Read
+   SITE.json, and in the work directory, `descriptions.md` (the plan's
    descriptions) and `commands.txt` (the commands that made the plan, in order).
 2. **Save a copy** of the plan JSON in the work directory before changing it, named with today's date
    (`<plan>.<YYYY-MM-DD>.json`), so the update can be compared against or reverted.

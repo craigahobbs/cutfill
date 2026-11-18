@@ -33,7 +33,7 @@ function siteRoad(site, name, points) {
 // by its name (an area's answer and its closer answer, or a point's answer). Returns the tools' input and output
 // functions object (testIo), with the command's exit "code", the model's "asks", and the written "plan".
 async function runAuto(
-    site, {args = [], answers = {}, roads = [], elevation = valley, mapImage = pngBytes, files = {}, io = null, progress = false} = {}
+    site, {args = [], answers = {}, roads = [], elevation = valley, mapImage = pngBytes, files = {}, io = null, status = false} = {}
 ) {
     const autoIo = io ?? testIo({
         'files': {...files, 'site.json': JSON.stringify(site)},
@@ -46,13 +46,9 @@ async function runAuto(
     autoIo.asks = [];
     autoIo.renderPng = () => pngBytes;
 
-    // The plan's progress - its report's lines as they're made, and its statuses
-    autoIo.progressLines = [];
+    // The plan's statuses - what it's doing, as it's made
     autoIo.statuses = [];
-    if (progress) {
-        autoIo.progress = (lines) => {
-            autoIo.progressLines.push(...lines);
-        };
+    if (status) {
         autoIo.status = (text, step) => Promise.resolve(autoIo.statuses.push(`${step}: ${text}`));
     }
     autoIo.ask = ({model, question, images, schema}) => {
@@ -68,7 +64,7 @@ async function runAuto(
 
 // The site command's report of the test site
 const siteLines = `\
-Grid: 61 x 54 at 10 meters spacing (600 x 530 meters)
+Grid: 61 x 54 at 10 meters spacing (600 x 530 meters), a margin of 150 meters
 Elevations: 1695.0 to 1715.7 meters, contours every 1 meters
 Elevation model: CO_New_2020 (2022-02-10)
 Features: 0 streams, 0 roads, 0 trails, 0 exclusion areas
@@ -167,11 +163,10 @@ test('auto, the notes', async () => {
         'Stall': {'found': true, 'x': 340, 'y': 90, 'why': 'A stall.'}
     };
     const roads = [siteRoad(site, 'Mill Rd', [[100, 500], [500, 500]])];
-    const io = await runAuto(site, {'args': ['--model', 'test-model'], answers, roads, 'progress': true});
+    const io = await runAuto(site, {'args': ['--model', 'test-model'], answers, roads, 'status': true});
     assert.equal(io.code, 0);
 
-    // The plan's progress - its report's lines, as they're made, and what it's doing
-    assert.equal(`${io.progressLines.join('\n')}\n`, io.output.join(''));
+    // The plan's statuses - what it's doing, as it's made
     assert.deepEqual(autoSteps.map(({key, isModel}) => [key, isModel]), [
         ['site', false], ['notes', true], ['options', false], ['describe', false]
     ]);
@@ -193,7 +188,7 @@ ${siteLines.replace('0 roads', '1 road').replace('"Start"', '"Gate"').replace('"
         replace('ground 1705.6', 'ground 1705.6, nearest road "Mill Rd" 128 meters away')}\
 Notes: maximum grade 10, minimum radius 20
 Notes: the road is 5 meters wide, asphalt
-Notes: the existing road "Mill Rd" is ruled out
+Notes: the existing road "Mill Rd" is ruled out - the options don't follow it
 Notes: avoid "Barn" - an exclusion area from x 310 to 370, y 70 to 110
 Notes: avoid "Well" - an exclusion area from x 500 to 560, y 400 to 460
 Notes: avoid "Yard" - an exclusion area from x 170 to 300, y 100 to 200
@@ -234,9 +229,9 @@ ${wroteLine}`);
     assert.ok('plan' in validatePlan(io.plan));
     assert.deepEqual(io.plan.criteria, {'maxGrade': 10, 'minRadius': 20});
     assert.deepEqual(io.plan.topography.features.map(({type, name, points}) => [type, name, points.length]), [
-        ['exclusion', 'Barn', 4], ['exclusion', 'Well', 4], ['exclusion', 'Yard', 4], ['stream', 'Draw 1', 2]
+        ['road', 'Mill Rd', 2], ['exclusion', 'Barn', 4], ['exclusion', 'Well', 4], ['exclusion', 'Yard', 4], ['stream', 'Draw 1', 2]
     ]);
-    assert.deepEqual(io.plan.topography.features[0].points, [
+    assert.deepEqual(io.plan.topography.features[1].points, [
         {'x': 310, 'y': 70}, {'x': 370, 'y': 70}, {'x': 370, 'y': 110}, {'x': 310, 'y': 110}
     ]);
     assert.deepEqual(io.plan.options.map(({name, section}) => [name, section.width, section.surface]), [
@@ -259,6 +254,22 @@ ${wroteLine}`);
         '"Cliff" (up high) - the model didn\'t find it on the map; pass through "Stall" (in the barn) at 340,90 - no route found ' +
         '(blocked by exclusion areas or the topography boundary?).'
     ));
+
+    // Run again - the plan's site data is kept (the USGS isn't asked for it), the model isn't asked (its answers are
+    // saved) and its questions aren't plotted, and the plan's notes are acted on as they were: its options are the same
+    const first = {'plan': io.plan, 'notes': io.output.join('').split('\n').filter((line) => line.startsWith('Notes:'))};
+    const [urlCount, writtenCount] = [io.urls.length, io.written.length];
+    const again = await runAuto(site, {'args': ['--model', 'test-model'], io});
+    assert.equal(again.code, 0);
+    assert.equal(again.output[0].split(' - ')[0], 'Site: the plan\'s site data is kept');
+    assert.equal(io.urls.length, urlCount);
+    assert.deepEqual(again.asks, []);
+    assert.deepEqual(io.written.slice(writtenCount).filter((path) => path.includes('/ask/')), []);
+    assert.deepEqual(again.output.join('').split('\n').filter((line) => line.startsWith('Notes:')), first.notes);
+    assert.deepEqual(again.plan.options, first.plan.options);
+    assert.deepEqual(again.plan.criteria, first.plan.criteria);
+    const featureNames = ({topography}) => topography.features.map(({type, name}) => `${type} ${name}`).sort();
+    assert.deepEqual(featureNames(again.plan), featureNames(first.plan));
 });
 
 
@@ -391,7 +402,7 @@ test('auto, failures', async () => {
 test('auto, usage', async () => {
     const usage = `${autoUsage.join('\n')}\n`;
     assert.ok(autoUsage.every((line) => line.length <= 120));
-    assert.equal(autoUsage[0], 'usage: plan auto <site.json> <plan.json> [--model MODEL] [--fresh] [--fetch] [options]');
+    assert.equal(autoUsage[0], 'usage: plan auto <site.json> <plan.json> [--model MODEL] [--fresh] [--fetch] [--no-plots] [options]');
     for (const args of [
         [], ['site.json'], ['site.json', 'road.json', 'other.json'], ['site.json', 'road.json', '--model', ''],
         ['site.json', 'road.json', '-w', 'wide'], ['site.json', 'road.json', '-w', '0'], ['site.json', 'road.json', '-s', 'mud'],

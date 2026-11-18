@@ -1,7 +1,7 @@
 // featureCommand.js - the "feature" command - add a topographic feature to a road plan model, or remove its features
 // of a name
 
-import {orderPlan, planText, readPlan} from './planFile.js';
+import {readPlan, writePlan} from './planFile.js';
 import {parseArgs} from 'node:util';
 import {planTopo} from '../../viewer/lib/model.js';
 
@@ -91,7 +91,7 @@ export function featureCommand(args, io) {
             );
         }
     }
-    io.writeFile(planPath, planText(orderPlan(plan)));
+    writePlan(io, planPath, plan);
     lines.push(`Wrote ${planPath} - plot it to check the feature against the terrain`);
     return {'code': 0, lines};
 }

@@ -18,9 +18,15 @@ function memberKind(types, type) {
 }
 
 
+// Get a member's name's words - "maxGrade" is "max grade"
+export function memberWords(name) {
+    return name.replace(/[A-Z]/g, (letter) => ` ${letter.toLowerCase()}`);
+}
+
+
 // Get a member's label from its name - "maxGrade" is "Max grade"
 function memberLabel(name) {
-    const words = name.replace(/[A-Z]/g, (letter) => ` ${letter.toLowerCase()}`);
+    const words = memberWords(name);
     return `${words[0].toUpperCase()}${words.slice(1)}`;
 }
 

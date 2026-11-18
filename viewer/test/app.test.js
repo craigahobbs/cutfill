@@ -1,8 +1,9 @@
 import {FakeIndexedDB, fakeBrowser, fire, flush, startApp} from './appHelpers.js';
-import {RoadieApp, titleFileName} from '../lib/app.js';
+import {RoadieApp} from '../lib/app.js';
 import assert from 'node:assert/strict';
 import {fixturePlan} from './fixture.js';
 import test from 'node:test';
+import {titleFileName} from '../lib/homePage.js';
 
 
 // The fixture plan's JSON text, and the files of a server with it
@@ -198,9 +199,10 @@ async function startToolsApp(browser, results = []) {
     app.importPlan = () => Promise.resolve({
         'autoSteps': toolSteps,
         'siteDefaults': (site) => ({'margin': Math.round(site.end.latitude * 1000), 'spacing': 5}),
-        'planRoad': async (window, {site, plan}, {model, ollamaHost, status, files, signal, fetch}) => {
+        'ollamaHostDefault': 'http://127.0.0.1:11434',
+        'planRoad': async (window, {site, plan}, {model, status, files, signal, fetch}) => {
             calls.push({
-                'isWindow': window === browser.window, site, plan, model, ollamaHost, 'isFiles': files === app.runFiles,
+                'isWindow': window === browser.window, site, plan, model, 'isFiles': files === app.runFiles,
                 'isSignal': signal instanceof browser.window.AbortSignal
             });
             Object.defineProperty(calls.at(-1), 'fetch', {'value': fetch});
@@ -353,8 +355,7 @@ test('running a plan', async (context) => {
     browser.clock.runTimeout();
     assert.equal(browser.clock.timeouts.size, 0);
     assert.deepEqual(calls, [{
-        'isWindow': true, 'site': siteConfig, 'plan': null, 'model': 'qwen:27b', 'ollamaHost': 'http://127.0.0.1:11434', 'isFiles': true,
-        'isSignal': true
+        'isWindow': true, 'site': siteConfig, 'plan': null, 'model': 'qwen:27b', 'isFiles': true, 'isSignal': true
     }]);
     assert.equal(document.getElementById('roadie-run-status').textContent, 'The plan ran in 1:11 - its road options are engineered.');
     assert.equal(document.querySelector('.roadie-run-icon').className, 'roadie-run-icon roadie-run-done');
@@ -462,7 +463,11 @@ test('running a plan without the planning tools', async (context) => {
 test('the planning tools', async (context) => {
     // The application's planning tools are the project's - they run a plan in a browser
     const tools = await new RoadieApp(fakeBrowser(context).window).importPlan();
-    assert.deepEqual([typeof tools.planRoad, typeof tools.siteDefaults, tools.autoSteps.length], ['function', 'function', 4]);
+    assert.deepEqual([typeof tools.planRoad, typeof tools.siteDefaults, tools.ollamaHostDefault], [
+        'function', 'function', 'http://127.0.0.1:11434'
+    ]);
+    const stepTypes = tools.autoSteps.map(({key, text, isModel}) => [typeof key, typeof text, typeof isModel].join());
+    assert.deepEqual([...new Set(stepTypes)], ['string,string,boolean']);
 });
 
 
@@ -807,9 +812,12 @@ test('the loaded plan, kept in local storage', async (context) => {
     const opener = fakeBrowser(context, {indexedDB, storage});
     await startToolsApp(opener);
     await selectFiles(opener, [localFile(opener, 'bad.json', JSON.stringify({...fixturePlan(), 'units': 'yards'}))]);
-    const badBrowser = loadedBrowser(context, {...loadedConfig, 'file': 'bad.json'}, {indexedDB});
-    await startToolsApp(badBrowser);
-    assert.ok(loadedElement(badBrowser).textContent.includes('The plan has no road options yet - run the plan to engineer them.'));
+    await selectFiles(opener, [localFile(opener, 'text.json', 'Not JSON')]);
+    for (const file of ['bad.json', 'text.json']) {
+        const badBrowser = loadedBrowser(context, {...loadedConfig, file}, {indexedDB});
+        await startToolsApp(badBrowser);
+        assert.ok(loadedElement(badBrowser).textContent.includes('The plan has no road options yet - run the plan to engineer them.'));
+    }
 
     // A loaded plan whose road options are gone from the database - it's its plan config, or there's none
     const loaded = {'name': 'gone.json', 'file': 'gone.json', 'site': siteConfig, 'changed': false, 'saved': true};
@@ -837,6 +845,7 @@ test('the home page, left while its loaded plan is drawn or run', async (context
         const app = new RoadieApp(browser.window);
         app.importPlan = () => (step === 'tools' ? tools.promise : Promise.resolve({
             'autoSteps': toolSteps,
+            'ollamaHostDefault': 'http://127.0.0.1:11434',
             'planRoad': (window, road, {status}) => {
                 Object.assign(hooks, {status});
                 return run.promise;
@@ -876,7 +885,9 @@ test('the home page, left while its loaded plan is drawn or run', async (context
     const other = Promise.withResolvers();
     const browser = loadedBrowser(context, loadedConfig, {files});
     const app = new RoadieApp(browser.window);
-    app.importPlan = () => Promise.resolve({'autoSteps': toolSteps, 'planRoad': () => other.promise});
+    app.importPlan = () => Promise.resolve({
+        'autoSteps': toolSteps, 'ollamaHostDefault': 'http://127.0.0.1:11434', 'planRoad': () => other.promise
+    });
     app.start();
     await flushUntil(() => browser.document.getElementById('roadie-run')?.disabled === false);
     click(browser, 'roadie-run');

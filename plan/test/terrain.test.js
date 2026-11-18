@@ -1,6 +1,6 @@
 import {
-    fillHoles, gridLimit, gridSurvey, layoutBox, layoutGeoreference, layoutLatLong, layoutPoint, readTile, siteDefaults, siteLayout,
-    siteTerrain, tileWindow
+    fillHoles, gridLimit, gridSurvey, isLayoutGrid, isLayoutPlan, layoutBox, layoutGeoreference, layoutLatLong, layoutPoint, readTile,
+    siteDefaults, siteLayout, siteTerrain, tileWindow
 } from '../lib/terrain.js';
 import {gridUtm, plane, siteEast, siteNorth, testImage, testIo, testSite} from './terrainHelpers.js';
 import {project, transverseMercator} from '../../viewer/lib/geo.js';
@@ -590,4 +590,40 @@ test('siteDefaults', () => {
 
     // The site's own margin and spacing aren't the defaults - the default spacing is the site's margin's
     assert.deepEqual(siteDefaults(testSite({'margin': 1000, 'spacing': 7})), {'margin': 150, 'spacing': 3});
+});
+
+
+test('isLayoutPlan and isLayoutGrid', () => {
+    // A plan of a site's layout has its projection center and its units - its grid is the layout's if its origin,
+    // spacing, and size are, too
+    const layout = siteLayout(testSite({'margin': 20, 'spacing': 50}));
+    const georeference = layoutGeoreference(layout);
+    const elevations = Array.from({'length': layout.nRows}, () => Array(layout.nCols).fill(0));
+    const plan = {'units': 'meters', georeference, 'topography': {'spacing': 50, elevations}};
+    assert.deepEqual([isLayoutPlan(layout, plan), isLayoutGrid(layout, plan)], [true, true]);
+
+    // Not the layout's plan - no georeference, another center, or other units
+    for (const other of [
+        {'units': 'meters', 'topography': plan.topography},
+        {...plan, 'georeference': {...georeference, 'latitude': georeference.latitude + 0.000001}},
+        {...plan, 'georeference': {...georeference, 'longitude': georeference.longitude + 0.000001}},
+        {...plan, 'units': 'feet'}
+    ]) {
+        assert.deepEqual([isLayoutPlan(layout, other), isLayoutGrid(layout, other)], [false, false]);
+    }
+
+    // The layout's plan, with another grid - its origin, spacing, or size, or a topography that isn't one
+    for (const topography of [
+        {'spacing': 25, elevations}, {'spacing': 50, 'elevations': elevations.slice(1)},
+        {'spacing': 50, 'elevations': elevations.map((row) => row.slice(1))}, {}
+    ]) {
+        assert.deepEqual([isLayoutPlan(layout, {...plan, topography}), isLayoutGrid(layout, {...plan, topography})], [true, false]);
+    }
+    for (const moved of [{...georeference, 'x': georeference.x + 10}, {...georeference, 'y': georeference.y + 10}]) {
+        assert.equal(isLayoutGrid(layout, {...plan, 'georeference': moved}), false);
+    }
+
+    // The site's default margin is its layout's - a site with it is the same grid
+    const defaults = siteLayout(testSite());
+    assert.deepEqual(layoutGeoreference(siteLayout(testSite({'margin': 150}))), layoutGeoreference(defaults));
 });

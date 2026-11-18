@@ -163,17 +163,24 @@ export function simplifyLine(points, tolerance) {
 }
 
 
-// Create a site's exclusion area features - an area without a name is named for its place in the site's areas. The
-// areas are clipped to the layout's grid, and an area outside it isn't a feature.
+// Get a site's exclusion areas' features' names - an area without a name is named for its place in the site's areas
+export function exclusionNames(site) {
+    return (site.exclusions ?? []).map((area, ixArea) => area.name ?? `Exclusion ${ixArea + 1}`);
+}
+
+
+// Create a site's exclusion area features. The areas are clipped to the layout's grid, and an area outside it isn't
+// a feature.
 export function exclusionFeatures(layout, site) {
     const [width, height] = layoutSize(layout);
     const features = [];
+    const names = exclusionNames(site);
     for (const [ixArea, area] of (site.exclusions ?? []).entries()) {
         const polygon = clipPolygon(area.points.map(({latitude, longitude}) => layoutPoint(layout, latitude, longitude)), width, height);
         if (polygonArea(polygon) > 0) {
             features.push({
                 'type': 'exclusion',
-                'name': area.name ?? `Exclusion ${ixArea + 1}`,
+                'name': names[ixArea],
                 'points': polygon.map(([x, y]) => ({'x': round(x, 1) + 0, 'y': round(y, 1) + 0}))
             });
         }

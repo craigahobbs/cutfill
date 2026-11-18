@@ -2,7 +2,7 @@
 // and add the unmapped draws that a road might cross to the plan, as streams
 
 import {lineIndex, nearestLine} from './roads.js';
-import {orderPlan, planText, readPlan} from './planFile.js';
+import {readPlan, writePlan} from './planFile.js';
 import {StateHeap} from './route.js';
 import {parseArgs} from 'node:util';
 import {planTopo} from '../../viewer/lib/model.js';
@@ -59,6 +59,22 @@ const neighbors = [
 // area it drains, at its end), its "points" ([x, y] arrays, from its head down), and the area that drains to each of
 // its points ("areas" - at its point on a longer draw, the area it drains above that draw).
 export function topoDraws(topo, minArea) {
+    // A topography's draws are kept - a plan's options are each checked against them
+    let areaDraws = topoDrawsCache.get(topo);
+    if (areaDraws === undefined) {
+        areaDraws = new Map();
+        topoDrawsCache.set(topo, areaDraws);
+    }
+    if (!areaDraws.has(minArea)) {
+        areaDraws.set(minArea, findDraws(topo, minArea));
+    }
+    return areaDraws.get(minArea);
+}
+const topoDrawsCache = new WeakMap();
+
+
+// Find a topography's draws (topoDraws)
+function findDraws(topo, minArea) {
     const {rows, nRows, nCols, spacing} = topo;
     const count = nRows * nCols;
     const isEdge = (cell) => {
@@ -341,7 +357,7 @@ export function drawsCommand(args, io) {
         );
     }
     plan.topography.features = [...topo.features, ...streams];
-    io.writeFile(planPath, planText(orderPlan(plan)));
+    writePlan(io, planPath, plan);
     lines.push(`Wrote ${planPath} - plot it to check the stream${adds.length === 1 ? '' : 's'} against the terrain`);
     return {'code': 0, lines};
 }

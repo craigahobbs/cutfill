@@ -34,7 +34,7 @@ test('site', async () => {
     const io = await runSite(coarseSite());
     assert.equal(io.code, 0);
     assert.equal(io.output.join(''), `\
-Grid: 8 x 7 at 50 meters spacing (350 x 300 meters)
+Grid: 8 x 7 at 50 meters spacing (350 x 300 meters), a margin of 20 meters
 Elevations: 1676.7 to 1726.7 meters, contours every 2 meters
 Elevation model: CO_New_2020 (2022-02-10)
 Features: 0 streams, 0 roads, 0 trails, 0 exclusion areas
@@ -174,7 +174,7 @@ test('site, a site in feet', async () => {
     }, 'road.JSON');
     assert.equal(io.code, 0);
     assert.equal(io.output.join(''), `\
-Grid: 24 x 18 at 50 feet spacing (1150 x 850 feet)
+Grid: 24 x 18 at 50 feet spacing (1150 x 850 feet), a margin of 60 feet
 Elevations: 5501.7 to 5659.2 feet, contours every 5 feet
 Elevation model: CO_New_2020
 Grid points without an elevation, filled from the points around them: 1
@@ -323,8 +323,8 @@ test('site, an existing plan', async () => {
     ];
 
     // The site, with a wider margin and an exclusion area - the plan's topography is the new grid's, and its features
-    // and options are moved to its coordinates (20 meters to the east and north). The plan's description and criteria
-    // are kept.
+    // and options are moved to its coordinates (20 meters to the east and north). The plan's description is kept, and
+    // its design criteria are the site's - it has none.
     const files = {...first.files, 'plans/road.json': JSON.stringify(plan)};
     const widerLayout = siteLayout(coarseSite({'margin': 40}));
     const barn = [[25, 25], [45, 25], [45, 45]].map(([x, y]) => {
@@ -342,7 +342,7 @@ test('site, an existing plan', async () => {
     });
     assert.equal(io.code, 0);
     const lines = io.output.join('').split('\n');
-    assert.deepEqual(lines.slice(0, 1), ['Grid: 9 x 8 at 50 meters spacing (400 x 350 meters)']);
+    assert.deepEqual(lines.slice(0, 1), ['Grid: 9 x 8 at 50 meters spacing (400 x 350 meters), a margin of 40 meters']);
     assert.deepEqual(lines.filter((line) => line.startsWith('Features:') || line.includes('plan\'s')), [
         'Features: 1 stream, 0 roads, 0 trails, 1 exclusion area',
         'Kept the plan\'s other features: 1 stream, 1 road, 1 rock outcrop, 2 exclusion areas',
@@ -350,9 +350,9 @@ test('site, an existing plan', async () => {
     ]);
     const wider = JSON.parse(io.files['plans/road.json']);
     assert.deepEqual(Object.keys(wider), [
-        'title', 'description', 'image', 'units', 'georeference', 'topography', 'start', 'end', 'criteria', 'options', 'site'
+        'title', 'description', 'image', 'units', 'georeference', 'topography', 'start', 'end', 'options', 'site'
     ]);
-    assert.deepEqual([wider.title, wider.description, wider.criteria], ['Wider Site', ['A road.'], {'maxGrade': 8}]);
+    assert.deepEqual([wider.title, wider.description], ['Wider Site', ['A road.']]);
 
     // The plan's site model is the site's - the earlier site model is replaced
     assert.deepEqual(plan.site, coarseSite());
@@ -422,8 +422,8 @@ test('site, an existing plan of the same site', async () => {
     assert.deepEqual(io.urls, []);
     assert.deepEqual(io.opened, []);
     assert.equal(io.output.join(''), `\
-Site: the plan's site data is kept - its terrain, streams, roads, trails, and map (its site has the same points, units, margin, \
-and spacing - fetch them again with --fetch)
+Site: the plan's site data is kept - its terrain, streams, roads, trails, and map (its grid is the site's - fetch them again \
+with --fetch)
 Features: 1 exclusion area from the site
 start: "Gate" (20, 20) at 40.00000, -105.28000, ground 1679.7
 end: "End" (318.87, 242.07) at 40.00200, -105.27650, ground 1720.7
@@ -449,27 +449,47 @@ Wrote plans/road.json
     const fetched = await runSite(site, {files, 'args': ['--fetch']});
     assert.equal(fetched.code, 0);
     assert.equal(fetched.urls.length, 9);
-    assert.equal(fetched.output.join('').split('\n')[0], 'Grid: 8 x 7 at 50 meters spacing (350 x 300 meters)');
+    assert.equal(fetched.output.join('').split('\n')[0], 'Grid: 8 x 7 at 50 meters spacing (350 x 300 meters), a margin of 20 meters');
 
-    // Another margin, spacing, or units - the site's data is fetched
-    for (const members of [{'margin': 30}, {'spacing': 25}, {'units': 'feet', 'margin': 60, 'spacing': 150}]) {
+    // Another margin or spacing - the site's data is fetched
+    for (const members of [{'margin': 30}, {'spacing': 25}]) {
         const other = await runSite(coarseSite(members), {files});
         assert.equal(other.urls.length, 9, JSON.stringify(members));
     }
+
+    // The site without its design criteria and cost rates - the plan has none. A plan that was made before plans kept
+    // their sites keeps its site's data, too - and its exclusion areas.
+    const {'site': keptSite, ...oldPlan} = kept;
+    assert.deepEqual(keptSite, site);
+    const plain = await runSite(coarseSite(), {'files': {...files, 'plans/road.json': JSON.stringify(oldPlan)}});
+    const plainPlan = JSON.parse(plain.files['plans/road.json']);
+    assert.deepEqual([plain.urls, 'criteria' in plainPlan, 'costRates' in plainPlan], [[], false, false]);
+    assert.deepEqual(plainPlan.topography.features.map(({type, name}) => `${type} ${name}`), ['exclusion Pond', 'exclusion Shed']);
+
+    // There's no site file - it's written from the plan's own site model
+    const noSite = testIo({'files': {'plans/road.json': JSON.stringify(kept)}});
+    assert.equal(await cliMain(['site', 'plans/road.work/site.json', 'plans/road.json'], noSite), 0);
+    assert.deepEqual(noSite.urls, []);
+    assert.equal(noSite.output.join('').split('\n')[0], 'Wrote plans/road.work/site.json - the plan\'s road site model');
+    assert.deepEqual(JSON.parse(noSite.files['plans/road.work/site.json']), site);
+    assert.ok(noSite.files['plans/road.work/site.json'].startsWith('{\n    "title": "Same Site",\n'));
 });
 
 
 test('site, an existing plan of another site', async () => {
     const first = await runSite(coarseSite());
-    const message = 'error: The road plan "plans/road.json" isn\'t a plan of this site - its georeference\'s center isn\'t the site\'s. ' +
-        'Plan the site again (remove the plan), or restore its start and end points.\n';
+    const message = 'error: The road plan "plans/road.json" isn\'t a plan of this site - its georeference\'s center, or its units, ' +
+        'aren\'t the site\'s. Plan the site again (remove the plan), or restore its start and end points and its units.\n';
 
-    // The site's start or end point moved - the plan's coordinates aren't the site's
+    // The site's start or end point moved, or its units changed - the plan's coordinates aren't the site's. The USGS
+    // isn't asked for the site's data.
     for (const members of [
-        {'start': {'latitude': 40.0001, 'longitude': -105.28}}, {'end': {'latitude': 40.002, 'longitude': -105.2766}}
+        {'start': {'latitude': 40.0001, 'longitude': -105.28}}, {'end': {'latitude': 40.002, 'longitude': -105.2766}},
+        {'units': 'feet', 'margin': 60, 'spacing': 150}
     ]) {
         const io = await runSite(coarseSite(members), {'files': {...first.files}});
         assert.deepEqual([io.code, io.output.join(''), io.files['plans/road.json']], [1, message, first.files['plans/road.json']]);
+        assert.deepEqual([io.urls, io.written], [[], []]);
     }
 
     // A plan without a georeference
@@ -535,9 +555,10 @@ usage: plan site <site.json> <plan.json> [--fetch]
   Create a road plan model's site from a road site model - its topography, from the USGS 3D Elevation Program's
   1 meter elevation models, its georeference, its start and end points, its streams, roads, and exclusion areas,
   and its topographic map image ("<plan>.png"). An existing plan's options are kept, and the features that were
-  added to it (the "feature" and "draws" commands'). If the existing plan's site is the site - the same points,
+  added to it (the "feature" and "draws" commands'). If the existing plan's grid is the site's - the same points,
   units, margin, and spacing - its site's data (its terrain, streams, roads, trails, and map) is kept, and the
-  USGS's services aren't asked for it again, unless "--fetch" is given.
+  USGS's services aren't asked for it again, unless "--fetch" is given. A plan's design criteria and cost rates
+  are the site's. If there's no site file, it's written from the plan's own site model.
 `;
     for (const args of [[], ['site.json'], ['site.json', 'road.json', 'extra'], ['-x', 'road.json'], ['site.json', '--plan']]) {
         const io = testIo();

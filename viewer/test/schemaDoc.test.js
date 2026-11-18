@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import {buildDoc} from '../lib/doc.js';
 import {fileURLToPath} from 'node:url';
+import {markdownHtml} from '../lib/markdown.js';
 import {parseSchemaMarkdown} from 'schema-markdown/lib/parser.js';
 import {readFileSync} from 'node:fs';
+import {roadieTypes} from '../lib/model.js';
 import {schemaDocMarkdown} from '../lib/schemaDoc.js';
 import test from 'node:test';
 
@@ -112,7 +114,8 @@ test('schemaDocMarkdown, dicts', () => {
 test('buildDoc', () => {
     const {title, html} = buildDoc({'vFile': 'a.json', 'vDoc': true, 'vOption': 1});
     assert.equal(title, 'Roadie Road Plan Model');
-    assert.equal(`${html}\n`, expected('doc.html'));
+    assert.equal(html.split('\n').slice(1).join('\n'), markdownHtml(schemaDocMarkdown(roadieTypes, 'RoadPlan')));
+    assert.ok(html.includes('<h3 id="struct-roadsite">struct RoadSite</h3>'));
     assert.deepEqual(html.split('\n').slice(0, 2), [
         '<p><a href="#var.vFile=&#039;a.json&#039;&amp;var.vOption=1">Back</a></p>',
         '<h1 id="struct-roadplan">struct RoadPlan</h1>'

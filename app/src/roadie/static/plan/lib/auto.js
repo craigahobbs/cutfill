@@ -5,13 +5,14 @@
 
 import {describeCommand, keepCommand} from './options.js';
 import {drawCrossings, drawsCommand} from './draws.js';
-import {orderPlan, planText, readPlan} from './planFile.js';
 import {planCriteria, planTopo} from '../../viewer/lib/model.js';
 import {planMapBase64, planPlot} from './plot.js';
+import {readPlan, writePlan} from './planFile.js';
 import {Buffer} from 'node:buffer';
 import {draftLines} from './draft.js';
 import {existingMask} from './structures.js';
 import {featureCommand} from './featureCommand.js';
+import {ollamaHostDefault} from './ollama.js';
 import {parseArgs} from 'node:util';
 import {polylineStations} from './route.js';
 import {routeCommands} from './routeCli.js';
@@ -29,7 +30,7 @@ export const autoSteps = [
 
 // The "auto" command's usage text lines
 export const autoUsage = [
-    'usage: plan auto <site.json> <plan.json> [--model MODEL] [--fresh] [--fetch] [options]',
+    'usage: plan auto <site.json> <plan.json> [--model MODEL] [--fresh] [--fetch] [--no-plots] [options]',
     '',
     '  Plan a road by procedure: create the plan\'s site, engineer its standard options (and add the unmapped draws they',
     '  cross, as streams), keep the best options, and set the descriptions - their facts. With a model (an Ollama model -',
@@ -40,9 +41,10 @@ export const autoUsage = [
     '',
     'options:',
     '  --model MODEL          the Ollama model to ask (default is none - the site\'s notes aren\'t read). The Ollama host',
-    '                         is the environment\'s "OLLAMA_HOST" (default is "http://127.0.0.1:11434").',
+    `                         is the environment's "OLLAMA_HOST" (default is "${ollamaHostDefault}").`,
     '  --fresh                ask the model again - don\'t use the saved answers',
     '  --fetch                fetch the site\'s data from the USGS again - an existing plan\'s, if it\'s the site\'s, is kept',
+    '  --no-plots             don\'t plot the plan (the work directory\'s "plan.png" and "map.png")',
     '  -w, --width WIDTH      the road width (default is the notes\', or 14 feet / 4.3 meters)',
     '  -s, --surface SURFACE  the road surface - native, gravel, asphalt, or concrete (default is the notes\', or gravel)'
 ];
@@ -53,6 +55,7 @@ const commandOptions = {
     'model': {'type': 'string'},
     'fresh': {'type': 'boolean', 'default': false},
     'fetch': {'type': 'boolean', 'default': false},
+    'no-plots': {'type': 'boolean', 'default': false},
     'width': {'type': 'string', 'short': 'w'},
     'surface': {'type': 'string', 'short': 's'}
 };
@@ -139,12 +142,10 @@ export async function autoCommand(args, io) {
     const lines = [];
     const fail = (errorLines) => ({'code': 1, 'lines': [...lines, ...errorLines]});
 
-    // The plan's report, and its status - what it's doing. They're shown as the plan is made, if the input and output
-    // functions have a "progress" function (of the report's new lines) and a "status" function (of the status' text,
-    // and its step's key - autoSteps).
-    const report = async (...reportLines) => {
+    // The plan's report, and its status - what it's doing. The status is shown as the plan is made, if the input and
+    // output functions have a "status" function (of the status' text, and its step's key - autoSteps).
+    const report = (...reportLines) => {
         lines.push(...reportLines);
-        await io.progress?.(reportLines);
     };
     const status = async (step, text) => {
         await io.status?.(text, step);
@@ -156,10 +157,9 @@ export async function autoCommand(args, io) {
     if (site.code !== 0) {
         return site;
     }
-    await report(...site.lines.slice(0, -1));
+    report(...site.lines.slice(0, -1));
     const {notes = [], 'criteria': siteCriteria = {}} = JSON.parse(io.readFile(sitePath));
     const loadPlan = () => readPlan(io, planPath).plan;
-    const savePlan = (plan) => io.writeFile(planPath, planText(orderPlan(plan)));
     let plan = loadPlan();
     let topo = planTopo(plan);
     const {units} = plan;
@@ -179,9 +179,11 @@ export async function autoCommand(args, io) {
         }
     }
 
-    // Ask the model a question - or use its saved answer
-    const ask = async (key, question, images, schema) => {
+    // Ask the model a question - or use its saved answer. "questionFn" is a function that makes the question - its text
+    // ("question"), and its "images" - when it's asked.
+    const ask = async (key, schema, questionFn) => {
         if (!answers.has(key)) {
+            const {question, images = []} = await questionFn();
             answers.set(key, await io.ask({model, question, images, schema}));
             io.writeFile(
                 decisionsPath, `${JSON.stringify({model, 'site': signature, 'answers': Object.fromEntries(answers)}, null, 4)}\n`
@@ -193,16 +195,18 @@ export async function autoCommand(args, io) {
     // The notes' directives
     let directives = {'purpose': null, 'width': null, 'surface': null, 'avoid': [], 'passThrough': [], 'ruleOutRoads': [], 'unhandled': []};
     const limitations = [];
+    const ruledOut = [];
     const roadNames = [...new Set(topo.features.filter(({type, name = null}) => type === 'road' && name !== null).map(({name}) => name))];
     try {
         if (model === null) {
             if (notes.length > 0) {
-                await report('Notes: not read - there\'s no model (--model)');
+                report('Notes: not read - there\'s no model (--model)');
                 limitations.push('The site\'s notes weren\'t read - the plan is the tools\' alone.');
             }
         } else if (notes.length > 0) {
             await status('notes', `Asking the model "${model}" what the site's notes ask for`);
-            const answer = await ask('notes', notesQuestion(plan, notes, roadNames), [], notesSchema);
+            const question = notesQuestion(plan, notes, roadNames);
+            const answer = await ask('notes', notesSchema, () => ({question}));
             directives = notesDirectives(answer, units);
 
             // The design criteria - the site model's own are the plan's
@@ -214,28 +218,26 @@ export async function autoCommand(args, io) {
             }
             if (Object.keys(criteria).length > 0) {
                 plan.criteria = {...plan.criteria, ...criteria};
-                savePlan(plan);
-                await report(`Notes: ${Object.entries(criteria).map(([member, value]) => `${criteriaNames[member]} ${value}`).join(', ')}`);
+                writePlan(io, planPath, plan);
+                report(`Notes: ${Object.entries(criteria).map(([member, value]) => `${criteriaNames[member]} ${value}`).join(', ')}`);
             }
             if (directives.width !== null || directives.surface !== null) {
-                await report(`Notes: the road is ${[
+                report(`Notes: the road is ${[
                     ...(directives.width !== null ? [`${directives.width} ${units} wide`] : []),
                     ...(directives.surface !== null ? [directives.surface] : [])
                 ].join(', ')}`);
             }
 
-            // The existing roads the notes rule out
+            // The existing roads the notes rule out - the options don't follow them (they're the plan's roads still)
             for (const roadName of directives.ruleOutRoads) {
                 const match = roadNames.find((name) => name.toLowerCase() === roadName.toLowerCase()) ?? null;
                 if (match === null) {
                     directives.unhandled.push(`rule out the road "${roadName}" (the site has no road of that name)`);
                 } else {
-                    featureCommand([planPath, '--remove', match], io);
-                    await report(`Notes: the existing road "${match}" is ruled out`);
+                    ruledOut.push(match);
+                    report(`Notes: the existing road "${match}" is ruled out - the options don't follow it`);
                 }
             }
-            plan = loadPlan();
-            topo = planTopo(plan);
 
             // The places the notes say to avoid - each is an exclusion area
             for (const place of directives.avoid) {
@@ -250,7 +252,7 @@ export async function autoCommand(args, io) {
                     featureCommand([planPath, 'exclusion', '-n', place.name, ...corners], io);
                     place.note = `${place.name}: the notes' place to avoid (${place.where}). The model "${model}" found it on the ` +
                         `site's map, from x ${west} to ${east} and y ${south} to ${north} - "${area.why}" Verify it.`;
-                    await report(`Notes: avoid "${place.name}" - an exclusion area from x ${west} to ${east}, y ${south} to ${north}`);
+                    report(`Notes: avoid "${place.name}" - an exclusion area from x ${west} to ${east}, y ${south} to ${north}`);
                     plan = loadPlan();
                     topo = planTopo(plan);
                 }
@@ -274,7 +276,8 @@ export async function autoCommand(args, io) {
     // Engineer the standard options - and add the unmapped draws they cross, as streams, until they cross none
     const designArgs = [
         ...((width ?? directives.width) !== null ? ['--width', `${width ?? directives.width}`] : []),
-        ...((values.surface ?? directives.surface) !== null ? ['--surface', values.surface ?? directives.surface] : [])
+        ...((values.surface ?? directives.surface) !== null ? ['--surface', values.surface ?? directives.surface] : []),
+        ...ruledOut.flatMap((name) => ['--rule-out', name])
     ];
     let options;
     const draws = [];
@@ -297,9 +300,9 @@ export async function autoCommand(args, io) {
     }
     if (draws.length > 0) {
         const drawNames = draws.map((number) => `Draw ${number}`).join(', ');
-        await report(`Draws: added the unmapped draws the options crossed, as streams - ${drawNames}`);
+        report(`Draws: added the unmapped draws the options crossed, as streams - ${drawNames}`);
     }
-    await report(...options.lines.filter((line) => !/^Option \d+: |^Wrote /.test(line)));
+    report(...options.lines.filter((line) => !/^Option \d+: |^Wrote /.test(line)));
 
     // The options through the notes' places
     const names = plan.options.filter(({name}) => standardNames.includes(name)).map(({name}) => name);
@@ -309,7 +312,7 @@ export async function autoCommand(args, io) {
         const routed = routeCommands.route([planPath, '-n', name, '-v', place.point.join(','), ...designArgs], io);
         if (routed.code === 0) {
             names.push(name);
-            await report(
+            report(
                 ...routed.lines.filter((line) => !/^Wrote /.test(line)),
                 `Notes: "${name}" passes through "${place.name}" at ${place.point.join(',')}`
             );
@@ -326,12 +329,12 @@ export async function autoCommand(args, io) {
     if (names.length > optionLimit) {
         kept = keepCommand([planPath, ...loadPlan().options.slice(0, optionLimit).map(({name}) => name)], io);
     }
-    await report(...kept.lines.filter((line) => /^Option \d+: /.test(line)));
+    report(...kept.lines.filter((line) => /^Option \d+: /.test(line)));
 
     // The descriptions - the plan's facts, and what the plan did with its notes
     plan = loadPlan();
     for (const text of directives.unhandled) {
-        await report(`Notes: NOT acted on - ${text}`);
+        report(`Notes: NOT acted on - ${text}`);
     }
     if (directives.unhandled.length > 0) {
         limitations.push(`These of the site's notes weren't acted on: ${directives.unhandled.join('; ')}.`);
@@ -348,14 +351,17 @@ export async function autoCommand(args, io) {
     describeCommand([planPath, descriptionsPath], io);
 
     // Plot the plan - its terrain, and its topographic map
-    plan = loadPlan();
-    topo = planTopo(plan);
-    io.writeBytes(`${work}/plan.png`, await io.renderPng(planPlot(plan, topo).svg));
-    const map = planMapBase64(io, planPath, plan);
-    if (map !== null) {
-        io.writeBytes(`${work}/map.png`, await io.renderPng(planPlot(plan, topo, 1400, null, map).svg));
+    if (!values['no-plots']) {
+        plan = loadPlan();
+        topo = planTopo(plan);
+        io.writeBytes(`${work}/plan.png`, await io.renderPng(planPlot(plan, topo).svg));
+        const map = planMapBase64(io, planPath, plan);
+        if (map !== null) {
+            io.writeBytes(`${work}/map.png`, await io.renderPng(planPlot(plan, topo, 1400, null, map).svg));
+        }
     }
-    await report(`Wrote ${planPath} - its descriptions are "${descriptionsPath}", and its plots are in "${work}/"`);
+    const plotsText = values['no-plots'] ? '' : `, and its plots are in "${work}/"`;
+    report(`Wrote ${planPath} - its descriptions are "${descriptionsPath}"${plotsText}`);
     return {'code': 0, lines};
 }
 
@@ -449,14 +455,13 @@ function notesDirectives(answer, units) {
 
 
 
-
-
-// Plot a plan for a question - its topographic map (or its terrain, if it has no map), all of it or a box of it. The
-// plot is written to the plan's work directory, to see what the model was asked. Returns its base64 text and the
-// question's description of it. (The plot's image is awaited - a browser's is made later.)
+// Plot a plan for a question - its topographic map (or its terrain, if it has no map), all of it or a box of it,
+// without its options: a plan that's made again asks of the plot it asked of before. The plot is written to the plan's
+// work directory, to see what the model was asked. Returns its base64 text and the question's description of it. (The
+// plot's image is awaited - a browser's is made later.)
 async function questionPlot(io, work, planPath, plan, topo, name, box) {
     const map = planMapBase64(io, planPath, plan);
-    const png = await io.renderPng(planPlot(plan, topo, 1400, box, map).svg);
+    const png = await io.renderPng(planPlot({...plan, 'options': []}, topo, 1400, box, map).svg);
     io.writeBytes(`${work}/ask/${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}${box === null ? '' : '-box'}.png`, png);
     const {units} = plan;
     const pointText = ({x, y, label}, color) => `"${label}" (the ${color} dot, at x ${Math.round(x)}, y ${Math.round(y)})`;
@@ -481,11 +486,13 @@ async function locateArea(io, ask, work, planPath, plan, topo, place) {
     const placeText = `"${place.name}"${place.where !== '' ? ` - ${place.where}` : ''}`;
 
     // The place's rectangle on the site's map
-    const sitePlot = await questionPlot(io, work, planPath, plan, topo, place.name, null);
-    const first = areaBox(plan, topo, await ask(`avoid:${place.name}`, [
-        sitePlot.text, '', `The road's planning notes say it must avoid: ${placeText}.`, '',
-        `Find it on the map. ${answerText} If you can't find it, answer with "found" false.`
-    ].join('\n'), [sitePlot.image], areaSchema));
+    const first = areaBox(plan, topo, await ask(`avoid:${place.name}`, areaSchema, async () => {
+        const sitePlot = await questionPlot(io, work, planPath, plan, topo, place.name, null);
+        return {'images': [sitePlot.image], 'question': [
+            sitePlot.text, '', `The road's planning notes say it must avoid: ${placeText}.`, '',
+            `Find it on the map. ${answerText} If you can't find it, answer with "found" false.`
+        ].join('\n')};
+    }));
     if ('problem' in first) {
         return first;
     }
@@ -498,12 +505,14 @@ async function locateArea(io, ask, work, planPath, plan, topo, place) {
         'type': 'exclusion', 'name': 'estimate',
         'points': [{'x': west, 'y': south}, {'x': east, 'y': south}, {'x': east, 'y': north}, {'x': west, 'y': north}]
     }]}};
-    const boxPlot = await questionPlot(io, work, planPath, estimate, planTopo(estimate), place.name, box);
-    const second = areaBox(plan, topo, await ask(`avoid:${place.name}:closer`, [
-        boxPlot.text, '', `The road's planning notes say it must avoid: ${placeText}.`, '',
-        `The red dashed rectangle, "estimate", is a first estimate of where it is. Correct it. ${answerText} If the estimate is ` +
-            'right, answer with it.'
-    ].join('\n'), [boxPlot.image], areaSchema));
+    const second = areaBox(plan, topo, await ask(`avoid:${place.name}:closer`, areaSchema, async () => {
+        const boxPlot = await questionPlot(io, work, planPath, estimate, planTopo(estimate), place.name, box);
+        return {'images': [boxPlot.image], 'question': [
+            boxPlot.text, '', `The road's planning notes say it must avoid: ${placeText}.`, '',
+            `The red dashed rectangle, "estimate", is a first estimate of where it is. Correct it. ${answerText} If the estimate ` +
+                'is right, answer with it.'
+        ].join('\n')};
+    }));
     return 'problem' in second ? first : second;
 }
 
@@ -548,13 +557,16 @@ function areaBox(plan, topo, answer) {
 // Find a place to pass through on the site's map - returns its point ([x, y], whole numbers), or null if the model
 // didn't find it, or the point isn't within the site
 async function locatePoint(io, ask, work, planPath, plan, topo, place) {
-    const sitePlot = await questionPlot(io, work, planPath, plan, topo, place.name, null);
-    const answer = await ask(`via:${place.name}`, [
-        sitePlot.text, '',
-        `The road's planning notes say it must pass through: "${place.name}"${place.where !== '' ? ` - ${place.where}` : ''}.`, '',
-        'Find it on the map, and answer with a point there for the road to pass through, in the plan\'s coordinates - its "x" and ' +
-            '"y" - on open ground. In "why", say in one sentence what you see there. If you can\'t find it, answer with "found" false.'
-    ].join('\n'), [sitePlot.image], pointSchema);
+    const answer = await ask(`via:${place.name}`, pointSchema, async () => {
+        const sitePlot = await questionPlot(io, work, planPath, plan, topo, place.name, null);
+        return {'images': [sitePlot.image], 'question': [
+            sitePlot.text, '',
+            `The road's planning notes say it must pass through: "${place.name}"${place.where !== '' ? ` - ${place.where}` : ''}.`, '',
+            'Find it on the map, and answer with a point there for the road to pass through, in the plan\'s coordinates - its "x" ' +
+                'and "y" - on open ground. In "why", say in one sentence what you see there. If you can\'t find it, answer with ' +
+                '"found" false.'
+        ].join('\n')};
+    });
     const {x, y} = answer;
     const isInside = typeof x === 'number' && typeof y === 'number' && x >= 0 && x <= topo.width && y >= 0 && y <= topo.height;
     if (answer.found !== true || !isInside) {

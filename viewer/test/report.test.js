@@ -377,10 +377,9 @@ test('buildReport, canvas 3D views', () => {
     assert.deepEqual([smooth.smooth, smooth.step, smooth.pointLimited], [2, 1, true]);
     assert.equal(smooth.ops.filter((op) => op.t === 0).length, 4 * 1200);
 
-    // The drawings are cached by their point limits
-    assert.equal(views[0].render({...smoothLimitsCanvas, 'points': 2000}), faceted);
-    assert.notEqual(views[0].render({...smoothLimitsCanvas, 'points': 2001}), faceted);
-    assert.equal(views[2].render(smoothLimitsCanvas), views[2].render(smoothLimitsCanvas));
+    // A drawing is drawn each time - its point limit follows the computer's measured speed, so it isn't cached
+    assert.deepEqual(views[0].render({...smoothLimitsCanvas, 'points': 2000}), faceted);
+    assert.notEqual(views[0].render({...smoothLimitsCanvas, 'points': 2000}), faceted);
 });
 
 

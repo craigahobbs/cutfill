@@ -12,25 +12,23 @@ import {siteCommand, siteUsage} from './siteCommand.js';
 import {cliMain as roadieMain} from '../../viewer/lib/cli.js';
 import {roadieTypes} from '../../viewer/lib/model.js';
 import {schemaDocMarkdown} from '../../viewer/lib/schemaDoc.js';
-import {siteTypes} from './site.js';
+
+
+// The "evaluate" and "doc" commands' usage text lines
+const evaluateUsage = ['usage: plan evaluate <plan.json> [--detail]', ''];
+const docUsage = ['usage: plan doc [site | plan]', ''];
+
+
+// The commands' synopses - each command's usage's first lines
+const synopsis = [
+    autoUsage, siteUsage, plotUsage, locateUsage, featureUsage, drawsUsage, optionsUsage, routeUsage, evaluateUsage, keepUsage,
+    draftUsage, describeUsage, docUsage
+].flatMap((usageLines) => usageLines.slice(0, usageLines.indexOf('')).map((line) => line.replace(/^(?:usage:| {6}) /, '')));
 
 
 // The command line's usage text lines
 const usage = [
-    'usage: plan auto <site.json> <plan.json> [--model MODEL]',
-    '       plan site <site.json> <plan.json>',
-    '       plan plot <plan.json> <plot.png> [--box X1,Y1,X2,Y2]',
-    '       plan locate <plan.json> [--xy] <latitude,longitude | x,y>...',
-    '       plan feature <plan.json> TYPE [-n NAME] X,Y X,Y...',
-    '       plan draws <plan.json> [--add NUMBER]...',
-    '       plan options <plan.json> [options]',
-    '       plan route <plan.json> -n NAME [-v X,Y]... [options]',
-    '       plan profile <plan.json> -n NAME [options]',
-    '       plan evaluate <plan.json> [--detail]',
-    '       plan keep <plan.json> NAME...',
-    '       plan draft <plan.json> <descriptions.md>',
-    '       plan describe <plan.json> <descriptions.md>',
-    '       plan doc [site | plan]',
+    ...synopsis.map((line, ixLine) => `${ixLine === 0 ? 'usage:' : '      '} ${line}`),
     '',
     '  auto      Plan a road by procedure - its site, options, and descriptions - asking a model what the site\'s',
     '            notes ask for',
@@ -75,7 +73,7 @@ function docCommand(args) {
     if (args.length > 1 || (model !== 'site' && model !== 'plan')) {
         return null;
     }
-    return {'code': 0, 'lines': model === 'site' ? schemaDocMarkdown(siteTypes, 'RoadSite') : schemaDocMarkdown(roadieTypes, 'RoadPlan')};
+    return {'code': 0, 'lines': model === 'site' ? schemaDocMarkdown(roadieTypes, 'RoadSite') : schemaDocMarkdown(roadieTypes, 'RoadPlan')};
 }
 
 

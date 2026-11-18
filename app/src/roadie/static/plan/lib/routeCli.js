@@ -8,8 +8,8 @@ import {designStructures, existingMask} from './structures.js';
 import {drawAreaText, drawCrossings} from './draws.js';
 import {fixedTrim, number as formatNumber} from '../../viewer/lib/format.js';
 import {lineIndex, nearestLine} from './roads.js';
-import {orderPlan, planText, readPlan} from './planFile.js';
 import {pyFixed, pyRound} from './numeric.js';
+import {readPlan, writePlan} from './planFile.js';
 import {createDesign} from './design.js';
 import {designProfile} from './profile.js';
 import {parseArgs} from 'node:util';
@@ -54,6 +54,8 @@ export const routeUsage = [
     '  -v, --via X,Y                  a via point (route only; may be repeated)',
     '  --all-new                      an all-new road - the route doesn\'t follow the plan\'s existing roads (route',
     '                                 only)',
+    '  --rule-out NAME                an existing road that the route doesn\'t follow - a private or closed road,',
+    '                                 say (route only; may be repeated)',
     '  --grade-weight WEIGHT          the route search\'s penalty weight for ground steeper than the design grade',
     '                                 (route only; default is the weight of 1, 0.5, and 0.25 whose road has the',
     '                                 lowest cost score)',
@@ -75,7 +77,9 @@ export const optionsUsage = [
     '  the plan\'s features or criteria change.',
     '',
     'options:',
-    ...designUsage
+    ...designUsage,
+    '  --rule-out NAME                an existing road that the roads don\'t follow - a private or closed road, say',
+    '                                 (may be repeated)'
 ];
 
 
@@ -105,6 +109,9 @@ const optionOptions = {
     'description': {'type': 'string', 'short': 'd', 'multiple': true},
     'existing-road': {'type': 'string', 'multiple': true}
 };
+const ruleOptions = {
+    'rule-out': {'type': 'string', 'multiple': true}
+};
 const routeOptions = {
     'via': {'type': 'string', 'short': 'v', 'multiple': true},
     'all-new': {'type': 'boolean', 'default': false},
@@ -122,7 +129,8 @@ function parseCommandArgs(command, args) {
     let parsed;
     try {
         const options = {
-            ...designOptions, ...(command === 'options' ? {} : optionOptions), ...(command === 'route' ? routeOptions : {})
+            ...designOptions, ...(command === 'options' ? {} : optionOptions), ...(command === 'route' ? routeOptions : {}),
+            ...(command === 'profile' ? {} : ruleOptions)
         };
         parsed = parseArgs({args, options, 'allowPositionals': true});
     } catch {
@@ -147,6 +155,7 @@ function parseCommandArgs(command, args) {
         'existingRoads': 'existing-road' in values ? numbers('existing-road') : null,
         'via': numbers('via'),
         'allNew': values['all-new'] ?? false,
+        'ruleOut': values['rule-out'] ?? [],
         'gradeWeight': number('grade-weight'),
         'slopeWeight': number('slope-weight')
     };
@@ -181,12 +190,32 @@ function routeCommand(command, args, io) {
     }
 
     // Engineer the option
-    const engineered = engineerOption(command, plan, planTopo(plan), commandArgs);
+    const topo = planTopo(plan);
+    const ruleOutError = ruledOutError(topo, commandArgs.ruleOut);
+    if (ruleOutError !== null) {
+        return {'code': 1, 'lines': [ruleOutError]};
+    }
+    const engineered = engineerOption(command, plan, topo, commandArgs);
     if (engineered.error !== null) {
         return {'code': 1, 'lines': [...engineered.lines, `error: ${engineered.error}`]};
     }
-    io.writeFile(commandArgs.plan, planText(orderPlan(plan)));
+    writePlan(io, commandArgs.plan, plan);
     return {'code': 0, 'lines': [...engineered.lines, wroteLine(commandArgs.plan)]};
+}
+
+
+// Get the plan's existing roads that a road may follow - all but those that are ruled out (by name, in any case)
+function followedRoads(topo, ruleOut) {
+    const names = ruleOut.map((name) => name.toLowerCase());
+    return topo.features.filter(({type, name = ''}) => type === 'road' && !names.includes(name.toLowerCase()));
+}
+
+
+// Check the roads that are ruled out - each is one of the plan's existing roads. Returns the error line, or null.
+function ruledOutError(topo, ruleOut) {
+    const names = new Set(topo.features.filter(({type}) => type === 'road').map(({name = ''}) => name.toLowerCase()));
+    const unknown = ruleOut.find((name) => name === '' || !names.has(name.toLowerCase())) ?? null;
+    return unknown !== null ? `error: The plan has no existing road named "${unknown}" to rule out` : null;
 }
 
 
@@ -214,6 +243,10 @@ function optionsCommand(args, io) {
         return {'code': 1, 'lines': error};
     }
     const topo = planTopo(plan);
+    const ruleOutError = ruledOutError(topo, commandArgs.ruleOut);
+    if (ruleOutError !== null) {
+        return {'code': 1, 'lines': [ruleOutError]};
+    }
     const routeArgs = {...commandArgs, 'description': null, 'existingRoads': null, 'via': [], 'gradeWeight': null, 'slopeWeight': 1};
     const removeOption = (optionName) => {
         plan.options = plan.options.filter(({name}) => name !== optionName);
@@ -223,7 +256,7 @@ function optionsCommand(args, io) {
 
     // The road that follows the plan's existing roads where that costs less than a new road - if it follows any
     let followsRoads = false;
-    if (topo.features.some(({type}) => type === 'road')) {
+    if (followedRoads(topo, commandArgs.ruleOut).length > 0) {
         const roadsOption = engineerOption('route', plan, topo, {...routeArgs, 'name': roadsName, 'allNew': false});
         if (roadsOption.error !== null) {
             return {'code': 1, 'lines': [...roadsOption.lines, `error: ${roadsOption.error}`]};
@@ -253,7 +286,7 @@ function optionsCommand(args, io) {
     lines.push(...scored.map(({option, analysis}, ixOption) => (
         `Option ${ixOption}: "${option.name}" - cost score ${formatNumber(analysis.score, 1)}, design warnings: ${analysis.warnings.length}`
     )));
-    io.writeFile(commandArgs.plan, planText(orderPlan(plan)));
+    writePlan(io, commandArgs.plan, plan);
     return {'code': 0, 'lines': [...lines, wroteLine(commandArgs.plan)]};
 }
 
@@ -279,7 +312,7 @@ function engineerOption(command, plan, topo, commandArgs) {
     const ixExisting = options.findIndex((option) => option.name === commandArgs.name);
     const ixOption = ixExisting === -1 ? options.length : ixExisting;
     const existingOption = ixExisting === -1 ? null : options[ixExisting];
-    const roads = lineIndex(topo.features, 'road', Math.max(topo.spacing, design.minRadius) * 2);
+    const roads = lineIndex(followedRoads(topo, commandArgs.ruleOut), 'road', Math.max(topo.spacing, design.minRadius) * 2);
     if (command === 'profile' && existingOption === null) {
         return {'lines': [], 'error': `no option named "${commandArgs.name}"`};
     }
@@ -288,11 +321,13 @@ function engineerOption(command, plan, topo, commandArgs) {
     const isRoute = command === 'route';
     const followsRoads = !commandArgs.allNew && commandArgs.existingRoads === null;
     const routeNodes = isRoute ? routeLattice(topo, design, commandArgs.slopeWeight, followsRoads ? roads : null) : null;
+    const pathDesigns = new Map();
     const designedRoads = [];
     let failed = null;
     for (const gradeWeight of (isRoute && commandArgs.gradeWeight === null ? gradeWeights : [commandArgs.gradeWeight])) {
         const lines = [];
-        const designed = isRoute ? routeAlignment(plan, topo, design, roads, routeNodes, {...commandArgs, gradeWeight}, lines) :
+        const designed = isRoute ?
+            routeAlignment(plan, topo, design, roads, routeNodes, {...commandArgs, gradeWeight}, lines, pathDesigns) :
             profileAlignment(topo, design, existingOption, commandArgs, plan.units);
 
         // A road that isn't within the grade limit isn't a road
@@ -373,8 +408,10 @@ export function bestRoad(roads) {
 // (gradeFailure), the route is searched again with stricter grade penalties (a line of "lines" reports each). Returns
 // the alignment's "x" and "y" coordinates and "stations", its "profile", "ground", and "sideSlope" (designProfile), its
 // "existingRoads" ([station, end station] ranges), its "notes" (the report's lines for the via points it turns back
-// at), and its "failure" (the last search's gradeFailure) - or null if there's no route.
-function routeAlignment(plan, topo, design, roads, routeNodes, commandArgs, lines) {
+// at), and its "failure" (the last search's gradeFailure) - or null if there's no route. "pathDesigns" are the designs
+// of the paths that were searched before (a map) - the searches with other grade penalty weights often find the same
+// path, and a path's design is the same.
+function routeAlignment(plan, topo, design, roads, routeNodes, commandArgs, lines, pathDesigns) {
     // The existing roads are the argument's ranges, or the plan's existing roads that the route follows
     const followsRoads = !commandArgs.allNew && commandArgs.existingRoads === null;
     let existingRoads = commandArgs.existingRoads ?? [];
@@ -404,16 +441,24 @@ function routeAlignment(plan, topo, design, roads, routeNodes, commandArgs, line
         }
 
         // The route's runs along existing roads are the roads' lines - the rest is smoothed to the minimum radius
-        const interval = Math.max(design.stationInterval, Math.min(lattice, topo.spacing) * 0.5);
-        const followed = followRoads(path, existing, roads, lattice, 2 * design.minRadius, design.minRadius);
-        const smooth = smoothCurves(followed.points, interval, design.minRadius, followed.ranges);
-        alignment = resamplePolyline(smooth.x, smooth.y, interval);
-        if (followsRoads) {
-            existingRoads = smooth.ranges;
+        const pathKey = `${path.join(' ')}|${existing.join('')}`;
+        let pathDesign = pathDesigns.get(pathKey);
+        if (pathDesign === undefined) {
+            const interval = Math.max(design.stationInterval, Math.min(lattice, topo.spacing) * 0.5);
+            const followed = followRoads(path, existing, roads, lattice, 2 * design.minRadius, design.minRadius);
+            const smooth = smoothCurves(followed.points, interval, design.minRadius, followed.ranges);
+            const pathAlignment = resamplePolyline(smooth.x, smooth.y, interval);
+            const pathRoads = followsRoads ? smooth.ranges : existingRoads;
+            pathDesign = {
+                'alignment': pathAlignment,
+                'existingRoads': pathRoads,
+                'designed': designProfile(
+                    topo, design, pathAlignment.x, pathAlignment.y, pathAlignment.stations, existingMask(pathAlignment.stations, pathRoads)
+                )
+            };
+            pathDesigns.set(pathKey, pathDesign);
         }
-        designed = designProfile(
-            topo, design, alignment.x, alignment.y, alignment.stations, existingMask(alignment.stations, existingRoads)
-        );
+        ({alignment, existingRoads, designed} = pathDesign);
         failure = gradeFailure(design, alignment.stations, designed, plan.units);
         if (failure === null) {
             break;

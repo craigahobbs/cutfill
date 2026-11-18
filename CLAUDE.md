@@ -35,8 +35,8 @@ The project is three subprojects, and the top-level makefile delegates to them:
 
 ```sh
 make commit                       # the pre-commit gate: the subprojects' tests and lint (at 100% coverage)
-make test [TEST=name]             # the viewer's unit tests (TEST runs one) and the planning tools' unit tests
-make lint                         # ESLint (the viewer and the planning tools)
+make test [TEST=name]             # the subprojects' unit tests (TEST runs the viewer's and planning tools' of a name)
+make lint                         # ESLint (the viewer and the planning tools) and pylint (the application)
 make plan FILE=<site.json> OUTPUT=<plan.json>   # plan a road (a Claude Code session)
 make auto FILE=<site.json> OUTPUT=<plan.json> [OLLAMA_MODEL=<model>]   # plan a road by procedure - the tools, and a model's answers
 make evaluate FILE=<plan.json> [DETAIL=1]   # a plan's analysis and cost from the command line
@@ -68,6 +68,9 @@ Run `make` in `viewer/` or `plan/` for a subproject's own targets (e.g.
   different models get the same roads, with fewer tokens. When a session writes code for something every plan needs,
   make it a tool, and keep the tools' reports short (they're a session's context). Keep PLAN.md and the session's
   allowed commands (`plan/Makefile`) in step with the tools.
+- A plan that's made again is made the same: `auto` doesn't change what a later run reads (the roads its notes rule
+  out stay the plan's roads - `--rule-out`), and `site` keeps a plan's site data when its grid is the site's, so a run
+  doesn't ask the USGS for it again.
 - `auto` (`plan/lib/auto.js`) plans a road by procedure: its code runs the plan's steps, and a model (Ollama's -
   `plan/lib/ollama.js`) is asked only small questions with checked JSON answers - it doesn't run the plan. A model's
   question is asked without thinking, with a limited answer. Keep `auto`'s steps and PLAN.md's in step.

@@ -30,13 +30,6 @@ USE_JSDOM := 1
 include Makefile.base
 
 
-# A unit test imports the planning tools' modules - the application's plan page plans a road with them - so the
-# tests need the tools' packages
-_test _cover: ../plan/build/npm.build
-../plan/build/npm.build:
-	@$(MAKE) --no-print-directory -C ../plan build/npm.build
-
-
 # The local web server port
 PORT ?= 8080
 
@@ -53,15 +46,16 @@ help:
 
 
 # Stage the application - the page, its stylesheet, its source modules, and the schema-markdown package's (the page's
-# import map resolves "schema-markdown/" there). The command line module isn't part of the application.
+# import map resolves "schema-markdown/" there - its "encode" module isn't the application's). The command line
+# module isn't part of the application. The Roadie application's package stages it, too (app/Makefile's "static").
 .PHONY: app
-commit: app
 app: build/npm.build
 	rm -rf build/app/
 	mkdir -p build/app/schema-markdown/
 	cp -R index.html app.css lib build/app/
 	rm build/app/lib/cli.js
 	cp -R node_modules/schema-markdown/lib build/app/schema-markdown/
+	rm build/app/schema-markdown/lib/encode.js
 
 
 # View a road plan in the browser - the application is served with the plan's directory, so the plan (and its map

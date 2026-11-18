@@ -36,10 +36,12 @@ they find each corridor's least-cost road, report its cost score, draft the desc
 log the commands that changed it (`<plan>.work/commands.txt`).
 
 A road site model (a plan config - a JSON file, of any name) is a road's start and end points, as latitudes and
-longitudes, and its planning instructions - the plan keeps it (its `site` member). Run on a plan of the same site
-(the same points, units, margin, and spacing), `site` keeps the plan's site data - its terrain, streams, roads,
-trails, and map - and only updates its title, labels, exclusion areas, criteria, and cost rates (`--fetch` fetches it
-again). Otherwise, `site` finds the USGS 3D Elevation Program's 1 meter elevation models of the site (lidar
+longitudes, and its planning instructions - the plan keeps it (its `site` member), and a plan's design criteria and
+cost rates are its site's. An existing plan must be the site's - the same points and units - and `site` says so
+before it fetches anything. Run on a plan whose grid is the site's (the same margin and spacing, too), `site` keeps
+the plan's site data - its terrain, streams, roads, trails, and map - and only updates its title, labels, exclusion
+areas, criteria, and cost rates (`--fetch` fetches it again). If there's no site file, `site` writes it from the
+plan's own site model (an update session's site file). Otherwise, `site` finds the USGS 3D Elevation Program's 1 meter elevation models of the site (lidar
 ground elevations), reads the site's part of them (it's cached in the plan's work directory,
 `<plan>.work/terrain/`), and grids them in the plan's coordinates - a transverse Mercator projection centered on
 the site. The newest survey's elevations are used, and an older survey's where the newer have none. The site's
@@ -57,8 +59,9 @@ options through the notes' places, `keep`, the descriptions (`draft`'s, with wha
 model doesn't run the plan: it's asked questions (`lib/ollama.js`, Ollama's chat API - `--model` is an Ollama model,
 and `OLLAMA_HOST` is the host), each a paragraph and at most one image, each answered with a JSON object of the
 question's schema that `auto` checks. The notes question's answer is the notes' directives - the road's width and
-surface, a maximum grade and minimum radius (the site model's own criteria win), the existing roads to rule out,
-the places to avoid and to pass through, and the notes it doesn't cover (they're reported, and they're in the plan's
+surface, a maximum grade and minimum radius (the site model's own criteria win), the existing roads to rule out
+(`options` and `route` don't follow them - `--rule-out` - and they stay the plan's roads, so a plan that's made again
+is made the same), the places to avoid and to pass through, and the notes it doesn't cover (they're reported, and they're in the plan's
 limitations). A place question shows the model the site's map plot (`plot --map`), and its answer is a rectangle -
 which the model corrects on a closer look, a plot of the rectangle and the map around it - or a point. A rectangle
 that contains the start or end point is cut back from it by the minimum radius, and one that covers more than a
@@ -71,11 +74,12 @@ be corrected by hand.
 `lib/browser/` is the tools in a web browser, for the Roadie application's page (`../app/`): `io.js` is the tools'
 input and output functions there - files in memory, the USGS's services and Ollama by `fetch`, an elevation model by
 the GeoTIFF reader's script, and a plot's PNG image by a canvas - and `planRoad`, which runs a plan config with
-`auto` and returns the road plan, its map image a data URL (a run of the same site keeps the plan's other options
-and features, and an abort signal stops it). `util.js`, `buffer.js`, and `zlib.js` are the Node
-modules the tools import (`parseArgs`, a buffer's base64 text, and `crc32` and `deflateSync`) - the page's import map
-names them. `auto` reports its progress to the input and output functions' `progress` and `status` functions, if
-they have them.
+`auto` and returns the road plan, its map image a data URL (a run of the same site keeps the plan's site data and
+the features that were added to it - its options are the run's - and an abort signal stops it). `util.js`,
+`buffer.js`, and `zlib.js` are the Node modules the tools import (`parseArgs`, a buffer's base64 text, and `crc32`
+and `deflateSync`) - the page's import map names them. `auto` reports what it's doing - its step's key (`autoSteps`)
+and text - to the input and output functions' `status` function, if they have it, and `--no-plots` skips the work
+directory's plots (the page doesn't keep them).
 
 `plot` draws a plan for the planning session to study: its terrain, shaded (lit from the northwest) with contours,
 its features, each option's line with its stations and structures, and the plan's coordinates along its sides.

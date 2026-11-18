@@ -25,7 +25,6 @@ C8_ARGS := --100 --all --src lib/ --src test/
 
 
 # Include javascript-build
-JSDOC_ARGS := -c jsdoc.json -r README.md lib/
 include Makefile.base
 
 
@@ -42,7 +41,7 @@ clean:
 
 
 help:
-	@echo "            [auto|evaluate|plan|run|update]"
+	@echo "            [auto|evaluate|plan|update]"
 	@echo ""
 	@echo "  make plan FILE=<site.json> OUTPUT=<plan.json>  Engineer road plan options for a road site (Claude Code)"
 	@echo "  make auto FILE=<site.json> OUTPUT=<plan.json>  Plan a road by procedure - the tools, and an Ollama model's answers"
@@ -52,7 +51,6 @@ help:
 	@echo "     OLLAMA=1 to launch Claude Code with an Ollama model - MODEL then names the Ollama model,"
 	@echo "     and GROK=1 to launch the Grok CLI instead - MODEL then names the Grok model)"
 	@echo "  make evaluate FILE=<plan.json> [DETAIL=1]  Print a road plan model's analysis and cost"
-	@echo "  make run [FILE=<plan.json>]                View a road plan model in the browser (the Roadie viewer)"
 
 
 # The planning tools' tests need the viewer's packages
@@ -65,8 +63,7 @@ $(VIEWER_BUILD):
 # Engineer road plan options for a road site - launches Claude Code (or Grok) with the planning instructions
 # (PLAN.md). FILE is the road site model (a JSON file), and OUTPUT is the road plan model to write (another JSON
 # file); intermediate work files go in the output's ".work/" directory (e.g., "<plan>.work/").
-PLAN_OUTPUT = $(OUTPUT)
-PLAN_WORK = $(basename $(PLAN_OUTPUT)).work
+PLAN_WORK = $(basename $(OUTPUT)).work
 
 # Check a plan's files - FILE is a road site model's file, and OUTPUT is another file. The argument is the usage.
 PLAN_FILES = (test -n "$(FILE)" -a -n "$(OUTPUT)" || (echo 'usage: $(1)' && exit 1)) && \
@@ -111,7 +108,7 @@ plan: build/npm.build
 		--effort "$(EFFORT)" \
 		$(call AGENT_NAME,Roadie: $(notdir $(FILE))) \
 		"Engineer cost-optimal road plan options for the road site \"$(FILE)\" by following the instructions in \
-PLAN.md exactly. Write the road plan model to \"$(PLAN_OUTPUT)\" and put intermediate work files in \
+PLAN.md exactly. Write the road plan model to \"$(OUTPUT)\" and put intermediate work files in \
 \"$(PLAN_WORK)/\". $(AGENT_PROMPT)"
 
 
@@ -124,7 +121,7 @@ PLAN.md exactly. Write the road plan model to \"$(PLAN_OUTPUT)\" and put interme
 .PHONY: auto
 auto: build/npm.build
 	@$(call PLAN_FILES,make auto FILE=<site.json> OUTPUT=<plan.json> [OLLAMA_MODEL=<model>] [ARGS=<arguments>])
-	$(PLAN_TOOL) auto "$(FILE)" "$(PLAN_OUTPUT)"$(if $(OLLAMA_MODEL), --model "$(OLLAMA_MODEL)") $(ARGS)
+	$(PLAN_TOOL) auto "$(FILE)" "$(OUTPUT)"$(if $(OLLAMA_MODEL), --model "$(OLLAMA_MODEL)") $(ARGS)
 
 
 # Update an existing road plan model with review feedback (Claude Code or Grok) - the session asks for the feedback
@@ -142,7 +139,8 @@ update: build/npm.build
 		$(call AGENT_NAME,Roadie update: $(notdir $(FILE))) \
 		"Update the road plan model \"$(FILE)\" with review feedback by following the \"Updating a plan\" \
 instructions in PLAN.md exactly. Intermediate work files (including any from the original planning \
-session) are in \"$(UPDATE_WORK)/\". $(AGENT_PROMPT) Ask me for the review feedback first."
+session) are in \"$(UPDATE_WORK)/\", and the plan's road site model is \"$(UPDATE_WORK)/site.json\" (the \"site\" \
+command writes it from the plan, if it isn't there). $(AGENT_PROMPT) Ask me for the review feedback first."
 
 
 # Print a road plan model's analysis and cost (DETAIL=1 adds the station table)
@@ -150,9 +148,3 @@ session) are in \"$(UPDATE_WORK)/\". $(AGENT_PROMPT) Ask me for the review feedb
 evaluate: $(VIEWER_BUILD)
 	@test -n "$(FILE)" || (echo 'usage: make evaluate FILE=<plan.json> [DETAIL=1]' && exit 1)
 	@$(ROADIE) evaluate "$(FILE)"$(if $(DETAIL), --detail)
-
-
-# View a road plan model in the browser (the Roadie viewer)
-.PHONY: run
-run:
-	@$(MAKE) --no-print-directory -C $(VIEWER) run$(if $(FILE), FILE="$(abspath $(FILE))")

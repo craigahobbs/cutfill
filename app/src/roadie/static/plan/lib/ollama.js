@@ -1,8 +1,8 @@
 // ollama.js - ask a model a question through Ollama's chat API (a local model's, or one of Ollama's cloud models')
 
 
-// The default Ollama host
-const defaultHost = 'http://127.0.0.1:11434';
+// The default Ollama host - this computer's
+export const ollamaHostDefault = 'http://127.0.0.1:11434';
 
 
 // The most tokens of a question's answer. A question's answer is a small JSON object, so a model that runs on is
@@ -15,7 +15,7 @@ const answerTokens = 2000;
 export function ollamaHost(env) {
     const host = (env.OLLAMA_HOST ?? '').trim();
     if (host === '') {
-        return defaultHost;
+        return ollamaHostDefault;
     }
     return (host.includes('://') ? host : `http://${host}`).replace(/\/+$/, '');
 }

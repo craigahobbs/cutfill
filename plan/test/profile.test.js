@@ -32,6 +32,18 @@ test('designProfile, the Python planning tools\' profiles', () => {
 });
 
 
+test('designProfile, the cross sections that are kept', () => {
+    // A design keeps its stations' cross sections, to cost them once for every balance price - a design that's too
+    // large to keep them computes them each time, and its profile is the same
+    for (const name of Object.keys(alignments)) {
+        const {topo, design, x, y, stations, existing} = alignmentFixture(...alignments[name]);
+        const kept = designProfile(topo, design, x, y, stations, existing);
+        const computed = designProfile(topo, design, x, y, stations, existing, 0);
+        assert.deepEqual(plain(computed), plain(kept), name);
+    }
+});
+
+
 test('designProfile, the grade limit', () => {
     // A road straight up a 30% plane is held to the design grade (11%) - it starts at the ground, and cuts to climb
     const {alignment, designed} = profileFixture('profile-grade');

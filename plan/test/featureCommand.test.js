@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {cliMain} from '../lib/cli.js';
 import {fixturePlan} from '../../viewer/test/fixture.js';
-import {planText} from '../lib/planFile.js';
+import {planText} from '../../viewer/lib/model.js';
 import test from 'node:test';
 import {testIo} from './terrainHelpers.js';
 

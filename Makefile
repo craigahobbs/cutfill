@@ -37,7 +37,9 @@ help:
 commit test lint:
 	$(call SUBMAKE,viewer,$@)
 	$(call SUBMAKE,plan,$@)
-	$(call SUBMAKE,app,$@)
+	$(if $(TEST),,$(call SUBMAKE,app,$@))
+	@if [ -n "$$(git status --porcelain app/src/roadie/static 2>/dev/null)" ]; then \
+		echo 'note: the application front end (app/src/roadie/static/) changed - commit it with its sources'; fi
 
 
 # Run the Roadie application, in the browser
