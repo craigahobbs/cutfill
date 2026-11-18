@@ -190,6 +190,52 @@ body.roadie-drop {
 }
 
 
+/* The road page's controls, and its road site form */
+button.roadie-button {
+    font: inherit;
+    font-weight: bold;
+    color: inherit;
+}
+button.roadie-button:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+.roadie-form fieldset, .roadie-form details {
+    margin: 1em 0;
+    padding: 0.2em 1em;
+    border: 1px solid var(--roadie-color-border);
+    border-radius: 4px;
+}
+.roadie-form summary {
+    cursor: pointer;
+    padding: 0.4em 0;
+}
+.roadie-form input, .roadie-form select, .roadie-form textarea, #roadie-road-name, #roadie-plan-model {
+    font: inherit;
+    max-width: 100%;
+    box-sizing: border-box;
+    padding: 0.2em 0.4em;
+}
+.roadie-form input:not([inputmode]) {
+    width: 40em;
+}
+.roadie-form textarea {
+    display: block;
+    width: 100%;
+    margin-top: 0.4em;
+}
+#roadie-plan-log:empty {
+    display: none;
+}
+.roadie-form-name {
+    font-weight: bold;
+}
+.roadie-form-doc {
+    font-size: 0.85em;
+    opacity: 0.75;
+}
+
+
 /* The 3D explorer's canvas and report link */
 .roadie-explorer {
     position: relative;

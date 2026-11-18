@@ -19,9 +19,9 @@ update an existing plan with review feedback, follow [Updating a plan](#updating
 
 **Inputs and outputs** (named in your initial prompt):
 
-- The road site model (`<plan>.site.json`, "SITE.json" below) - the road's start and end points
+- The road site model (a JSON file, "SITE.json" below) - the road's start and end points
   (their latitudes and longitudes, labels, and descriptions) and its planning instructions (`notes`)
-- The road plan model to write (`<plan>.json`, "PLAN.json" below)
+- The road plan model to write (another JSON file - `<plan>.json`, "PLAN.json" below)
 - The work directory for intermediate files (`<plan>.work/`, "WORK" below)
 
 **Tools** (`plan.js` is the planning tools' command in your initial prompt - run it exactly as it's
@@ -282,7 +282,7 @@ before making any changes.
 
 1. **Read the current plan.** Run `evaluate PLAN.json` to record every option's length, maximum
    grade, earthwork, warnings, and cost score, and plot it (`plot`). Read the road site model
-   (`<plan>.site.json`, beside the plan), and in the work directory, `descriptions.md` (the plan's
+   (if your initial prompt names it), and in the work directory, `descriptions.md` (the plan's
    descriptions) and `commands.txt` (the commands that made the plan, in order).
 2. **Save a copy** of the plan JSON in the work directory before changing it, named with today's date
    (`<plan>.<YYYY-MM-DD>.json`), so the update can be compared against or reverted.

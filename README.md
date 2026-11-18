@@ -3,29 +3,31 @@
 Roadie engineers low-volume roads (driveways, rural access roads, and forest roads) on USGS lidar
 terrain, and views the resulting road grading plans in 3D.
 
-- **`make plan FILE=<plan>.site.json [OUTPUT=<plan.json>]`** launches a Claude Code session with detailed
-  road engineering instructions ([PLAN.md](#url=plan/PLAN.md)). The road site model (`FILE`) has the road's
-  start and end points - their latitudes and longitudes - and its planning notes. Claude builds the
-  site from the USGS 3D Elevation Program's 1 meter lidar terrain, engineers one or more cost-optimal
-  road plan options from the start point to the end point, and writes the road plan model (`OUTPUT`,
-  default `<plan>.json`).
-- **`make update FILE=<plan.json>`** launches a Claude Code session that
+- **`make plan FILE=<site.json> OUTPUT=<plan.json>`** launches a Claude Code session with detailed
+  road engineering instructions ([PLAN.md](#url=plan/PLAN.md)). The road site model (`FILE`, a JSON file)
+  has the road's start and end points - their latitudes and longitudes - and its planning notes.
+  Claude builds the site from the USGS 3D Elevation Program's 1 meter lidar terrain, engineers one or
+  more cost-optimal road plan options from the start point to the end point, and writes the road plan
+  model (`OUTPUT`, another JSON file).
+- **`make update FILE=<plan.json> [SITE=<site.json>]`** launches a Claude Code session that
   updates an existing road plan model with review feedback (from the city or county, a surveyor, or
   the owner, for example).
-- **`make auto FILE=<plan>.site.json [OUTPUT=<plan.json>] [OLLAMA_MODEL=<model>]`** plans a road by
+- **`make auto FILE=<site.json> OUTPUT=<plan.json> [OLLAMA_MODEL=<model>]`** plans a road by
   procedure - no Claude Code session. The planning tools do every step, and an
   [Ollama](https://ollama.com) model (a local model, or one of Ollama's cloud models) is asked only
   what the site's notes ask for.
 - **`make run FILE=<plan.json>`** opens the road plan model in the Roadie viewer, a JavaScript web
   application.
-- **`make app [DIR=<directory>]`** serves the Roadie application - the viewer, with a directory's
-  roads: its road site models and road plan models.
+- **`make app FILE=<site.json> OUTPUT=<plan.json>`** serves the Roadie application - a road, in the
+  browser. Its page edits the road site model (`FILE` - a new road's is made when it's saved), plans
+  the road from it - the planning tools run in the page, and an Ollama model answers what its notes
+  ask - writes the road plan model (`OUTPUT`), and views it.
 
 ![The Roadie viewer](example/screenshot.png)
 
 Roadie has three parts: the **viewer** ([viewer/](viewer/)) and the **planning tools and
 instructions** (`plan/`) - both JavaScript - and the **application** (`app/`), a Python package whose
-command line serves the viewer and a directory's roads. It requires `make` and Node.js 22 or later -
+command line serves the viewer and a road's files. It requires `make` and Node.js 22 or later -
 Python 3.11 or later for the application - and [Claude Code](https://claude.com/claude-code) to plan
 and update roads (see [Installing](#installing)).
 A site must be in the United States, where the USGS has 1 meter lidar terrain.
@@ -159,13 +161,13 @@ make run FILE=example/example.json
    mkdir driveway
    ```
 
-2. Create the road site model in it - a text file, `driveway/driveway.site.json`, with the road's start and
-   end points (see [Planning a road](#planning-a-road) for its contents). Name it `<name>.site.json`.
-3. Plan the road, from the `roadie` folder:
+2. Create the road site model in it - a JSON text file, `driveway/site.json`, with the road's start and
+   end points (see [Planning a road](#planning-a-road) for its contents).
+3. Plan the road, from the `roadie` folder - `OUTPUT` is the road plan model to write:
 
    ```
    cd roadie
-   make plan FILE=../driveway/driveway.site.json
+   make plan FILE=../driveway/site.json OUTPUT=../driveway/driveway.json
    ```
 
    Claude Code asks you to log in the first time it runs. Log in with your Claude subscription (the
@@ -306,7 +308,7 @@ start and end points (`margin`), and its topography grid's spacing (`spacing`). 
 `node plan/bin/plan.js doc` for the road site model's documentation.
 
 ```
-make plan FILE=driveway.site.json
+make plan FILE=site.json OUTPUT=driveway.json
 ```
 
 The planning tools do the engineering - they build the site, find, design, and cost the roads, and
@@ -354,7 +356,7 @@ decide, and the command to run - so that a smaller model can follow them. It use
 To plan a road by procedure, without a session:
 
 ```
-make auto FILE=driveway.site.json OLLAMA_MODEL=qwen3.8:27b-mlx
+make auto FILE=site.json OUTPUT=driveway.json OLLAMA_MODEL=qwen3.8:27b-mlx
 ```
 
 The planning tools do every step of the plan, in order: they create the site, engineer its standard
@@ -381,12 +383,12 @@ plan's descriptions say what the model found, to be verified.
 Without `OLLAMA_MODEL`, the site's notes aren't read - the plan is the tools' alone. `ARGS` are the
 `auto` command's other arguments (`ARGS="--width 16 --surface asphalt"`, say).
 
-The session writes `driveway.json` (and the site's topographic map image, `driveway.png`), with
-intermediate files in `driveway.work/`. Use `OUTPUT` to write the model elsewhere - for example, to
-compare planning runs without overwriting earlier ones:
+The session writes the road plan model, `driveway.json` (and the site's topographic map image,
+`driveway.png`), with intermediate files in `driveway.work/`. Name another `OUTPUT` to compare
+planning runs without overwriting earlier ones:
 
 ```
-make plan FILE=driveway.site.json OUTPUT=driveway-run2.json
+make plan FILE=site.json OUTPUT=driveway-run2.json
 ```
 
 The intermediate files go next to the output (here, `driveway-run2.work/`).
@@ -396,7 +398,7 @@ The session uses the Opus model at high effort by default. Use `MODEL` and `EFFO
 `max`), for both `make plan` and `make update`:
 
 ```
-make plan FILE=driveway.site.json MODEL=sonnet EFFORT=max
+make plan FILE=site.json OUTPUT=driveway.json MODEL=sonnet EFFORT=max
 ```
 
 Use `OLLAMA=1` to run the session on a local or cloud [Ollama](https://ollama.com) model instead
@@ -404,7 +406,7 @@ Use `OLLAMA=1` to run the session on a local or cloud [Ollama](https://ollama.co
 it, Ollama picks the model (prompting if needed):
 
 ```
-make plan FILE=driveway.site.json OLLAMA=1 MODEL=qwen3.8:27b-mlx
+make plan FILE=site.json OUTPUT=driveway.json OLLAMA=1 MODEL=qwen3.8:27b-mlx
 ```
 
 The session runs in Claude Code's "accept edits" mode, with the planning tools allowed. Leave it in that
@@ -415,7 +417,7 @@ Use `GROK=1` to run the session with the [Grok CLI](https://docs.x.ai/build/over
 `MODEL` then names the Grok model; without it, Grok uses its default model:
 
 ```
-make plan FILE=driveway.site.json GROK=1 MODEL=grok-4.6
+make plan FILE=site.json OUTPUT=driveway.json GROK=1 MODEL=grok-4.6
 ```
 
 
@@ -425,7 +427,7 @@ Plans often change after review - the city or county may require a 10% fire code
 line setback, or a larger culvert, and the owner may move the house site. To update a plan, run:
 
 ```
-make update FILE=driveway.json
+make update FILE=driveway.json SITE=site.json
 ```
 
 The session asks for the feedback - paste it in, or give the path of a file that contains it. It
@@ -454,11 +456,11 @@ The model is defined with [Schema Markdown](https://craigahobbs.github.io/schema
 
 The [example](example/example.json) is an access road up a hill at the south edge of Kennewick,
 Washington - not quite half a mile of road, to climb 200 feet. It was planned from its road site model,
-[example.site.json](example/example.site.json): the road's start and end points, as latitudes and
-longitudes, and its planning notes.
+[site.json](example/site.json): the road's start and end points, as latitudes and longitudes, and its
+planning notes.
 
 ```
-make plan FILE=example/example.site.json
+make plan FILE=example/site.json OUTPUT=example/example.json
 ```
 
 The site's terrain is the USGS's 1 meter lidar elevations, and its features are the USGS's roads -
@@ -493,7 +495,7 @@ targets:
 | --- | --- |
 | [viewer/](viewer/) | The Roadie viewer - the web application, the road plan model (its schema, validation, earthwork, and cost analysis), and the command line behind `make evaluate` and `make doc`. JavaScript, built with [javascript-build](https://github.com/craigahobbs/javascript-build#readme) - see its [README](#url=viewer/README.md). |
 | `plan/` | The planning tools (`bin/plan.js`) - the road site model, the site's USGS lidar terrain and features, plotting, and road engineering - and the road planning instructions for Claude Code ([PLAN.md](#url=plan/PLAN.md)). JavaScript, built with [javascript-build](https://github.com/craigahobbs/javascript-build#readme). |
-| `app/` | The Roadie application - a Python package (`roadie`), built with [python-build](https://github.com/craigahobbs/python-build#readme). Its command line, `roadie [DIRECTORY]`, serves the front end (the viewer's application, staged in the package) and a [chisel](https://github.com/craigahobbs/chisel#readme) back end that lists a directory's roads and reads and writes its files - to this computer only. |
+| `app/` | The Roadie application - a Python package (`roadie`), built with [python-build](https://github.com/craigahobbs/python-build#readme). Its command line, `roadie SITE PLAN`, serves the front end (the viewer's application and the planning tools, staged in the package) and a [chisel](https://github.com/craigahobbs/chisel#readme) back end that reads and writes a road's files - its road site model and its road plan model - to this computer only. A road's plan is made in the browser (`plan/lib/browser/`). |
 | `example/` | The example - its road site model, and its plan |
 
 `CLAUDE.md` is the repository guide for Claude Code.
