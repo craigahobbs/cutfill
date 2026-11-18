@@ -1,8 +1,7 @@
-import {planPlot, plotCommand, plotFonts} from '../lib/plot.js';
+import {planMapBase64, planPlot} from '../lib/plot.js';
 import {planTopo, validatePlan} from '../../viewer/lib/model.js';
 import {Buffer} from 'node:buffer';
 import assert from 'node:assert/strict';
-import {cliMain} from '../lib/cli.js';
 import {fixturePlan} from '../../viewer/test/fixture.js';
 import {inflateSync} from 'node:zlib';
 import test from 'node:test';
@@ -305,50 +304,10 @@ test('planPlot, a box beyond the plan', () => {
 });
 
 
-test('plot', async () => {
-    const plan = fixturePlan();
-    const io = testIo({'files': {'road.json': JSON.stringify(plan)}});
-    const svgs = [];
-    io.renderPng = (svg) => {
-        svgs.push(svg);
-        return Uint8Array.from([137, 80, 78, 71]);
-    };
-    assert.equal(await cliMain(['plot', 'road.json', 'work/plot.png'], io), 0);
-    assert.equal(io.output.join(''), 'Wrote work/plot.png (1400 x 1058 pixels)\n');
-    assert.deepEqual([io.written, [...io.files['work/plot.png']]], [['work/plot.png'], [137, 80, 78, 71]]);
-    assert.equal(svgs.length, 1);
-    assert.equal(svgs[0], planPlot(validatePlan(plan).plan, planTopo(plan)).svg);
-    assert.ok(svgs[0].includes('>0: Direct</text>'));
-
-    // A site's plan - it has no options yet
-    io.files['site.json'] = JSON.stringify({...plan, 'options': []});
-    assert.deepEqual(plotCommand(['site.json', 'site.png'], io), {'code': 0, 'lines': ['Wrote site.png (1400 x 1058 pixels)']});
-    assert.ok(!svgs[1].includes('>0: '));
-    assert.equal(countOf(svgs[1], '<circle'), 2);
-
-    // A box of the plan
-    assert.deepEqual(plotCommand(['--box', '100,50,300,150', 'road.json', 'box.png'], io), {
-        'code': 0,
-        'lines': ['Wrote box.png (1400 x 728 pixels)']
-    });
-    assert.equal(svgs[2], planPlot(validatePlan(plan).plan, planTopo(plan), 1400, [100, 50, 300, 150]).svg);
-    assert.equal(svgs.length, 3);
-});
-
-
-test('plot, the topographic map', async () => {
-    // The plan's topographic map image (beside the plan) is plotted in place of its terrain, with the coordinates' grid
+test('planPlot, the topographic map', () => {
+    // The plan's topographic map image is plotted in place of its terrain, with the coordinates' grid
     const plan = {...fixturePlan(), 'image': 'road.png'};
-    const io = testIo({'files': {'plans/road.json': JSON.stringify(plan), 'plans/road.png': Uint8Array.from([137, 80, 78, 71])}});
-    const svgs = [];
-    io.renderPng = (svg) => {
-        svgs.push(svg);
-        return Uint8Array.from([1]);
-    };
-    assert.equal(await cliMain(['plot', 'plans/road.json', 'map.png', '--map'], io), 0);
-    assert.equal(io.output.join(''), 'Wrote map.png (1400 x 1058 pixels)\n');
-    const [svg] = svgs;
-    assert.equal(svg, planPlot(validatePlan(plan).plan, planTopo(plan), 1400, null, 'iVBORw==').svg);
+    const {svg} = planPlot(validatePlan(plan).plan, planTopo(plan), 1400, null, 'iVBORw==');
     assert.ok(svg.includes(
         '<image x="64" y="34" width="1320" height="990" preserveAspectRatio="none" href="data:image/png;base64,iVBORw=="/>'
     ));
@@ -367,102 +326,19 @@ test('plot, the topographic map', async () => {
     assert.ok(!planPlot(validatePlan(plan).plan, planTopo(plan)).svg.includes('stroke-dasharray="6 4"'));
 
     // A box of the map - the image is all of the map, and the plot's margins cover the rest of it
-    assert.deepEqual(plotCommand(['plans/road.json', 'box.png', '--map', '--box', '100,50,300,150'], io), {
-        'code': 0, 'lines': ['Wrote box.png (1400 x 728 pixels)']
-    });
-    assert.ok(svgs[1].includes('<image x="-596" y="-956" width="2640" height="1980" preserveAspectRatio="none" href="data:image/png;'));
-
-    // A plan without a topographic map image, and one whose image is missing
-    const error = {'code': 1, 'lines': ['error: The plan "road.json" has no topographic map image']};
-    const noImage = testIo({'files': {'road.json': JSON.stringify(fixturePlan()), 'other.json': JSON.stringify(plan)}});
-    assert.deepEqual(plotCommand(['road.json', 'map.png', '--map'], noImage), error);
-    assert.deepEqual(plotCommand(['other.json', 'map.png', '--map'], noImage).lines, [
-        'error: The plan "other.json" has no topographic map image'
-    ]);
-    assert.deepEqual(noImage.written, []);
-
-    // A plan whose image is a data URL - the image itself
-    const dataPlan = {...fixturePlan(), 'image': 'data:image/png;base64,iVBORw=='};
-    const dataIo = testIo({'files': {'road.json': JSON.stringify(dataPlan)}});
-    dataIo.renderPng = (dataSvg) => {
-        svgs.push(dataSvg);
-        return Uint8Array.from([1]);
-    };
-    assert.deepEqual(plotCommand(['road.json', 'map.png', '--map'], dataIo), {'code': 0, 'lines': ['Wrote map.png (1400 x 1058 pixels)']});
-    assert.equal(svgs.at(-1), planPlot(validatePlan(dataPlan).plan, planTopo(dataPlan), 1400, null, 'iVBORw==').svg);
+    const box = planPlot(validatePlan(plan).plan, planTopo(plan), 1400, [100, 50, 300, 150], 'iVBORw==');
+    assert.deepEqual([box.width, box.height], [1400, 728]);
+    assert.ok(box.svg.includes('<image x="-596" y="-956" width="2640" height="1980" preserveAspectRatio="none" href="data:image/png;'));
 });
 
 
-test('plot, a box that is not a part of the plan', () => {
-    const io = testIo({'files': {'road.json': JSON.stringify(fixturePlan())}});
-    for (const box of ['300,50,100,150', '100,150,300,50', '100,50,100,150', '400,0,500,100', '0,300,100,400']) {
-        assert.deepEqual(plotCommand(['road.json', 'box.png', '--box', box], io), {
-            'code': 1,
-            'lines': [`error: The box "${box}" is not a part of the plan's topography (400 x 300 feet)`]
-        });
-    }
-    assert.deepEqual(io.written, []);
-});
+test('planMapBase64', () => {
+    // A plan's topographic map image is a file beside the plan, or a data URL - the image itself
+    const io = testIo({'files': {'plans/road.png': Uint8Array.from([137, 80, 78, 71])}});
+    assert.equal(planMapBase64(io, 'plans/road.json', {'image': 'road.png'}), 'iVBORw==');
+    assert.equal(planMapBase64(io, 'plans/road.json', {'image': 'data:image/png;base64,iVBORw=='}), 'iVBORw==');
 
-
-test('plot, a plan that cannot be loaded or is invalid', async () => {
-    const io = testIo({
-        'files': {'text.json': 'Not JSON', 'null.json': 'null', 'invalid.json': JSON.stringify({...fixturePlan(), 'units': 'yards'})}
-    });
-    io.renderPng = () => assert.fail();
-    for (const [file, output] of [
-        ['missing.json', 'error: Could not load the road plan "missing.json"\n'],
-        ['text.json', 'error: Could not load the road plan "text.json"\n'],
-        ['null.json', 'error: The road plan "null.json" is invalid:\n\nInvalid value null (type "object"), expected type "RoadPlan"\n'],
-        ['invalid.json', 'error: The road plan "invalid.json" is invalid:\n\n' +
-            'Invalid value "yards" (type "string") for member "units", expected type "Units"\n']
-    ]) {
-        io.output.length = 0;
-        assert.deepEqual([await cliMain(['plot', file, 'plot.png'], io), io.output.join(''), io.written], [1, output, []]);
-    }
-});
-
-
-test('plot, usage', async () => {
-    const usage = `\
-usage: plan plot <plan.json> <plot.png> [--box X1,Y1,X2,Y2] [--map]
-
-  Plot a road plan model - its terrain (shaded, with contours), features, and options, with the plan's
-  coordinates along its sides
-
-options:
-  --box X1,Y1,X2,Y2    plot a part of the plan - the box from (X1, Y1) to (X2, Y2), in the plan's coordinates -
-                       for a closer look, with the contour interval of its elevations
-  --map                plot the plan's topographic map image in place of its terrain, with the coordinates' grid
-                       - to find the places on the map (its buildings and labels) in the plan's coordinates
-`;
-    const invalid = [
-        [], ['road.json'], ['road.json', 'plot.png', 'extra'], ['--width', 'plot.png'], ['road.json', 'plot.png', '--box'],
-        ['road.json', 'plot.png', '--box', '1,2,3'], ['road.json', 'plot.png', '--box', '1,2,3,x'],
-        ['--box', '-1,2,3,4', 'road.json', 'plot.png']
-    ];
-    for (const args of invalid) {
-        const io = testIo();
-        assert.deepEqual([await cliMain(['plot', ...args], io), io.output.join('')], [1, usage]);
-    }
-});
-
-
-test('plotFonts', () => {
-    // Where the computer has the plot's font files, only they are loaded
-    const mac = ['/System/Library/Fonts/Supplemental/Arial.ttf', '/System/Library/Fonts/Supplemental/Arial Bold.ttf'];
-    assert.deepEqual(plotFonts('darwin', {}, () => true), {'loadSystemFonts': false, 'fontFiles': mac});
-    assert.deepEqual(
-        plotFonts('win32', {'SystemRoot': 'D:\\Win'}, () => true),
-        {'loadSystemFonts': false, 'fontFiles': ['D:\\Win\\Fonts\\arial.ttf', 'D:\\Win\\Fonts\\arialbd.ttf']}
-    );
-    assert.deepEqual(
-        plotFonts('win32', {}, () => true).fontFiles,
-        ['C:\\Windows\\Fonts\\arial.ttf', 'C:\\Windows\\Fonts\\arialbd.ttf']
-    );
-
-    // Without one of them - or on another platform - the computer's fonts are loaded
-    assert.deepEqual(plotFonts('darwin', {}, (file) => file !== mac[1]), {'loadSystemFonts': true});
-    assert.deepEqual(plotFonts('linux', {}, () => true), {'loadSystemFonts': true});
-    assert.deepEqual(plotFonts('toString', {}, () => true), {'loadSystemFonts': true});
+    // A plan without an image, and one whose image is missing
+    assert.equal(planMapBase64(io, 'plans/road.json', {}), null);
+    assert.equal(planMapBase64(io, 'road.json', {'image': 'road.png'}), null);
 });

@@ -158,7 +158,7 @@ export async function planRoad(window, {site, plan = null}, options = {}) {
     };
     let result;
     try {
-        const args = ['--no-plots', ...(model !== null ? ['--model', model] : []), ...(fetch ? ['--fetch'] : [])];
+        const args = [...(model !== null ? ['--model', model] : []), ...(fetch ? ['--fetch'] : [])];
         result = await autoCommand([sitePath, planPath, ...args], io);
     } catch ({message}) {
         result = {'code': 1, 'lines': [`error: ${message}`]};

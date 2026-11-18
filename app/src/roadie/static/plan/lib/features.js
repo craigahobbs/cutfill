@@ -169,6 +169,23 @@ export function exclusionNames(site) {
 }
 
 
+// Get a site's roads' features' names - a road without a name is named for its place in the site's roads
+export function siteRoadNames(site) {
+    return (site.roads ?? []).map((road, ixRoad) => road.name ?? `Road ${ixRoad + 1}`);
+}
+
+
+// Create a site's road features - the existing roads that the USGS doesn't map. The roads are clipped to the layout's
+// grid, and a road outside it isn't a feature.
+export function siteRoadFeatures(layout, site) {
+    const names = siteRoadNames(site);
+    const lines = (site.roads ?? []).map(({points}, ixRoad) => (
+        {'name': names[ixRoad], 'points': points.map(({latitude, longitude}) => [longitude, latitude])}
+    ));
+    return lineFeatures(layout, 'road', lines).map((feature) => ({...feature, 'added': true}));
+}
+
+
 // Create a site's exclusion area features. The areas are clipped to the layout's grid, and an area outside it isn't
 // a feature.
 export function exclusionFeatures(layout, site) {
@@ -181,7 +198,8 @@ export function exclusionFeatures(layout, site) {
             features.push({
                 'type': 'exclusion',
                 'name': names[ixArea],
-                'points': polygon.map(([x, y]) => ({'x': round(x, 1) + 0, 'y': round(y, 1) + 0}))
+                'points': polygon.map(([x, y]) => ({'x': round(x, 1) + 0, 'y': round(y, 1) + 0})),
+                'added': true
             });
         }
     }

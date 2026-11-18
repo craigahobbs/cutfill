@@ -1,34 +1,26 @@
 # Roadie's top-level makefile - it delegates to the project's subprojects:
 #
 #   viewer/  The Roadie viewer - a JavaScript web application (javascript-build)
-#   plan/    The planning tools and instructions - JavaScript (javascript-build)
+#   plan/    The planning tools - JavaScript (javascript-build)
 #   app/     The Roadie application - a Python package that serves the viewer and the planning tools (python-build)
 
 .DEFAULT_GOAL := help
 
 
-# Delegate a target to a subproject - FILE and OUTPUT are relative to this directory. Other variables given on the
-# command line (TEST, DETAIL, MODEL, EFFORT, ...) are passed along by make.
-SUBMAKE = @$(MAKE) --no-print-directory -C $(1) $(2)$(if $(FILE), FILE="$(abspath $(FILE))")$(if $(OUTPUT), OUTPUT="$(abspath $(OUTPUT))")
+# Delegate a target to a subproject - other variables given on the command line (TEST, ...) are passed along by make
+SUBMAKE = @$(MAKE) --no-print-directory -C $(1) $(2)
 
 
 .PHONY: help
 help:
-	@echo "usage: make [auto|clean|commit|doc|evaluate|gh-pages|lint|plan|run|site|superclean|test|update]"
+	@echo "usage: make [clean|commit|gh-pages|lint|run|site|superclean|test]"
 	@echo ""
-	@echo "  make run                                   Run the Roadie application, in the browser - open, make, run, and save plans"
-	@echo "  make plan FILE=<site.json> OUTPUT=<plan.json>  Engineer road plan options for a road site (Claude Code)"
-	@echo "  make auto FILE=<site.json> OUTPUT=<plan.json>  Plan a road by procedure - the tools, and an Ollama model's answers"
-	@echo "    (auto accepts OLLAMA_MODEL=<model> - without it, the site's notes aren't read)"
-	@echo "  make update FILE=<plan.json>               Update a road plan model with review feedback (Claude Code)"
-	@echo "    (plan and update accept MODEL=<model> [default: opus] and EFFORT=<effort> [default: high],"
-	@echo "     OLLAMA=1 to launch Claude Code with an Ollama model - MODEL then names the Ollama model,"
-	@echo "     and GROK=1 to launch the Grok CLI instead - MODEL then names the Grok model)"
-	@echo "  make evaluate FILE=<plan.json> [DETAIL=1]  Print a road plan model's analysis and cost"
-	@echo "  make doc                                   Print the road plan model documentation"
-	@echo "  make commit                                Run the viewer's, the planning tools', and the application's tests and lint"
-	@echo "  make site                                  Stage the project's web site (build/gh-pages/)"
-	@echo "  make gh-pages                              Update the project's gh-pages branch checkout (../roadie.gh-pages)"
+	@echo "  make run          Run the Roadie application, in the browser - open, make, run, and save plans"
+	@echo "  make commit       Run the viewer's, the planning tools', and the application's tests and lint"
+	@echo "  make test         Run the tests (TEST=<name> runs the viewer's and the planning tools' tests of a name)"
+	@echo "  make lint         Lint the viewer, the planning tools, and the application"
+	@echo "  make site         Stage the project's web site (build/gh-pages/)"
+	@echo "  make gh-pages     Update the project's gh-pages branch checkout (../roadie.gh-pages)"
 
 
 # The pre-commit gate, and its parts - the viewer's (tests, lint, documentation, and 100% coverage), the planning
@@ -48,43 +40,20 @@ run:
 	@$(MAKE) --no-print-directory -C app run
 
 
-# Engineer road plan options for a road site (a road site model - the road's start and end points and its planning
-# notes), and update an existing road plan model with review feedback (Claude Code or Grok) - see plan/Makefile and
-# plan/PLAN.md. "auto" plans a road by procedure: the planning tools do every step, and an Ollama model (OLLAMA_MODEL)
-# is asked only what the site's notes ask for.
-.PHONY: plan update auto
-plan update auto:
-	$(call SUBMAKE,plan,$@)
-
-
-# Print a road plan model's analysis and cost (DETAIL=1 adds the station table)
-.PHONY: evaluate
-evaluate:
-	$(call SUBMAKE,plan,$@)
-
-
-# Print the road plan model documentation
-.PHONY: doc
-doc:
-	@$(MAKE) -s --no-print-directory -C viewer build/npm.build
-	@node viewer/bin/roadie.js doc
-
-
-# Stage the project's web site - the documentation at its root (index.html renders README.md), the planning
-# instructions, the example plan, and the viewer application (and its README) in viewer/. The site's READMEs link to
-# the other Markdown documents as rendered Markdown ("#url=plan/PLAN.md&<header ID>"), not to the Markdown files. The
-# site's viewer has the example plan's URL (its page element's "data-example" attribute), so its home page links to it.
+# Stage the project's web site - the documentation at its root (index.html renders README.md), the example plan, and
+# the viewer application (and its README) in viewer/. The site's READMEs link to the other Markdown documents as
+# rendered Markdown ("#url=viewer/README.md&<header ID>"), not to the Markdown files. The site's viewer has the example
+# plan's URL (its page element's "data-example" attribute), so its home page links to it.
 SITE_LINKS := sed -E 's/\]\(([^):\#]*\.md)\#([^)]*)\)/](\#url=\1\&\2)/g; s/\]\(([^):\#]*\.md)\)/](\#url=\1)/g'
 
 .PHONY: site
 site:
 	$(call SUBMAKE,viewer,app)
 	rm -rf build/gh-pages/
-	mkdir -p build/gh-pages/example/ build/gh-pages/plan/
+	mkdir -p build/gh-pages/example/
 	cp index.html build/gh-pages/
 	$(SITE_LINKS) README.md > build/gh-pages/README.md
 	cp example/site.json example/example.json example/example.png example/screenshot.png build/gh-pages/example/
-	cp plan/PLAN.md build/gh-pages/plan/
 	cp -R viewer/build/app build/gh-pages/viewer
 	sed 's|<div id="roadie">|<div id="roadie" data-example="../example/example.json">|' viewer/build/app/index.html \
 		> build/gh-pages/viewer/index.html

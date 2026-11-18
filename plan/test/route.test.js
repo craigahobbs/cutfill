@@ -1,8 +1,7 @@
-import {
-    alignmentPolyline, followRoads, polylineStations, resamplePolyline, routeLattice, routeSearch, smoothCurves, turnRadius,
-    viaTurnBacks
-} from '../lib/route.js';
 import {blockedPlan, designArgs, expected, hillPlan, plain, planePlan, roadPlan} from './roadFixtures.js';
+import {
+    followRoads, polylineStations, resamplePolyline, routeLattice, routeSearch, smoothCurves, turnRadius, viaTurnBacks
+} from '../lib/route.js';
 import assert from 'node:assert/strict';
 import {createDesign} from '../lib/design.js';
 import {lineIndex} from '../lib/roads.js';
@@ -77,42 +76,6 @@ test('smoothCurves', () => {
     assert.deepEqual(plain(resampled), {...expected['smooth-none'], 'ranges': []});
     const polyline = resamplePolyline([0, 50, 60], [0, 0, 30], 10);
     assert.deepEqual(plain(resampled), plain({'x': polyline.x, 'y': polyline.y, 'ranges': []}));
-});
-
-
-test('alignmentPolyline', () => {
-    const line = (xs) => xs.map((x) => ({x, 'y': 0}));
-    const xs = (alignment) => plain(alignment.x);
-
-    // Points at the interval are an alignment - they're kept, with evenly-spaced stations
-    const even = alignmentPolyline(line([0, 5, 10, 15, 20, 25]), 5);
-    assert.deepEqual(plain(even), {'x': [0, 5, 10, 15, 20, 25], 'y': [0, 0, 0, 0, 0, 0], 'stations': [0, 5, 10, 15, 20, 25]});
-
-    // So are points a little closer than the interval (as many as the interval makes of their length), and points that
-    // are nearly even
-    assert.deepEqual(xs(alignmentPolyline(line([0, 4.9, 9.8, 14.7, 19.6]), 5)), [0, 4.9, 9.8, 14.7, 19.6]);
-    assert.deepEqual(xs(alignmentPolyline(line([0, 5.05, 10, 14.95, 20]), 5)), [0, 5.05, 10, 14.95, 20]);
-    assert.deepEqual(plain(alignmentPolyline(line([0, 5.05, 10, 14.95, 20]), 5).stations), [0, 5, 10, 15, 20]);
-
-    // Other points are resampled at the interval - too few or too many points, or uneven points
-    assert.deepEqual(xs(alignmentPolyline(line([0, 20]), 5)), [0, 5, 10, 15, 20]);
-    assert.deepEqual(xs(alignmentPolyline(line([0, 10, 20]), 5)), [0, 5, 10, 15, 20]);
-    assert.deepEqual(xs(alignmentPolyline(line([0, 2.5, 5, 7.5, 10, 12.5, 15, 17.5, 20]), 5)), [0, 5, 10, 15, 20]);
-    assert.deepEqual(xs(alignmentPolyline(line([0, 4, 10, 16, 20]), 5)), [0, 5, 10, 15, 20]);
-    assert.deepEqual(xs(alignmentPolyline(line([0, 5.5, 10, 15, 20]), 5)), [0, 5, 10, 15, 20]);
-
-    // An existing road's corner - the points either side of it are closer than the interval, along the road's line
-    const corner = [
-        ...[0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95].map((x) => ({x, 'y': 0})),
-        {'x': 98, 'y': 2}, {'x': 98, 'y': 7}, {'x': 98, 'y': 12}, {'x': 98, 'y': 17}
-    ];
-    assert.equal(alignmentPolyline(corner, 5, [[60, 200]]).x.length, 24);
-    assert.deepEqual(plain(alignmentPolyline(corner, 5, [[60, 200]]).x.slice(-5)), [95, 98, 98, 98, 98]);
-
-    // It's only an existing road's points that may be closer - a new road's are resampled
-    assert.deepEqual(plain(alignmentPolyline(corner, 5).x.slice(-3)).map(Math.round), [98, 98, 98]);
-    assert.notDeepEqual(plain(alignmentPolyline(corner, 5).x), plain(alignmentPolyline(corner, 5, [[60, 200]]).x));
-    assert.notDeepEqual(plain(alignmentPolyline(corner, 5, [[0, 90]]).x), plain(alignmentPolyline(corner, 5, [[60, 200]]).x));
 });
 
 

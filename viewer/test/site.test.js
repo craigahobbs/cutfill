@@ -117,11 +117,15 @@ test('validateSite, invalid sites', () => {
 test('roadieTypes, the road site model', () => {
     // The road site model, and the road plan model's types it shares
     assert.deepEqual(
-        ['RoadSite', 'SitePoint', 'SiteArea', 'LatLong', 'Units', 'DesignCriteria', 'CostRates'].filter((name) => !(name in roadieTypes)),
+        ['RoadSite', 'SitePoint', 'SiteArea', 'SiteLine', 'SitePlace', 'SiteFound', 'LatLong', 'Units', 'DesignCriteria', 'CostRates'].
+            filter((name) => !(name in roadieTypes)),
         []
     );
     assert.deepEqual(
         roadieTypes.RoadSite.struct.members.map((member) => `${member.name}${member.optional ? '?' : ''}`),
-        ['title', 'units', 'start', 'end', 'notes?', 'exclusions?', 'criteria?', 'costRates?', 'margin?', 'spacing?']
+        [
+            'title', 'units', 'start', 'end', 'notes?', 'exclusions?', 'roads?', 'passThrough?', 'criteria?', 'costRates?', 'margin?',
+            'spacing?'
+        ]
     );
 });

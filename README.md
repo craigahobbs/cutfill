@@ -3,40 +3,19 @@
 Roadie engineers low-volume roads (driveways, rural access roads, and forest roads) on USGS lidar
 terrain, and views the resulting road grading plans in 3D.
 
-- **`roadie`** (or **`make run`**, in a clone of the repository) runs the Roadie application, in your
-  web browser. Open a plan, or make a new one -
-  its config is the road's start and end points (their latitudes and longitudes) and its planning
-  notes. Run the plan to engineer its road options - the planning tools build the site from the USGS
-  3D Elevation Program's 1 meter lidar terrain and engineer the roads, and an
-  [Ollama](https://ollama.com) model answers what its notes ask - then view them, edit the config and
-  run it again, and save the plan to a file. See [The Roadie application](#the-roadie-application).
-- **`make plan FILE=<site.json> OUTPUT=<plan.json>`** launches a Claude Code session with detailed
-  road engineering instructions ([PLAN.md](plan/PLAN.md)). The road site model (`FILE`, a JSON file)
-  has the road's start and end points - their latitudes and longitudes - and its planning notes.
-  Claude builds the site from the USGS 3D Elevation Program's 1 meter lidar terrain, engineers one or
-  more cost-optimal road plan options from the start point to the end point, and writes the road plan
-  model (`OUTPUT`, another JSON file).
-- **`make update FILE=<plan.json>`** launches a Claude Code session that
-  updates an existing road plan model with review feedback (from the city or county, a surveyor, or
-  the owner, for example).
-- **`make auto FILE=<site.json> OUTPUT=<plan.json> [OLLAMA_MODEL=<model>]`** plans a road by
-  procedure from the command line - what the application's "Run" does. The planning tools do every
-  step, and an Ollama model (a local model, or one of Ollama's cloud models) is asked only what the
-  site's notes ask for.
+The Roadie application runs in your web browser. Make a plan - the road's start and end points (their
+latitudes and longitudes) and its planning notes - and run it: Roadie builds the site from the USGS 3D
+Elevation Program's 1 meter lidar terrain, engineers the road's options from the start point to the
+end point, and costs them, and an [Ollama](https://ollama.com) model reads what the notes ask for.
+Then view the options' report and 3D views, edit the plan and run it again, and save it to a file.
 
 ![The Roadie viewer](example/screenshot.png)
 
-Roadie has three parts: the **viewer** ([viewer/](viewer/)) and the **planning tools and
-instructions** (`plan/`) - both JavaScript - and the **application** (`app/`), a Python package whose
-command line serves the viewer, with the planning tools. The application needs only Python 3.11 or
-later. The command line planning sessions need a clone of the repository, `make`, Node.js 22 or
-later, and [Claude Code](https://claude.com/claude-code) (see [Installing](#installing)).
-A site must be in the United States, where the USGS has 1 meter lidar terrain.
+The application needs only Python 3.11 or later. A site must be in the United States, where the USGS
+has 1 meter lidar terrain.
 
 
 ## Installing
-
-### The Roadie application
 
 The application is a Python package - it needs [Python](https://www.python.org/downloads/) 3.11 or
 later, and `git`. Install it in a virtual environment, from the repository's main branch:
@@ -52,159 +31,23 @@ On Windows, the virtual environment's commands are `roadie-venv\Scripts\pip` and
 in your web browser (Ctrl-C stops it - `roadie -h` lists its options). To update it, run the same
 `pip install` with `--force-reinstall`.
 
+To have a model read your plans' notes, install [Ollama](https://ollama.com) and pull a model that
+reads images. Without a model, a plan's notes aren't read.
+
 The application runs offline - its page and its planning tools are the package's - except for the
 USGS's site data, which a plan's first run (or a run after its site's points, units, margin, or
 spacing change) fetches, and Ollama, on this computer (an Ollama cloud model uses the internet).
 
 
-### Planning sessions and development
+## Your first road
 
-The command line planning sessions (`make plan`, `make update`, and `make auto`), and Roadie's
-development, run from a clone of its repository, on macOS, Linux, and Windows. They need:
-
-- `make`, `git`, and `curl` (or `wget`)
-- [Node.js](https://nodejs.org/en/download) 22 or later
-- [Python](https://www.python.org/downloads/) 3.11 or later, for the application (`make run`)
-- [Claude Code](https://code.claude.com/docs/en/setup), to plan and update roads - viewing a plan
-  doesn't need it
-
-The first `make` command downloads the build's files and npm packages, so it takes a minute.
-
-
-#### macOS
-
-1. Install the Xcode Command Line Tools - they have `make` and `git`:
-
-   ```
-   xcode-select --install
-   ```
-
-2. Install [Node.js](https://nodejs.org/en/download) - its installer, or `brew install node` with
-   [Homebrew](https://brew.sh).
-3. Install Claude Code:
-
-   ```
-   curl -fsSL https://claude.ai/install.sh | bash
-   ```
-
-4. Clone Roadie:
-
-   ```
-   git clone https://github.com/craigahobbs/roadie.git
-   ```
-
-
-#### Linux
-
-1. Install `make`, `git`, and `curl` with your distribution's package manager - for example,
-   `sudo apt install make git curl` (Debian and Ubuntu) or `sudo dnf install make git curl` (Fedora).
-2. Install [Node.js](https://nodejs.org/en/download) 22 or later. A distribution's own Node.js package
-   may be older - check it with `node --version`.
-3. Install Claude Code:
-
-   ```
-   curl -fsSL https://claude.ai/install.sh | bash
-   ```
-
-4. Clone Roadie:
-
-   ```
-   git clone https://github.com/craigahobbs/roadie.git
-   ```
-
-`make run` opens the application in your web browser - if it can't (on a server, or in the Windows
-Subsystem for Linux), open the URL that `make run` prints.
-
-
-#### Windows
-
-Roadie's `make` commands need a Unix shell. On Windows, that's [MSYS2](https://www.msys2.org/) - run
-every Roadie command in its terminal.
-
-1. Install [MSYS2](https://www.msys2.org/), in its default folder (`C:\msys64`).
-2. Install [Node.js](https://nodejs.org/en/download) with its Windows installer.
-3. Install Claude Code - in PowerShell:
-
-   ```
-   irm https://claude.ai/install.ps1 | iex
-   ```
-
-   If the installer's setup notes say that its folder isn't in your `PATH`, add it as they describe.
-4. Let the MSYS2 terminal find Windows programs (`node` and `claude`) - MSYS2 hides them unless this
-   Windows environment variable is set. In PowerShell:
-
-   ```
-   setx MSYS2_PATH_TYPE inherit
-   ```
-
-5. Open a new "MSYS2 UCRT64" terminal from the Start menu, and install `make` and `git` - MSYS2 doesn't
-   come with them:
-
-   ```
-   pacman -S --needed make git
-   ```
-
-6. Have Claude Code run its commands with the MSYS2 shell, where `make` is - add its setting to the
-   terminal's startup file, and open a new terminal:
-
-   ```
-   echo "export CLAUDE_CODE_GIT_BASH_PATH='C:\msys64\usr\bin\bash.exe'" >> ~/.bashrc
-   ```
-
-7. Clone Roadie:
-
-   ```
-   git clone https://github.com/craigahobbs/roadie.git
-   ```
-
-The MSYS2 terminal starts in its own home folder, `C:\msys64\home\<your name>`. Your Windows folders
-are under `/c/` there - `cd /c/Users/<your name>/Documents`, for example.
-
-
-#### Checking the installation
-
-In a new terminal, each of these prints a version:
-
-```
-make --version
-node --version
-claude --version
-```
-
-Then run Roadie - it opens in your web browser (Ctrl-C stops it):
-
-```
-cd roadie
-make run
-```
-
-Open the example plan, `example/example.json`, with "Open Plan", and view it with "View Plan".
-
-
-### Your first road
-
-1. Make a folder for the road's files, beside the `roadie` folder - not in it:
-
-   ```
-   mkdir driveway
-   ```
-
-2. Create the road site model in it - a JSON text file, `driveway/site.json`, with the road's start and
-   end points (see [Planning a road](#planning-a-road) for its contents).
-3. Plan the road, from the `roadie` folder - `OUTPUT` is the road plan model to write:
-
-   ```
-   cd roadie
-   make plan FILE=../driveway/site.json OUTPUT=../driveway/driveway.json
-   ```
-
-   Claude Code asks you to log in the first time it runs. Log in with your Claude subscription (the
-   free plan doesn't include Claude Code) - not with API billing, which charges for each token the
-   planning session uses. The session takes a while, and writes the road plan model,
-   `driveway/driveway.json`.
-4. View the plan when the session finishes - `make run`, and open `driveway/driveway.json`.
-
-Or skip the session: `make run`, make a new plan with the road's start and end points, and run it.
+1. Run `roadie`, and choose **New Plan**.
+2. Give the plan a title, and its start and end points - copy each point's latitude and longitude from
+   a map (Google Maps, say), and paste them into its latitude. Write the road's notes: what it's for,
+   and what it must avoid or pass through (see [The plan's notes](#the-plans-notes)).
+3. **Run Plan**, with an Ollama model to read the notes. The first run fetches the site's data from
+   the USGS, so it takes a few minutes.
+4. **View Plan** for its road options' report, and **Save** the plan to a file.
 
 
 ## The Roadie application
@@ -217,31 +60,143 @@ browser (`Ctrl-C` stops it). Its home page:
   page lists the recent files (remove one with its ✕).
 - **New Plan** - a form for the plan's config: its title, units, start and end points, notes, design
   criteria, cost rates, and its site's margin and grid spacing. An empty member is its default - its
-  box shows it. To set a point, copy its latitude and longitude from a map (Google Maps, say) and
-  paste them into its latitude.
+  box shows it.
 
 A plan is its config and, once it's run, its **road options**. The opened or new plan is the
-**loaded plan** - the home page shows its config (its points, the distance between them, its notes
-and criteria), and what can be done with it:
+**loaded plan** - the home page shows its config (its points, the distance between them, its notes,
+criteria, and marks), and what can be done with it:
 
 - **View Plan** - its road options' report (each option's length, maximum grade, earthwork, walls,
   warnings, and cost score, its plan and profile, and its 3D views), and the 3D explorer.
 - **Edit Plan** - its config: the notes, say. If the plan has road options, they're from the config
   before - run the plan to engineer them again.
+- **Edit Map** - draw its config's marks on its site's map (once it's run): the areas the road must
+  avoid (a property line's setback, an easement), the existing roads that the USGS doesn't map (a
+  track - the shaded relief shows one's worn trough), and the places the road must pass through.
+  The map's backdrop is the site's contours, its topographic map, or its shaded relief, with its
+  streams, roads, and road options. Scroll to zoom, and drag to move. Draw an area's corners or a
+  road's points with clicks (double-click or Enter finishes, Backspace removes the last point), or
+  click a place. Select a mark to rename or delete it, or drag its points. A mark that a run found
+  for the notes is dashed - edit it to correct it (it's yours then). Run the plan again to engineer
+  its road options with the marks - its site's data is kept, so the USGS isn't asked for it again.
 - **Run Plan** - choose an Ollama model to read its notes (or none - the last model chosen is the
-  default). The planning tools run in the page: the run's steps are shown as it goes, with its time,
-  and its result and report when it's done. **Stop** stops it, when its current step's work is done -
-  and its work is thrown away. The road options it engineers are the plan's - a plan that's run
-  again keeps the features that were added to it, and its site's data (its terrain, streams, roads, and
-  map), so the USGS isn't asked for it again - unless its points, units, margin, or spacing changed,
-  or "Fetch the site's data from the USGS again" is checked. **Clear Road Options** clears them - the
-  plan keeps its site's data.
+  default). The run's steps are shown as it goes, with its time, and its result and report when it's
+  done. **Stop** stops it, when its current step's work is done - and its work is thrown away. The
+  road options it engineers are the plan's, and so are the places it found for the notes (see
+  [Planning a road](#planning-a-road)). A plan that's run again keeps its site's data (its terrain,
+  streams, roads, and map), so the USGS isn't asked for it again - unless its points, units, margin,
+  or spacing changed, or "Fetch the site's data from the USGS again" is checked. **Clear Road
+  Options** clears them - the plan keeps its site's data.
 - **Save** the plan to its file - the file it was opened from, or saved to - or **Save As** another,
   to duplicate it (and run it with another config, say). A plan with road options keeps its config
   and its map image, so it's one file - and a plan without road options is its config's file.
 - **Close** it - if it has changes that aren't saved, you're asked first.
 
 Ollama answers the application's page when it runs on this computer (`http://127.0.0.1:11434`).
+
+
+## Planning a road
+
+A plan's config - its **road site model** - is a JSON file:
+
+```json
+{
+    "title": "Hillside Driveway",
+    "units": "feet",
+    "start": {
+        "latitude": 44.0000, "longitude": -115.0000,
+        "label": "County Rd",
+        "description": "At the gate on the county road"
+    },
+    "end": {
+        "latitude": 44.0030, "longitude": -114.9960,
+        "label": "House site",
+        "description": "The bench above the creek"
+    },
+    "notes": [
+        "A single-lane gravel driveway with fire apparatus access.",
+        "Stay off the creek's east bank."
+    ]
+}
+```
+
+The points' latitudes and longitudes are decimal degrees, as a phone or a map application gives them
+(the United States' longitudes are negative). A config may also have design criteria (`criteria`),
+cost rates (`costRates`), the distance its site extends beyond the start and end points (`margin`),
+its terrain grid's spacing (`spacing`), and its **marks** - the areas the road must avoid
+(`exclusions`, polygons of latitudes and longitudes), the existing roads the USGS doesn't map (`roads`
+- a track, a driveway - that a road may follow), and the places a road must pass through
+(`passThrough`) - draw them with **Edit Map**. The model documentation (linked from the viewer's
+report) describes every member.
+
+A run of the plan:
+
+1. **Builds the site.** Its terrain is the USGS 3D Elevation Program's 1 meter elevation models -
+   lidar ground elevations - gridded in the plan's coordinates, a map projection centered on the
+   site. Its streams are the USGS National Hydrography Dataset's (moved to the bottoms of their
+   valleys), its roads and trails and its topographic map image are the USGS National Map's, and its
+   marks are the config's.
+2. **Reads the notes**, with a model - see [The plan's notes](#the-plans-notes).
+3. **Engineers the road options:**
+   - **Existing Roads** - the least-cost road, following the site's existing roads where upgrading
+     them costs less than a new road (if it follows any)
+   - **New Road** - the least-cost all-new road
+   - **Another corridor** - the least-cost road around the middle of those two, through the middle of
+     that way (named for its side - "West Corridor"), if it's a real choice: within the grade limit,
+     apart from them, and at most three times the least-cost option's cost score. Otherwise the
+     plan's description says why there isn't one.
+   - **Via PLACE** - a road through each place the road must pass through
+
+   A road is found by a least-cost lattice search (with radius-constrained turns, and grade, side
+   slope, stream crossing, rock, and exclusion costs), its vertical profile is designed by dynamic
+   programming (the least earthwork within the grade limits, flatter on switchbacks), and its
+   culverts, retaining walls, bridges, and turnouts are placed. Each road is searched with three
+   weights of the penalty for ground steeper than the design grade, and it's the one with the lowest
+   cost score. The terrain's unmapped draws that a road crosses are added as streams, with culverts,
+   and the roads are engineered again. If the Existing Roads or New Road option runs to the site's
+   edge, or there's no road within the grade limit, the site's margin is enlarged by half, and the
+   plan is made again - at most twice.
+4. **Keeps the best options** - at most four, in cost score order (another corridor is the first
+   that isn't kept) - and writes their descriptions: the plan's facts, what the notes asked for, and
+   what the run did with them.
+
+
+### The plan's notes
+
+The notes are the road's purpose, constraints, and preferences, in your words. A model (an Ollama
+model) is asked what they ask for:
+
+- the road's **width** and **surface**, a **maximum grade** and **minimum radius**, and the depth of
+  a stream crossing's fill that a **bridge** replaces (the config's own criteria win)
+- the **existing roads to rule out** - a private or closed road, say - which the options don't follow
+- the **places to avoid**, and the **places to pass through**
+
+A place's coordinates may be in the notes ("the easement's corners are 44.0011, -114.9981; ..."):
+three or more corners are an area to avoid, and one point is a place to pass through. Otherwise the
+model finds the place on the site's topographic map. Each place it finds is one of the config's marks,
+with how it was found - so a plan that's run again doesn't look for it again. Correct a found mark by
+editing it on the map (it's yours then), and a mark that was found for a place the notes don't name
+any more is removed. A place the model can't find - an easement, a property line - draw on the map. A model's reading of a map is the weakest part of a plan - the plan's description says what
+the model found, to be verified. A note the run can't act on is reported, and it's in the plan's
+limitations.
+
+The model's questions are small - a paragraph, and a map image - with a JSON answer that's checked:
+the model doesn't run the plan. Without a model, the notes aren't read, and the plan is the tools'
+alone.
+
+Typical criteria for the notes (from the USFS *Low-Volume Roads Engineering Best Management Practices
+Field Guide*, AASHTO low-volume road guidance, and fire codes):
+
+| | Driveway / fire access | Rural access road | Forest / ranch road |
+| --- | --- | --- | --- |
+| Width | 12-14 ft / 3.7-4.3 m | 14-20 ft / 4.3-6 m | 12-14 ft / 3.7-4.3 m |
+| Surface | gravel (asphalt above about 12-15% grade) | gravel or asphalt | gravel or native |
+| Maximum grade | 12% (10% where the fire code requires) | 12% | 15% (12% preferred) |
+| Minimum radius | 50 ft / 15 m | 50 ft / 15 m | 50 ft / 15 m (70 ft for trucks with trailers) |
+
+The defaults are a 14 foot (4.3 meter) gravel road, a 12% maximum grade (designed 1% under it, and 8%
+on switchbacks), a 50 foot (15 meter) minimum radius, and a 20 foot (6 meter) maximum wall height. A
+dead-end road also needs a turnaround at its end - it isn't modeled.
 
 
 ## The viewer
@@ -294,8 +249,8 @@ The report's "Explore" links open the full-window **3D explorer**, controlled wi
 
 ### Viewing a road plan
 
-The application views a road plan that's opened, or made by a run. The viewer is also a web site (see [Publishing](#publishing)) that views plans without installing
-anything:
+The application views a road plan that's opened, or made by a run. The viewer is also a web site (see
+[Publishing](#publishing)) that views plans without installing anything:
 
 - **Open a local plan** - on the viewer's home page, select or drop the plan's JSON file (and its
   source map image, to show it in the report). Local files stay on your computer - they're kept in
@@ -329,187 +284,43 @@ average bid prices and low-volume road references):
   surfacing, and ditches
 - **Mobilization** (10%)
 
-A plan can override any unit rate (`costRates`) for local prices. See [PLAN.md](plan/PLAN.md#reference-the-cost-score)
-for the default rates.
+A plan's config can override any unit rate (`costRates`, in dollars per metric unit) for local prices.
+The default rates:
 
+| Item | Default rate |
+| --- | --- |
+| Clearing and grubbing | $8,000 / acre of disturbed area |
+| Common excavation | $15 / CY |
+| Rock excavation | $75 / CY |
+| Embankment placement and compaction | $5 / CY |
+| Borrow (import) | $20 / CY |
+| Waste (export) | $8 / CY |
+| Overhaul (beyond 500 ft free haul) | about $3 / CY-mile |
+| Aggregate surfacing | about $16 / SY |
+| Asphalt paving (with base) | about $33 / SY |
+| Ditches and cross drains | about $14 / LF of road |
+| Culverts | about $120 / LF (18 in) to $250 / LF (36 in), plus $3,000 per end |
+| Retaining walls | about $60 / SF of face |
+| Bridges | about $250 / SF of deck |
+| Existing road upgrade (reshaping, gravel lift, ditch cleaning, minor widening) | about $11 / SY of road |
+| Erosion control and revegetation | $3,000 / acre of disturbed area |
+| Mobilization | 10% |
 
-## Planning a road
-
-A road is planned from a **road site model** - a JSON file with the road's start and end points and
-its planning notes:
-
-```json
-{
-    "title": "Hillside Driveway",
-    "units": "feet",
-    "start": {
-        "latitude": 44.0000, "longitude": -115.0000,
-        "label": "County Rd",
-        "description": "At the gate on the county road"
-    },
-    "end": {
-        "latitude": 44.0030, "longitude": -114.9960,
-        "label": "House site",
-        "description": "The bench above the creek"
-    },
-    "notes": [
-        "A single-lane gravel driveway with fire apparatus access.",
-        "Stay off the creek's east bank."
-    ]
-}
-```
-
-The points' latitudes and longitudes are decimal degrees, as a phone or a map application gives them
-(the United States' longitudes are negative). A point's `label` and `description`, and the `notes` -
-the road's purpose, constraints, and preferences - are the planning session's instructions. A site may
-also have exclusion areas (`exclusions` - polygons of latitudes and longitudes the road must avoid),
-design criteria (`criteria`), cost rates (`costRates`), the distance its topography extends beyond the
-start and end points (`margin`), and its topography grid's spacing (`spacing`). Run
-`node plan/bin/plan.js doc` for the road site model's documentation.
-
-```
-make plan FILE=site.json OUTPUT=driveway.json
-```
-
-The planning tools do the engineering - they build the site, find, design, and cost the roads, and
-draft their descriptions. The Claude Code session follows [PLAN.md](plan/PLAN.md) for what the tools
-can't do: it applies the site's notes, checks the site against its plots (and adds what the USGS's
-maps lack - a building to avoid, an unmapped road or draw), chooses any other corridors worth
-comparing, and explains the result. Its steps are a few defined actions - what to look at, what to
-decide, and the command to run - so that a smaller model can follow them. It uses these tools:
-
-- `plan/bin/plan.js` - the planning tools:
-  - `site` creates the plan's site from the road site model. Its topography is the USGS 3D Elevation
-    Program's 1 meter elevation models - lidar ground elevations: `site` finds the site's models,
-    reads only the site's part of each (it's cached in the work directory), and grids them in the
-    plan's coordinates, a map projection centered on the site. It adds the site's streams (the USGS
-    National Hydrography Dataset's), its roads and trails and its topographic map image (the USGS
-    National Map's), and its exclusion areas. A site the USGS has no 1 meter elevation models of
-    can't be planned. A plan's site can be created again - for a larger site, say: its options and
-    the features that were added to it are kept.
-  - `plot` plots the plan - its shaded terrain, contours, features, and options - for the session to
-    study (all of it, or a part of it for a closer look), `locate` converts latitudes and
-    longitudes to the plan's coordinates, `feature` adds and removes the plan's features, and `draws`
-    finds the unmapped draws of the terrain (the valleys that need a culvert where a road crosses
-    them) and adds them as streams.
-  - `options` engineers the plan's standard options - the least-cost road that follows the site's
-    existing roads ("Existing Roads"), and the least-cost all-new road ("New Road") - and puts the
-    plan's options in cost score order.
-  - `route` and `profile` engineer a road option. `route` finds the least-cost horizontal alignment
-    with a lattice search (radius-constrained turns, grade, side slope, stream crossing, rock, and
-    exclusion costs), designs the vertical profile by dynamic programming (minimum earthwork within
-    the grade limits, with flatter switchbacks), and places culverts, retaining walls, bridges, and
-    turnouts. The route follows the site's existing roads where upgrading them costs less than a new
-    road, and joins and leaves them where that's cheapest - so the least-cost option is the tools',
-    not the session's guess. The search is run with three weights of its penalty for ground steeper
-    than the design grade, and the road is the one with the lowest cost score. A road is within its grade limit: where no road on a corridor can be,
-    `route` reports an error and doesn't write an option. `route` notes a road that runs along the
-    site's edge (the site may be too small for it), a via point that the road turns back at, and the
-    unmapped draws that the road crosses.
-  - `evaluate` is the viewer's own analysis and cost score (`--detail` adds a station-by-station
-    table), so the planner optimizes the same cost the viewer shows. `keep` keeps the best options,
-    in cost score order, `draft` writes a draft of the plan's and its options' descriptions - their
-    facts, for the session to add to - and `describe` sets the descriptions.
-  - The commands that change a plan are logged, in order, in its work directory (`commands.txt`).
-- `make evaluate FILE=<plan.json> [DETAIL=1]` - the same analysis and cost score, from `make`
-
-To plan a road by procedure, without a session:
-
-```
-make auto FILE=site.json OUTPUT=driveway.json OLLAMA_MODEL=qwen3.8:27b-mlx
-```
-
-The planning tools do every step of the plan, in order: they create the site, engineer its standard
-options (and add the unmapped draws the options cross, as streams, with their culverts), keep the
-best options, set their descriptions - the plan's facts - and plot the plan (`driveway.work/plan.png`,
-and `map.png`, the plan on its topographic map). A model doesn't run the plan - it's asked the
-questions the tools can't answer, through [Ollama](https://ollama.com) (`OLLAMA_MODEL` is a local
-model, or one of Ollama's cloud models, and `OLLAMA_HOST` is Ollama's host):
-
-- **What the notes ask for** - the road's width and surface, a maximum grade, the existing roads to
-  rule out, and the places the road must avoid or pass through. A note the plan can't act on is
-  reported, and it's in the plan's limitations.
-- **Where each of those places is** - the model is shown the site's topographic map, with the plan's
-  coordinates' grid, and it answers with a rectangle (which it corrects on a closer look) or a point.
-  A place to avoid is an exclusion area, and a place to pass through is an option through it.
-
-Each question is small - a paragraph and an image - and its answer is a JSON object that the tools
-check: a model that drives a planning session carries every plot it has read, and a local model
-stalls on that. The answers are saved in the work directory (`decisions.json`), and they're used
-again: to correct an answer - a place's rectangle, say - change it there, and run the command again
-(`ARGS=--fresh` asks the model again). A model's reading of a map is the weakest part of a plan - the
-plan's descriptions say what the model found, to be verified.
-
-Without `OLLAMA_MODEL`, the site's notes aren't read - the plan is the tools' alone. `ARGS` are the
-`auto` command's other arguments (`ARGS="--width 16 --surface asphalt"`, say).
-
-The session writes the road plan model, `driveway.json` (and the site's topographic map image,
-`driveway.png`), with intermediate files in `driveway.work/`. Name another `OUTPUT` to compare
-planning runs without overwriting earlier ones:
-
-```
-make plan FILE=site.json OUTPUT=driveway-run2.json
-```
-
-The intermediate files go next to the output (here, `driveway-run2.work/`).
-
-The session uses the Opus model at high effort by default. Use `MODEL` and `EFFORT` to change them
-(any Claude Code `--model` alias or name, and `--effort` level - `low`, `medium`, `high`, `xhigh`, or
-`max`), for both `make plan` and `make update`:
-
-```
-make plan FILE=site.json OUTPUT=driveway.json MODEL=sonnet EFFORT=max
-```
-
-Use `OLLAMA=1` to run the session on a local or cloud [Ollama](https://ollama.com) model instead
-(it launches Claude Code with `ollama launch claude`). `MODEL` then names the Ollama model; without
-it, Ollama picks the model (prompting if needed):
-
-```
-make plan FILE=site.json OUTPUT=driveway.json OLLAMA=1 MODEL=qwen3.8:27b-mlx
-```
-
-The session runs in Claude Code's "accept edits" mode, with the planning tools allowed. Leave it in that
-mode with a local model: in auto mode, Claude Code asks the session's model to classify each command
-that isn't allowed, which is slow on a local model and can time out.
-
-Use `GROK=1` to run the session with the [Grok CLI](https://docs.x.ai/build/overview) (`grok`) instead of Claude Code.
-`MODEL` then names the Grok model; without it, Grok uses its default model:
-
-```
-make plan FILE=site.json OUTPUT=driveway.json GROK=1 MODEL=grok-4.6
-```
-
-
-## Updating a plan
-
-Plans often change after review - the city or county may require a 10% fire code grade, a property
-line setback, or a larger culvert, and the owner may move the house site. To update a plan, run:
-
-```
-make update FILE=driveway.json
-```
-
-The session asks for the feedback - paste it in, or give the path of a file that contains it. It
-follows [Updating a plan](plan/PLAN.md#updating-a-plan): it saves a dated copy of the plan in the work
-directory (`driveway.work/`), restates each feedback item and how it will address it, updates the
-criteria, site features, site, or options, re-engineers and re-evaluates the affected options, and
-adds a revision history to the plan's description. It finishes with a before-and-after comparison of
-the options.
+Shrinkage: 1 CY of common excavation makes 0.87 CY of compacted fill; rock swells to 1.1 CY.
 
 
 ## The road plan model
 
 A road plan model is a JSON file containing the site topography (an elevation grid with streams,
-roads, trails, rock outcrops, and exclusion areas, and its elevation data's sources), the plan's georeference
-(its place on the Earth), the start and end points, design criteria, cost rate overrides, and one or
-more road plan options. Each option has a road cross section, a centerline alignment (x, y,
-and grade elevation), and structures (retaining walls, bridges, culverts, turnouts, and the existing roads
-it follows).
+roads, trails, rock outcrops, and exclusion areas, and its elevation data's sources), the plan's
+georeference (its place on the Earth), the start and end points, design criteria, cost rate
+overrides, one or more road plan options, and the plan's config (its road site model). Each option
+has a road cross section, a centerline alignment (x, y, and grade elevation), and structures
+(retaining walls, bridges, culverts, turnouts, and the existing roads it follows).
 
 The model is defined with [Schema Markdown](https://craigahobbs.github.io/schema-markdown-js/language/)
-(in `viewer/lib/model.js`), and the viewer and `make evaluate` validate every plan against it. Run
-`make doc` for the model documentation (also linked from the viewer's report).
+(in `viewer/lib/model.js`), and the viewer validates every plan against it. The viewer's report links
+to the model documentation.
 
 
 ## The example
@@ -519,49 +330,62 @@ Washington - not quite half a mile of road, to climb 200 feet. It was planned fr
 [site.json](example/site.json): the road's start and end points, as latitudes and longitudes, and its
 planning notes.
 
-```
-make plan FILE=example/site.json OUTPUT=example/example.json
-```
-
 The site's terrain is the USGS's 1 meter lidar elevations, and its features are the USGS's roads -
-plus two draws, the house lots at the foot of the hill, and an unmapped dirt track to the hilltop, which
-the planning session added from the terrain and the topographic map. The plan has two options: the
-least-cost road, which follows the track to the hilltop, and an all-new road. The plan's image,
-[example.png](example/example.png), isn't an input - it's the USGS topographic map of the site, which
-the planning tools download for the report's source map.
+plus two draws, the house lots at the foot of the hill, and an unmapped dirt track to the hilltop,
+which were added from the terrain and the topographic map. The plan has two options: the least-cost
+road, which follows the track to the hilltop, and an all-new road. The plan's image,
+[example.png](example/example.png), is the USGS topographic map of the site, for the report's source
+map.
 
-Run the application (`make run`), and open `example/example.json` to view it. On the project's web site, [view the example](viewer/#url=../example/example.json) - the site's viewer
-links to it from its home page, too.
+Run the application, and open `example/example.json` to view it. On the project's web site,
+[view the example](viewer/#url=../example/example.json) - the site's viewer links to it from its home
+page, too.
 
 
 ## Development
 
+Roadie's development runs from a clone of its repository, on macOS, Linux, and Windows. It needs
+`make`, `git`, and `curl` (or `wget`), [Node.js](https://nodejs.org/en/download) 22 or later, and
+[Python](https://www.python.org/downloads/) 3.11 or later:
+
+- **macOS** - the Xcode Command Line Tools have `make` and `git` (`xcode-select --install`), and
+  Node.js has an installer (or `brew install node`, with [Homebrew](https://brew.sh)).
+- **Linux** - your distribution's package manager (`sudo apt install make git curl`, say), and
+  Node.js 22 or later - a distribution's own Node.js package may be older.
+- **Windows** - the `make` commands need a Unix shell: [MSYS2](https://www.msys2.org/) (run
+  `pacman -S --needed make git` in its "MSYS2 UCRT64" terminal), and Node.js's Windows installer. To
+  let the MSYS2 terminal find `node`, set the Windows environment variable `MSYS2_PATH_TYPE` to
+  `inherit` (`setx MSYS2_PATH_TYPE inherit`, in PowerShell).
+
 ```
+make run          # run the application from the repository, in the browser
 make commit       # the pre-commit gate: the viewer's, the planning tools', and the application's tests and lint
-make test         # run the viewer's, the planning tools', and the application's unit tests
+make test         # run the unit tests (TEST=name runs the viewer's and the planning tools' tests of a name)
 make lint         # run ESLint on the viewer and the planning tools, and pylint on the application
 make site         # stage the project's web site (build/gh-pages/)
 make clean        # remove the build directories
 ```
 
-The top-level makefile delegates to the project's subprojects - run `make` in one for its own
-targets:
+The first `make` command downloads the build's files and npm packages, so it takes a minute. The
+top-level makefile delegates to the project's subprojects - run `make` in one for its own targets:
 
 | Directory | Contents |
 | --- | --- |
-| [viewer/](viewer/) | The Roadie viewer - the web application, the road plan model (its schema, validation, earthwork, and cost analysis), and the command line behind `make evaluate` and `make doc`. JavaScript, built with [javascript-build](https://github.com/craigahobbs/javascript-build#readme) - see its [README](viewer/README.md). |
-| `plan/` | The planning tools (`bin/plan.js`) - the road site model, the site's USGS lidar terrain and features, plotting, and road engineering - and the road planning instructions for Claude Code ([PLAN.md](plan/PLAN.md)). JavaScript, built with [javascript-build](https://github.com/craigahobbs/javascript-build#readme). |
-| `app/` | The Roadie application - a Python package (`roadie`), built with [python-build](https://github.com/craigahobbs/python-build#readme). Its command line, `roadie`, serves the front end (the viewer's application and the planning tools, staged in the package) with a [chisel](https://github.com/craigahobbs/chisel#readme) back end - to this computer only. A plan is run in the browser (`plan/lib/browser/`). |
+| [viewer/](viewer/) | The Roadie viewer - the web application, the road plan model (its schema, validation, earthwork, and cost analysis), and a command line (`bin/roadie.js`) that prints a plan's analysis and the model documentation. JavaScript, built with [javascript-build](https://github.com/craigahobbs/javascript-build#readme) - see its [README](viewer/README.md). |
+| `plan/` | The planning tools - the site's USGS lidar terrain and features, road engineering, and a plan's run (`auto`) - which the application runs in the browser, and a command line for their development (`bin/plan.js`). JavaScript, built with [javascript-build](https://github.com/craigahobbs/javascript-build#readme). |
+| `app/` | The Roadie application - a Python package (`roadie`), built with [python-build](https://github.com/craigahobbs/python-build#readme). Its command line, `roadie`, serves the front end (the viewer's application and the planning tools, staged in the package) with a [chisel](https://github.com/craigahobbs/chisel#readme) back end - to this computer only. |
 | `example/` | The example - its road site model, and its plan |
 
-`CLAUDE.md` is the repository guide for Claude Code.
+The planning tools' command line - `node plan/bin/plan.js site`, `options`, `route`, and `auto` -
+checks the tools against the USGS's services, and compares their plans when they change. It doesn't
+ask a model. `CLAUDE.md` is the repository guide for Claude Code.
 
 
 ### Publishing
 
 `make site` stages the project's web site in `build/gh-pages/`: this README at its root (rendered by
-`index.html`, a [MarkdownUp](https://github.com/craigahobbs/markdown-up#readme) page), the planning
-instructions, the example plan, and the viewer in `viewer/`. `make gh-pages` runs the pre-commit gate, stages the site, and
+`index.html`, a [MarkdownUp](https://github.com/craigahobbs/markdown-up#readme) page), the example
+plan, and the viewer in `viewer/`. `make gh-pages` runs the pre-commit gate, stages the site, and
 updates a checkout of the repository's `gh-pages` branch in `../roadie.gh-pages` - commit and push it
 there to publish (GitHub Pages serves the branch).
 

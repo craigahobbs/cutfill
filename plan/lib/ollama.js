@@ -11,16 +11,6 @@ export const ollamaHostDefault = 'http://127.0.0.1:11434';
 const answerTokens = 2000;
 
 
-// Get the Ollama host's URL from the environment's "OLLAMA_HOST" (a host and port, or a URL)
-export function ollamaHost(env) {
-    const host = (env.OLLAMA_HOST ?? '').trim();
-    if (host === '') {
-        return ollamaHostDefault;
-    }
-    return (host.includes('://') ? host : `http://${host}`).replace(/\/+$/, '');
-}
-
-
 // Ask a model a question - "fetchFn" is the fetch function, "host" is the Ollama host's URL, and the question is its
 // "model", its "question" text, its "images" (PNG images' base64 text), and its answer's JSON "schema". The model
 // answers with a JSON object of the schema, which is returned. Ollama holds a local model's answer to the schema, but

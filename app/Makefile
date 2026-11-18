@@ -52,7 +52,7 @@ static:
 	mkdir -p $(STATIC)/plan
 	cp -R $(VIEWER)/build/app/. $(STATIC)/
 	cp -R $(PLAN)/lib $(STATIC)/plan/
-	rm $(STATIC)/plan/lib/cli.js $(STATIC)/plan/lib/locate.js
+	rm $(STATIC)/plan/lib/cli.js
 
 
 # Run the application

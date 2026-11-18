@@ -173,10 +173,12 @@ export function routeLattice(topo, design, slopeWeight, roads = null) {
 // A turning move is limited to the switchback grade, and a move that crosses a stream has a culvert (a turning move's
 // cost doesn't include it). "startHeading" is the heading at the start (the previous leg's final heading), or null.
 //
+// The lattice's "barrier", if it has one, is its nodes that the route doesn't go through (corridorBarrier).
+//
 // Returns the route's "path" (an array of [x, y] points), its points' "existing" flags (the move to the point is along
 // an existing road), the "lattice" spacing, and the final "heading" - or null if there's no route.
 export function routeSearch(routeNodes, design, start, end, gradeWeight, startHeading = null, softBand = 0.03, gradeMargin = 0) {
-    const {lattice, nX, nY, moveLengths, moveCosts, moveGrades, moveRoads, moveCulverts} = routeNodes;
+    const {lattice, nX, nY, moveLengths, moveCosts, moveGrades, moveRoads, moveCulverts, barrier = null} = routeNodes;
     const {costLength, costCulvert} = design;
     const moveCount = moves.length;
     const nodeCount = nX * nY;
@@ -252,7 +254,11 @@ export function routeSearch(routeNodes, design, start, end, gradeWeight, startHe
                 }
             }
             const [dx, dy] = moves[nextHeading];
-            const nextState = (node + dy * nX + dx) * headingCount + nextHeading;
+            const nextNode = node + dy * nX + dx;
+            if (barrier !== null && barrier[nextNode] === 1) {
+                continue;
+            }
+            const nextState = nextNode * headingCount + nextHeading;
             const nextCost = cost + moveCost;
             if (nextCost < best[nextState]) {
                 best[nextState] = nextCost;
@@ -283,6 +289,44 @@ export function routeSearch(routeNodes, design, start, end, gradeWeight, startHe
 
 // The distance from an existing road's line that the route search's nodes are on the road within, in lattice spacings
 const roadToleranceLattice = 0.75;
+
+
+// Create a route lattice's barrier (routeSearch) - its nodes within a distance ("halfWidth") of lines (each an object
+// of its points' "x" and "y" coordinate arrays), but for the nodes within that distance of the open points ([x, y]
+// arrays). Returns the barrier - a Uint8Array of the lattice's nodes, 1 for a node in the barrier.
+export function corridorBarrier(routeNodes, lines, halfWidth, openPoints) {
+    const {lattice, nX, nY} = routeNodes;
+    const barrier = new Uint8Array(nX * nY);
+    const nodesNear = (x1, y1, x2, y2, isNear) => {
+        const colEnd = Math.min(nX - 1, Math.floor((Math.max(x1, x2) + halfWidth) / lattice));
+        const rowEnd = Math.min(nY - 1, Math.floor((Math.max(y1, y2) + halfWidth) / lattice));
+        const nodes = [];
+        for (let row = Math.max(0, Math.ceil((Math.min(y1, y2) - halfWidth) / lattice)); row <= rowEnd; row++) {
+            for (let col = Math.max(0, Math.ceil((Math.min(x1, x2) - halfWidth) / lattice)); col <= colEnd; col++) {
+                if (isNear(col * lattice, row * lattice)) {
+                    nodes.push(row * nX + col);
+                }
+            }
+        }
+        return nodes;
+    };
+    for (const {x, y} of lines) {
+        for (let ix = 1; ix < x.length; ix++) {
+            const segment = {'x1': x[ix - 1], 'y1': y[ix - 1], 'x2': x[ix], 'y2': y[ix]};
+            for (const node of nodesNear(x[ix - 1], y[ix - 1], x[ix], y[ix], (nodeX, nodeY) => (
+                segmentNearest(segment, nodeX, nodeY)[0] <= halfWidth
+            ))) {
+                barrier[node] = 1;
+            }
+        }
+    }
+    for (const [x, y] of openPoints) {
+        for (const node of nodesNear(x, y, x, y, (nodeX, nodeY) => Math.hypot(nodeX - x, nodeY - y) <= halfWidth)) {
+            barrier[node] = 0;
+        }
+    }
+    return barrier;
+}
 
 
 // Follow the existing roads of a route search's path (an array of [x, y] points, and its points' "existing" flags) -
@@ -451,40 +495,6 @@ export function resamplePolyline(pointsX, pointsY, interval) {
         'y': stations.map((stationValue) => interp(stationValue, pointStations, pointsY)),
         stations
     };
-}
-
-
-// The tolerances of an alignment that's already at an interval (alignmentPolyline) - its points' spacing, and its
-// length (an alignment's length along its points is a little less than the length it was sampled along)
-const spacingTolerance = 0.02;
-const lengthTolerance = 0.002;
-
-
-// Get an option's alignment for its profile's design - its points' ({x, y} objects) "x" and "y" coordinate arrays and
-// their evenly-spaced "stations". The points are resampled at the interval - unless they're already an alignment at
-// the interval (one the tools made): as many points as the interval makes of their length, evenly spaced (but for
-// an existing road's corners, where they're closer). Such an alignment is kept as it is, so designing its profile
-// again doesn't move it - resampling it would cut its corners, a little shorter each time. "existingRoads" are the
-// alignment's existing roads ([station, end station] ranges).
-export function alignmentPolyline(points, interval, existingRoads = []) {
-    const pointsX = points.map((point) => point.x);
-    const pointsY = points.map((point) => point.y);
-    const pointStations = polylineStations(pointsX, pointsY);
-    const length = pointStations[pointStations.length - 1];
-    const count = points.length - 1;
-    const spacing = length / count;
-    const isExisting = (stationValue) => existingRoads.some(([start, end]) => stationValue >= start - 1e-6 && stationValue <= end + 1e-6);
-    let isAlignment = count >= Math.ceil(length / interval) && count <= Math.ceil(length * (1 + lengthTolerance) / interval);
-    for (let ix = 1; ix <= count && isAlignment; ix++) {
-        const distance = pointStations[ix] - pointStations[ix - 1];
-        isAlignment = distance <= spacing * (1 + spacingTolerance) && (
-            distance >= spacing * (1 - spacingTolerance) || (isExisting(pointStations[ix - 1]) && isExisting(pointStations[ix]))
-        );
-    }
-    if (isAlignment) {
-        return {'x': Float64Array.from(pointsX), 'y': Float64Array.from(pointsY), 'stations': linspace(length, points.length)};
-    }
-    return resamplePolyline(pointsX, pointsY, interval);
 }
 
 

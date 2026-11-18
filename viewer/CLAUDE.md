@@ -1,8 +1,8 @@
 # Roadie Viewer
 
 The Roadie road plan viewer - a JavaScript web application (ES modules in `lib/`, served as is - no bundler) built with
-[javascript-build](https://github.com/craigahobbs/javascript-build#readme). It also holds the road plan model and the
-command line behind the project's `make evaluate` and `make doc`. See [README.md](README.md).
+[javascript-build](https://github.com/craigahobbs/javascript-build#readme). It also holds the road plan model and a
+command line (a plan's analysis, and the model documentation). See [README.md](README.md).
 
 ## Commands
 
@@ -21,9 +21,9 @@ make run FILE=<plan.json>    # view a plan in the browser
   (`roadieTypes`), plans are validated with the `schema-markdown` package (`validatePlan` - the application validates
   every plan it loads), and the documentation page and `bin/roadie.js doc` are generated from the type model
   (`schemaDoc.js`). Don't hand-write schema parsing, validation, or documentation.
-- `bin/roadie.js` (`lib/cli.js`) is the command line behind the project's `make evaluate` and `make doc` - the planning
-  instructions depend on its output, so keep it stable (`test/expected/` has its expected output for the example
-  plan). `lib/cli.js` isn't part of the web application.
+- `bin/roadie.js` (`lib/cli.js`) is the viewer's command line - a plan's analysis and cost (`evaluate`), and the model
+  documentation (`doc`). The viewer's performance work compares its output against a baseline, so keep it stable
+  (`test/expected/` has its expected output for the example plan). `lib/cli.js` isn't part of the web application.
 - New code needs tests (`test/*.test.js`) that assert behavior - exact output, not just coverage. The application's
   tests run in jsdom with the fakes in `test/appHelpers.js`. Coverage ignores and large HTML/SVG snapshots aren't
   used - assert on specific elements and counts, and keep `test/expected/` files small.
@@ -41,7 +41,9 @@ make run FILE=<plan.json>    # view a plan in the browser
   plan (`RoadieApp.loaded` - its config, and its road options): it runs the plan with the planning tools, which it
   imports (`importPlan` - the project's web site doesn't have them), clears its road options, and saves it to a file
   or closes it. The plan config's form is made from the road site model's types (`form.js`), so don't hand-write a
-  member's control. The report and the 3D explorer are `viewPages.js`'s. The home page links to an example plan if the
+  member's control. The loaded plan's map (`mapPage.js`, `#var.vMap=true`) draws its config's marks - in latitudes
+  and longitudes (`geo.js`'s `planPoint` and `planLatLong`), and a mark that's edited isn't found (its `found` member
+  is dropped). The report and the 3D explorer are `viewPages.js`'s. The home page links to an example plan if the
   page's `roadie` element has a `data-example` attribute (the plan's URL) - the project's web site adds it (the
   top-level makefile's `site`).
 - ESLint's `id-length` rule allows the coordinate names `x`, `y`, and `z` (`ESLINT_ARGS` in the makefile) - other names

@@ -41,11 +41,13 @@ The plan config's form (`#var.vEdit='new'`, or `'loaded'` for the loaded plan's)
 Schema Markdown types, so it has the model's members and their documentation, and a config is done only if the model
 validates it. An optional member's default is its box's placeholder - the design criteria's (in the config's units)
 and the cost rates' are the model's, and the site's margin and grid spacing are the planning tools' (`siteDefaults`).
-The members the form doesn't edit - the exclusion areas - are kept as they are. A point that's copied from a map
-("46.16755, -119.16811") is pasted into its latitude.
+The members the form doesn't edit - the marks: the exclusion areas, roads, and places to pass through - are kept as
+they are (the map page edits them). A point that's copied from a map ("46.16755, -119.16811") is pasted into its
+latitude.
 
 The home page shows the loaded plan - its config - and its actions: view it (its road options' report), edit its
-config, run it (its steps - the planning tools' `autoSteps` - and its time are shown as it goes, and its result and
+config, draw its config's marks on its site's map (`#var.vMap=true` - its contours, topographic map, or shaded relief,
+once it's run), run it (its steps - the planning tools' `autoSteps` - and its time are shown as it goes, and its result and
 report when it's done; it's stopped with an abort signal, when its current step's work is done, and its work is
 thrown away; the last model chosen is remembered; a plan's site's data is kept, unless the site changed or it's
 fetched again), clear its road options (its site's data is kept), save it (to its file, or another - the browser's
@@ -55,6 +57,8 @@ opened, or removed (but for the loaded plan's road options' file).
 
 The engineering isn't the back end's: a plan is run in the browser, by the planning tools' `auto` command
 (`../plan/lib/browser/io.js`) - with one of Ollama's models, or none - and the run's report is shown when it's done.
+The run's plan config is the loaded plan's: the places it found for the notes are its marks, and a too-small site's
+margin is enlarged.
 The tools' files are in the browser's memory. The terrain cache and the model's saved answers are kept from one run
 to the next, so a plan that's run again doesn't fetch its terrain or ask the model again. The USGS's services and
 Ollama answer other sites' pages, so the browser fetches them itself. The page's import map has the tools' Node

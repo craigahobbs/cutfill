@@ -1,19 +1,9 @@
 // options.js - the "describe" and "keep" commands - set a plan's and its options' descriptions, and keep its best
-// options
+// options (the "auto" command's steps)
 
 import {analyzeOption, planTopo} from '../../viewer/lib/model.js';
 import {readPlan, writePlan} from './planFile.js';
 import {number} from '../../viewer/lib/format.js';
-
-
-// The "describe" command's usage text lines
-export const describeUsage = [
-    'usage: plan describe <plan.json> <descriptions.md>',
-    '',
-    '  Set a road plan model\'s descriptions from a Markdown file - the text under its "# Plan" heading is the plan\'s',
-    '  description, and the text under each "# Option: NAME" heading is that option\'s. A description that isn\'t in',
-    '  the file is kept.'
-];
 
 
 // A description heading - the plan's, or an option's
@@ -80,15 +70,6 @@ export function describeCommand(args, io) {
     lines.push(`Wrote ${planPath}`);
     return {'code': 0, lines};
 }
-
-
-// The "keep" command's usage text lines
-export const keepUsage = [
-    'usage: plan keep <plan.json> NAME...',
-    '',
-    '  Keep a road plan model\'s named options, and remove its others - the options are put in cost score order, the',
-    '  lowest (the best) first'
-];
 
 
 // The "keep" command - "io" is the tools' input and output functions. Returns the command's exit code and its

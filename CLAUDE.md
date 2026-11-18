@@ -7,14 +7,14 @@ The project is three subprojects, and the top-level makefile delegates to them:
 
 - **The viewer** (`viewer/`, JavaScript, [javascript-build](https://github.com/craigahobbs/javascript-build#readme)) -
   the web application (report, plan and profile views, 3D views, and 3D explorer), the road plan model (its Schema
-  Markdown schema, validation, earthwork, and cost analysis), and the command line behind `make evaluate` and
-  `make doc`. See [viewer/CLAUDE.md](viewer/CLAUDE.md).
+  Markdown schema, validation, earthwork, and cost analysis), and a command line (`viewer/bin/roadie.js` - a plan's
+  analysis, and the model documentation). See [viewer/CLAUDE.md](viewer/CLAUDE.md).
 - **The planning tools** (`plan/`, JavaScript, [javascript-build](https://github.com/craigahobbs/javascript-build#readme)) -
-  `plan/bin/plan.js` (`plan/lib/`) and the planning instructions, [plan/PLAN.md](plan/PLAN.md). A road is planned
-  from a road site model (a JSON file - the road's start and end points, as latitudes and longitudes, and its
-  planning notes): the tools build the site from the USGS 3D Elevation Program's 1 meter lidar terrain, and engineer
-  its road options. **Planning a road** (`make plan`, `make update`) follows PLAN.md - when asked to plan or update
-  a road, follow PLAN.md exactly. The planning session runs in `plan/`. See [plan/README.md](plan/README.md).
+  `plan/lib/`. A road is planned from a road site model (a plan config - the road's start and end points, as
+  latitudes and longitudes, its planning notes, and its marks): the tools build the site from the USGS 3D Elevation
+  Program's 1 meter lidar terrain, and engineer its road options. The application runs them in the browser (`auto`,
+  `plan/lib/auto.js`). `plan/bin/plan.js` is their command line, for development only - `site`, `options`, `route`,
+  and `auto` (without a model). See [plan/README.md](plan/README.md).
 
 - **The application** (`app/`, Python, [python-build](https://github.com/craigahobbs/python-build#readme)) - the
   `roadie` package: its command line (`roadie`, `make run`) serves the front end - the viewer's application and the
@@ -28,8 +28,8 @@ The project is three subprojects, and the top-level makefile delegates to them:
   is its config's file. The tools' modules stay importable in a browser: a Node module they import needs a stand-in in
   `plan/lib/browser/` and the page's import map (`viewer/index.html`). See [app/README.md](app/README.md).
 
-`example/` is the example - a road site model (`site.json`) and the plan a planning session made from it
-(`example.json`, and its USGS topographic map image). `index.html` renders this project's README on its web site.
+`example/` is the example - a road site model (`site.json`) and the plan made from it (`example.json`, and its USGS
+topographic map image). `index.html` renders this project's README on its web site.
 
 ## Commands
 
@@ -37,11 +37,7 @@ The project is three subprojects, and the top-level makefile delegates to them:
 make commit                       # the pre-commit gate: the subprojects' tests and lint (at 100% coverage)
 make test [TEST=name]             # the subprojects' unit tests (TEST runs the viewer's and planning tools' of a name)
 make lint                         # ESLint (the viewer and the planning tools) and pylint (the application)
-make plan FILE=<site.json> OUTPUT=<plan.json>   # plan a road (a Claude Code session)
-make auto FILE=<site.json> OUTPUT=<plan.json> [OLLAMA_MODEL=<model>]   # plan a road by procedure - the tools, and a model's answers
-make evaluate FILE=<plan.json> [DETAIL=1]   # a plan's analysis and cost from the command line
-make doc                          # the road plan model documentation
-make run                          # run the application, in the browser - open, make, run, update, view, and save plans
+make run                          # run the application, in the browser - open, make, run, view, and save plans
 make site                         # stage the web site (build/gh-pages/): README, example, and viewer/
 ```
 
@@ -61,35 +57,27 @@ Run `make` in `viewer/` or `plan/` for a subproject's own targets (e.g.
   retaining wall where a slope doesn't daylight) - keep them consistent with `viewer/lib/model.js`'s.
 - The planning tools' tests never use the network - the USGS services and elevation models are faked
   (`plan/test/terrainHelpers.js`). To check the tools against the real services, plan a site in the scratchpad
-  (`node plan/bin/plan.js site <site.json> <plan.json>`, then `route` and `plot`).
+  (`node plan/bin/plan.js auto <site.json> <plan.json>`, or `site`, then `options` and `route`).
 - The planning tools read the USGS's elevation models themselves (`plan/lib/elevationImage.js` - a GeoTIFF file's
   header, tags, and LZW-compressed tiles, by HTTP range requests), in Node and in a browser. The reader is of the one
   form the 1 meter models have, not a general TIFF reader - a model of another form is an error that says so. Its
   tests' files are made by `plan/test/tiffHelpers.js`.
-- The planning tools, not the planning session's model, do the plan's engineering and write the plan file
-  (`options` engineers the standard options, `route` follows existing roads, `draws` finds the terrain's draws,
-  `draft` writes the descriptions' facts, and `feature`, `keep`, and `describe` edit the plan) - so that sessions on
-  different models get the same roads, with fewer tokens. When a session writes code for something every plan needs,
-  make it a tool, and keep the tools' reports short (they're a session's context). Keep PLAN.md and the session's
-  allowed commands (`plan/Makefile`) in step with the tools.
-- A plan that's made again is made the same: `auto` doesn't change what a later run reads (the roads its notes rule
-  out stay the plan's roads - `--rule-out`), and `site` keeps a plan's site data when its grid is the site's, so a run
-  doesn't ask the USGS for it again.
-- `auto` (`plan/lib/auto.js`) plans a road by procedure: its code runs the plan's steps, and a model (Ollama's -
-  `plan/lib/ollama.js`) is asked only small questions with checked JSON answers - it doesn't run the plan. A model's
-  question is asked without thinking, with a limited answer. Keep `auto`'s steps and PLAN.md's in step.
-- PLAN.md's steps are **actions** for the planning session's model - each says what to look at, what to decide (with
-  a default), and the command to run - so that a smaller model can follow them. A step that needs no judgment is a
-  tool's, not an action.
+- All of Roadie's functionality is the application's - there are no command line planning flows. Judgment that a
+  procedure can do is the tools' (`auto` - the other corridor, enlarging a site that's too small, the unmapped draws a
+  road crosses), what only a person knows is the plan config's (its notes and marks), and a model is asked only small
+  questions (Ollama's - `plan/lib/ollama.js`) with checked JSON answers: what the notes ask for, and where their places
+  are on the site's map. A model doesn't run the plan, and its question is asked without thinking, with a limited
+  answer.
+- A plan that's made again is made the same: `auto` doesn't change what a later run reads but the plan config's marks
+  and margin (the roads its notes rule out stay the plan's roads - `--rule-out`), the places the notes name are the
+  plan config's marks once they're found (with how they were found - `SiteFound`), and `site` keeps a plan's site data
+  when its grid is the site's, so a run doesn't ask the USGS for it again. A run's plan config is the loaded plan's.
 - The road site model (a plan config) is defined and validated with Schema Markdown, with the road plan model
   (`viewer/lib/model.js`) - a road plan keeps the road site model it was made from (its `site` member), so it can be
-  updated. A plan made by the application keeps its map image, too (a data URL), so it's one file.
+  run again. A plan made by the application keeps its map image, too (a data URL), so it's one file.
 - Keep the README's viewer section and key table in sync with the viewer's controls.
 - A road site model and a road plan model are each a JSON file of any name - there's no file naming convention
-  (no `.site.json`), so the commands that plan a road name both: `FILE` is the road site model, and `OUTPUT` is the
-  road plan model to write.
-- `FILE` and `OUTPUT` paths are relative to the directory `make` runs in - the top-level makefile makes them absolute
-  before delegating.
+  (no `.site.json`).
 - The application's front end (`app/src/roadie/static/`) is generated (`make -C app static`) and committed, so the
   package installs from the repository without Node.js - commit it with the viewer and planning tool changes that
   regenerate it (`make commit` does), and don't edit it by hand. The front end loads nothing from the internet but
@@ -117,5 +105,5 @@ SVG 3D views).
 ## Performance work
 
 - Optimizations must leave the output byte-identical - for the viewer, see viewer/CLAUDE.md; for the planning tools,
-  compare their written plans and images against a baseline, then time the change against the baseline in the same
-  session.
+  compare their written plans (`node plan/bin/plan.js options` on copies of the example and the real plans) against
+  a baseline, then time the change against the baseline in the same session.

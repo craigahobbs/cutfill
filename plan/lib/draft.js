@@ -1,5 +1,5 @@
-// draft.js - the "draft" command - write a draft of a road plan model's descriptions: the facts of the plan and of
-// each option that the tools know, for a planning session (or the plan's author) to add to
+// draft.js - a draft of a road plan model's descriptions: the facts of the plan and of each option that the tools know,
+// and what a plan's run adds to them
 
 import {analyzeOption, culvertDiameter, planCriteria, planTopo} from '../../viewer/lib/model.js';
 import {displayQuantity, fixedTrim, station as formatStation, number, unitLabel} from '../../viewer/lib/format.js';
@@ -7,18 +7,6 @@ import {existingRoadGrades} from './routeCli.js';
 import {groundElevation} from './design.js';
 import {lineIndex} from './roads.js';
 import {polylineStations} from './route.js';
-import {readPlan} from './planFile.js';
-
-
-// The "draft" command's usage text lines
-export const draftUsage = [
-    'usage: plan draft <plan.json> <descriptions.md>',
-    '',
-    '  Write a draft of a road plan model\'s descriptions - a Markdown file of the plan\'s and each option\'s facts (its',
-    '  site, design criteria, added features, and limitations - and each option\'s length, grades, existing roads,',
-    '  structures, earthwork, cost, and design warnings). Add what the tools don\'t know - the road\'s purpose, its',
-    '  corridors, and what to verify in the field - and set the descriptions with "plan describe".'
-];
 
 
 // The added features' types, and their names in the draft
@@ -31,30 +19,30 @@ const featureTypeNames = {
 const structureTypeNames = {'bridge': 'bridge', 'culvert': 'culvert', 'retainingWall': 'retaining wall', 'turnout': 'turnout'};
 
 
-// The number of an option's largest cost items in the draft, and the most structures of a type that it lists
+// The number of an option's largest cost items in the draft, the number of its cost items that are most of its cost's
+// difference from the least-cost option's, and the most structures of a type that it lists
 const costItemCount = 3;
+const differenceItemCount = 2;
 const structureLimit = 6;
 
 
-// The "draft" command - "io" is the tools' input and output functions. Returns the command's exit code and its
-// output text lines, or null if its arguments are invalid.
-export function draftCommand(args, io) {
-    const [planPath, textPath] = args;
-    if (args.length !== 2 || planPath.startsWith('-') || textPath.startsWith('-')) {
-        return null;
+// Describe the cost items that are an option's largest cost differences from the least-cost option ("analysis" and
+// "least" are their analyzeOption analyses) - its items that cost the most more than the least-cost option's, in
+// thousands (as the cost score is). An item is matched by its name without its count, and an item without a quantity
+// (mobilization - a part of the others' cost) or that's less than a twentieth of the difference isn't one. Returns the
+// text (it begins with a space), or "" if there are none.
+function costDifference(analysis, least) {
+    const itemName = (name) => name.replace(/ \(\d+\)$/, '');
+    const leastCosts = new Map(least.costs.map(({name, cost}) => [itemName(name), cost]));
+    const difference = (analysis.score - least.score) * 1000;
+    const items = analysis.costs.filter(({quantity}) => quantity !== null).
+        map(({name, cost}) => ({'name': itemName(name), 'more': cost - (leastCosts.get(itemName(name)) ?? 0)})).
+        filter(({more}) => more > 0.05 * difference).sort((first, second) => second.more - first.more).slice(0, differenceItemCount);
+    if (items.length === 0) {
+        return '';
     }
-
-    // Read the road plan model
-    const {plan, error} = readPlan(io, planPath);
-    if (error !== undefined) {
-        return {'code': 1, 'lines': error};
-    }
-    const lines = draftLines(plan);
-    io.writeFile(textPath, `${lines.join('\n')}\n`);
-    return {'code': 0, 'lines': [
-        `Wrote ${textPath} - the plan's and ${plan.options.length} option${plan.options.length === 1 ? '\'s' : 's\''} facts. Add what ` +
-            `the tools don't know, and set the descriptions with "plan describe ${planPath} ${textPath}"`
-    ]};
+    const texts = items.map(({name, more}) => `${name.toLowerCase()} ${number(more / 1000, 1)} more`);
+    return ` Its largest cost difference${texts.length === 1 ? '' : 's'}: ${texts.join(', ')}.`;
 }
 
 
@@ -119,9 +107,9 @@ export function lineRuns(x, y, stations) {
 
 
 // Create the draft's Markdown lines of a plan. "additions" are what a planning process adds to the plan's facts: the
-// road's "purpose" (a paragraph, or null), its "featureNotes" (a line for each feature it added), and its
-// "limitations" (sentences).
-export function draftLines(plan, {purpose = null, featureNotes = [], limitations = []} = {}) {
+// road's "purpose" (a paragraph, or null), its "featureNotes" (a line for each feature it added), its "optionNotes"
+// (sentences about its options), and its "limitations" (sentences).
+export function draftLines(plan, {purpose = null, featureNotes = [], optionNotes = [], limitations = []} = {}) {
     const {units} = plan;
     const topo = planTopo(plan);
     const criteria = planCriteria(plan);
@@ -148,9 +136,10 @@ export function draftLines(plan, {purpose = null, featureNotes = [], limitations
             `maximum retaining wall height ${lengthText(criteria.maxWallHeight)}.`
     ];
 
-    // The features that were added to the site
+    // The features that were added to the site, and its places to pass through
     const added = topo.features.filter((feature) => feature.added ?? false);
-    if (added.length > 0) {
+    const places = (plan.site?.passThrough ?? []).map(({name = null}, ixPlace) => name ?? `Place ${ixPlace + 1}`);
+    if (added.length > 0 || places.length > 0) {
         lines.push('', '**Features added to the site.** They aren\'t the USGS\'s - verify them in the field:', '');
         for (const [type, typeName] of Object.entries(featureTypeNames)) {
             const features = added.filter((feature) => feature.type === type);
@@ -160,9 +149,15 @@ export function draftLines(plan, {purpose = null, featureNotes = [], limitations
                 lines.push(`- ${typeName}: ${[...names, ...(unnamed > 0 ? [`${unnamed} unnamed`] : [])].join(', ')}`);
             }
         }
+        if (places.length > 0) {
+            lines.push(`- Places to pass through: ${places.join(', ')}`);
+        }
         if (featureNotes.length > 0) {
             lines.push('', ...featureNotes.map((note) => `- ${note}`));
         }
+    }
+    if (optionNotes.length > 0) {
+        lines.push('', `**Options.** ${optionNotes.join(' ')}`);
     }
     lines.push(
         '',
@@ -188,7 +183,8 @@ export function draftLines(plan, {purpose = null, featureNotes = [], limitations
             '',
             `# Option: ${option.name}`,
             '',
-            `${costText} - its cost score is ${number(analysis.score, 1)}. It's ${lengthText(analysis.length)} long and ` +
+            `${costText} - its cost score is ${number(analysis.score, 1)}.${ixOption === ixLeast ? '' : costDifference(analysis, least)} ` +
+                `It's ${lengthText(analysis.length)} long and ` +
                 `${lengthText(section.width, section.width % 1 === 0 ? 0 : 1)} wide, ${section.surface ?? 'gravel'}, and ` +
                 `${analysis.existingLength > 0 ? 'its new road\'s' : 'its'} maximum grade is ${gradeText(analysis.maxGrade)}.`,
             ''

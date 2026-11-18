@@ -1,7 +1,8 @@
-import {draftLines, draftUsage, lineRuns} from '../lib/draft.js';
+import {draftLines, lineRuns} from '../lib/draft.js';
 import {planePlan, roadPlan} from './roadFixtures.js';
 import assert from 'node:assert/strict';
 import {cliMain} from '../lib/cli.js';
+import {describeCommand} from '../lib/options.js';
 import {fixturePlan} from '../../viewer/test/fixture.js';
 import test from 'node:test';
 import {testIo} from './terrainHelpers.js';
@@ -27,16 +28,10 @@ async function command(plan, args) {
 }
 
 
-test('draft', async () => {
+test('draft', () => {
     // The fixture plan's draft - the plan's facts, and each option's
-    const io = await command(fixturePlan(), ['draft', 'work/descriptions.md']);
-    assert.equal(
-        io.output.join(''),
-        'Wrote work/descriptions.md - the plan\'s and 2 options\' facts. Add what the tools don\'t know, and set the descriptions ' +
-            'with "plan describe road.json work/descriptions.md"\n'
-    );
-    assert.deepEqual(io.written, ['work/descriptions.md']);
-    assert.equal(io.files['work/descriptions.md'], `\
+    const draft = `${draftLines(fixturePlan()).join('\n')}\n`;
+    assert.equal(draft, `\
 # Plan
 
 **The site.** From "Road" (elevation 504 feet) to the end point (elevation 533 feet). The straight line between them climbs 30 \
@@ -59,8 +54,8 @@ Its deepest fill is 7.0 feet (station 2+13).
 
 # Option: Bridge - East
 
-It costs 703% more than the least-cost option, "Direct" - its cost score is 390.2. It's 464 feet long and 14 feet wide, asphalt, \
-and its new road's maximum grade is 9.9%.
+It costs 703% more than the least-cost option, "Direct" - its cost score is 390.2. Its largest cost difference: bridges 316.1 \
+more. It's 464 feet long and 14 feet wide, asphalt, and its new road's maximum grade is 9.9%.
 
 - **Line.** From the start, it runs east for about 230 feet and northeast for about 230 feet to the end.
 - **Existing road.** It follows an existing road for 100 feet (stations 3+00 to 4+00).
@@ -73,20 +68,13 @@ Its deepest fill is 5.3 feet (station 1+59).
 `);
 
     // The draft is the describe command's file
-    const described = testIo({'files': {...io.files}});
-    assert.equal(await cliMain(['describe', 'road.json', 'work/descriptions.md'], described), 0);
-    assert.equal(described.output.join(''), `\
-The plan's description: 5 lines
-Option "Direct"'s description: 7 lines
-Option "Bridge - East"'s description: 9 lines
-Wrote road.json
-`);
-
-    // A plan with one option
-    const plan = fixturePlan();
-    plan.options.pop();
-    const one = await command(plan, ['draft', 'descriptions.md']);
-    assert.ok(one.output.join('').startsWith('Wrote descriptions.md - the plan\'s and 1 option\'s facts. '));
+    const described = testIo({'files': {'road.json': JSON.stringify(fixturePlan()), 'descriptions.md': draft}});
+    assert.deepEqual(describeCommand(['road.json', 'descriptions.md'], described), {'code': 0, 'lines': [
+        'The plan\'s description: 5 lines',
+        'Option "Direct"\'s description: 7 lines',
+        'Option "Bridge - East"\'s description: 9 lines',
+        'Wrote road.json'
+    ]});
 });
 
 
@@ -109,7 +97,8 @@ test('draft, options that aren\'t in cost order', () => {
         'The least-cost option - its cost score is 80.0. It\'s 440 feet long and 12 feet wide, gravel, and its maximum grade is 20.9%.',
         '- **Structures.** 6 culverts (station 0+10, 1.5 ft; station 0+20, 1.5 ft; station 0+30, 1.5 ft; station 0+40, 1.5 ft; station ' +
             '0+50, 1.5 ft; station 0+60, 1.5 ft).',
-        'It costs 10% more than the least-cost option, "Direct" - its cost score is 88.4. It\'s 440 feet long and 12 feet wide, ' +
+        'It costs 10% more than the least-cost option, "Direct" - its cost score is 88.4. Its largest cost difference: culverts 7.6 ' +
+            'more. It\'s 440 feet long and 12 feet wide, ' +
             'gravel, and its maximum grade is 20.9%.',
         '- **Structures.** 7 culverts (station 0+10, 1.5 ft; station 0+20, 1.5 ft; station 0+30, 1.5 ft; station 0+40, 1.5 ft; station ' +
             '0+50, 1.5 ft; station 0+60, 1.5 ft; ...).'
@@ -121,10 +110,12 @@ test('draft, options that aren\'t in cost order', () => {
             'and its maximum grade is 20.9%.'
     ));
     assert.deepEqual(lines.filter((line) => line.startsWith('- **Structures.**') || / - its cost score is /.test(line)), [
-        'It costs 1,011% more than the least-cost option, "Plain" - its cost score is 390.2. It\'s 464 feet long and 14 feet wide, ' +
+        'It costs 1,011% more than the least-cost option, "Plain" - its cost score is 390.2. Its largest cost difference: bridges ' +
+            '316.1 more. It\'s 464 feet long and 14 feet wide, ' +
             'asphalt, and its new road\'s maximum grade is 9.9%.',
         '- **Structures.** 1 bridge (stations 1+60 to 2+50).',
-        'It costs 69% more than the least-cost option, "Plain" - its cost score is 59.3. It\'s 440 feet long and 12 feet wide, ' +
+        'It costs 69% more than the least-cost option, "Plain" - its cost score is 59.3. Its largest cost differences: culverts 18.7 ' +
+            'more, retaining walls 6.1 more. It\'s 440 feet long and 12 feet wide, ' +
             'gravel, and its maximum grade is 20.9%.',
         '- **Structures.** 2 culverts (Creek culvert, station 2+11, 1.5 ft; station 0+50, 2.5 ft), 1 retaining wall (stations 2+60 ' +
             'to 3+00), 2 turnouts.',
@@ -166,7 +157,8 @@ test('draft, existing roads and added features', async () => {
     assert.deepEqual(lines.slice(lines.indexOf('# Option: Existing Roads'), lines.indexOf('# Option: Existing Roads') + 7), [
         '# Option: Existing Roads',
         '',
-        'It costs 11% more than the least-cost option, "New Road" - its cost score is 23.5. It\'s 569 feet long and 14 feet wide, ' +
+        'It costs 11% more than the least-cost option, "New Road" - its cost score is 23.5. Its largest cost differences: culverts ' +
+            '7.7 more, existing road upgrade 7.1 more. It\'s 569 feet long and 14 feet wide, ' +
             'gravel, and its new road\'s maximum grade is 4.9%.',
         '',
         '- **Line.** From the start, it runs east for about 310 feet and north for about 260 feet to the end.',
@@ -250,19 +242,4 @@ test('lineRuns', () => {
     assert.deepEqual(runs([[0, 0], [100, 0], [100, 110], [220, 110], [220, 240], [360, 240], [360, 390], [520, 390]]), [
         ['east', 114], ['north', 341], ['east', 152], ['north', 152], ['east', 152]
     ]);
-});
-
-
-test('draft, a plan that cannot be loaded and usage', async () => {
-    const io = testIo({'files': {'road.json': '{'}});
-    assert.equal(await cliMain(['draft', 'road.json', 'descriptions.md'], io), 1);
-    assert.deepEqual([io.output.join(''), io.written], ['error: Could not load the road plan "road.json"\n', []]);
-
-    // The usage
-    const usage = `${draftUsage.join('\n')}\n`;
-    assert.ok(draftUsage.every((line) => line.length <= 120));
-    for (const args of [[], ['road.json'], ['road.json', 'text.md', 'other.md'], ['--all', 'text.md'], ['road.json', '-x']]) {
-        const usageIo = testIo();
-        assert.deepEqual([await cliMain(['draft', ...args], usageIo), usageIo.output.join('')], [1, usage]);
-    }
 });

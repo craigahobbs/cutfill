@@ -99,7 +99,7 @@ A topographic feature
 | type   | [FeatureType](#enum-featuretype) |                            | The feature type                                                                                                                                                           |
 | points | [Point](#struct-point) []        | len(array) > 1             | The feature's polyline (stream, road) or polygon (rock, exclusion) points                                                                                                  |
 | name   | string                           | optional<br>len(value) > 0 | The feature name                                                                                                                                                           |
-| added  | bool                             | optional                   | If true, the planning session added the feature - it isn't one of the site's (the USGS's streams, roads, and trails) - and it's kept when the plan's site is created again |
+| added  | bool                             | optional                   | If true, the feature isn't the USGS's - it's one of the plan config's areas or roads, or the planning tools added it (and it's kept when the plan's site is created again) |
 
 ### enum FeatureType
 
@@ -173,18 +173,20 @@ A road cross section
 A road site - the start and end points of a road to plan, and its planning instructions. The site's
 topography is USGS 3D Elevation Program lidar terrain, so the site is in the United States.
 
-| Name       | Type                                     | Attributes            | Description                                                                                                                                                                                     |
-|------------|------------------------------------------|-----------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| title      | string                                   | len(value) > 0        | The site title - it's the road plan's title                                                                                                                                                     |
-| units      | [Units](#enum-units)                     |                       | The unit of the road plan's lengths and elevations                                                                                                                                              |
-| start      | [SitePoint](#struct-sitepoint)           |                       | The road start point                                                                                                                                                                            |
-| end        | [SitePoint](#struct-sitepoint)           |                       | The road end point                                                                                                                                                                              |
-| notes      | string []                                | optional              | The planning instructions - the road's purpose, constraints, preferences, and anything else the road's engineer should know                                                                     |
-| exclusions | [SiteArea](#struct-sitearea) []          | optional              | The areas the road must avoid (buildings, wetlands, a neighbor's land, etc.)                                                                                                                    |
-| criteria   | [DesignCriteria](#struct-designcriteria) | optional              | The road design criteria                                                                                                                                                                        |
-| costRates  | [CostRates](#struct-costrates)           | optional              | The cost rate overrides                                                                                                                                                                         |
-| margin     | float                                    | optional<br>value > 0 | The distance the site's topography extends beyond the start and end points, in the plan's units (default is 30% of the distance between the points, from 500 to 2,000 feet / 150 to 600 meters) |
-| spacing    | float                                    | optional<br>value > 0 | The topography grid spacing, in the plan's units (default is the finest spacing that keeps the grid within its size limit)                                                                      |
+| Name        | Type                                     | Attributes            | Description                                                                                                                                                                                     |
+|-------------|------------------------------------------|-----------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| title       | string                                   | len(value) > 0        | The site title - it's the road plan's title                                                                                                                                                     |
+| units       | [Units](#enum-units)                     |                       | The unit of the road plan's lengths and elevations                                                                                                                                              |
+| start       | [SitePoint](#struct-sitepoint)           |                       | The road start point                                                                                                                                                                            |
+| end         | [SitePoint](#struct-sitepoint)           |                       | The road end point                                                                                                                                                                              |
+| notes       | string []                                | optional              | The planning instructions - the road's purpose, constraints, preferences, and anything else the road's engineer should know                                                                     |
+| exclusions  | [SiteArea](#struct-sitearea) []          | optional              | The areas the road must avoid (buildings, wetlands, a neighbor's land, etc.)                                                                                                                    |
+| roads       | [SiteLine](#struct-siteline) []          | optional              | The site's existing roads that the USGS doesn't map (a track, a driveway, etc.) - a road may follow them                                                                                        |
+| passThrough | [SitePlace](#struct-siteplace) []        | optional              | The places the road must pass through - each has an option through it                                                                                                                           |
+| criteria    | [DesignCriteria](#struct-designcriteria) | optional              | The road design criteria                                                                                                                                                                        |
+| costRates   | [CostRates](#struct-costrates)           | optional              | The cost rate overrides                                                                                                                                                                         |
+| margin      | float                                    | optional<br>value > 0 | The distance the site's topography extends beyond the start and end points, in the plan's units (default is 30% of the distance between the points, from 500 to 2,000 feet / 150 to 600 meters) |
+| spacing     | float                                    | optional<br>value > 0 | The topography grid spacing, in the plan's units (default is the finest spacing that keeps the grid within its size limit)                                                                      |
 
 ### enum Side
 
@@ -200,10 +202,41 @@ A side of the road
 
 An area of the site
 
-| Name   | Type                          | Attributes                 | Description               |
-|--------|-------------------------------|----------------------------|---------------------------|
-| name   | string                        | optional<br>len(value) > 0 | The area name             |
-| points | [LatLong](#struct-latlong) [] | len(array) > 2             | The area's polygon points |
+| Name   | Type                           | Attributes                 | Description                                                                                |
+|--------|--------------------------------|----------------------------|--------------------------------------------------------------------------------------------|
+| name   | string                         | optional<br>len(value) > 0 | The area name                                                                              |
+| points | [LatLong](#struct-latlong) []  | len(array) > 2             | The area's polygon points                                                                  |
+| found  | [SiteFound](#struct-sitefound) | optional                   | How a plan's run found the area from the notes - an area without it is the plan's author's |
+
+### struct SiteFound
+
+How a plan's run found an area or a place of the site from its notes
+
+| Name  | Type   | Attributes                 | Description                                                                            |
+|-------|--------|----------------------------|----------------------------------------------------------------------------------------|
+| place | string | len(value) > 0             | The notes' place - its name                                                            |
+| model | string | optional<br>len(value) > 0 | The model that found it on the site's map - without it, its coordinates are the notes' |
+| why   | string | optional                   | What the model saw there                                                               |
+
+### struct SiteLine
+
+A line of the site
+
+| Name   | Type                          | Attributes                 | Description       |
+|--------|-------------------------------|----------------------------|-------------------|
+| name   | string                        | optional<br>len(value) > 0 | The line name     |
+| points | [LatLong](#struct-latlong) [] | len(array) > 1             | The line's points |
+
+### struct SitePlace
+
+A place of the site
+
+| Name      | Type                           | Attributes                    | Description                                                                                 |
+|-----------|--------------------------------|-------------------------------|---------------------------------------------------------------------------------------------|
+| name      | string                         | optional<br>len(value) > 0    | The place name                                                                              |
+| latitude  | float                          | value >= -90<br>value <= 90   | The place's latitude, in decimal degrees (WGS 84)                                           |
+| longitude | float                          | value >= -180<br>value <= 180 | The place's longitude, in decimal degrees (WGS 84)                                          |
+| found     | [SiteFound](#struct-sitefound) | optional                      | How a plan's run found the place from the notes - a place without it is the plan's author's |
 
 ### struct SitePoint
 

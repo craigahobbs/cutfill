@@ -3,7 +3,7 @@
 // (the USGS National Map's streams, roads, and trails, and the site's exclusion areas), and its topographic map image
 
 import {elevationModels, roadLines, streamLines, topoMapImageUrl, trailLines} from './usgs.js';
-import {exclusionFeatures, exclusionNames, lineFeatures, snapDistance, snapStreams} from './features.js';
+import {exclusionFeatures, exclusionNames, lineFeatures, siteRoadFeatures, siteRoadNames, snapDistance, snapStreams} from './features.js';
 import {
     isLayoutGrid, isLayoutPlan, layoutBox, layoutGeoreference, layoutLatLong, layoutSize, readTile, siteLayout, siteTerrain
 } from './terrain.js';
@@ -173,14 +173,16 @@ export async function siteCommand(args, io) {
     const snapped = snapStreams(layout, streams, (x, y) => planElevation(streamTopo, x, y));
     ({streams} = snapped);
 
-    // The features - the site's streams, roads, trails, and exclusion areas, and the plan's other features: its rock
-    // outcrops, its exclusion areas that aren't the site's, and the streams, roads, and trails that were added to it
+    // The features - the USGS's streams, roads, and trails, the site's exclusion areas and roads, and the plan's other
+    // features: its rock outcrops, its exclusion areas that aren't the site's, and the streams, roads, and trails that
+    // were added to it
     const exclusions = exclusionFeatures(layout, site);
-    const siteNames = siteExclusionNames(plan, site);
-    const kept = (shifted.topography?.features ?? []).filter(({type, name, added = false}) => (
-        type === 'rock' || (type === 'exclusion' ? !siteNames.has(name) : added)
+    const siteRoads = siteRoadFeatures(layout, site);
+    const isMark = siteMarks(plan, site);
+    const kept = (shifted.topography?.features ?? []).filter((feature) => (
+        !isMark(feature) && (feature.type === 'rock' || feature.type === 'exclusion' || (feature.added ?? false))
     ));
-    const features = [...streams, ...roads, ...trails, ...exclusions, ...kept];
+    const features = [...streams, ...roads, ...trails, ...exclusions, ...siteRoads, ...kept];
 
     // Update the plan
     const topography = {
@@ -211,7 +213,8 @@ export async function siteCommand(args, io) {
     }
     lines.push(
         `Features: ${featureCount(streams, 'stream')}, ${featureCount(roads, 'road')}, ${featureCount(trails, 'trail')}, ` +
-            `${featureCount(exclusions, 'exclusion area')}`
+            `${featureCount(exclusions, 'exclusion area')}` +
+            `${siteRoads.length > 0 ? `, ${featureCount(siteRoads, 'road')} of the site's` : ''}`
     );
     if (streams.length > 0) {
         lines.push(`Streams: moved to the lowest ground within ${Math.round(snapDistance / layout.scale)} ${units} across them - ` +
@@ -247,10 +250,16 @@ function pointLines(plan, layout) {
 }
 
 
-// Get the names of the exclusion areas that are a site's - the site's, and those of the site that the plan was made
-// from. A plan's other exclusion areas are its own.
-function siteExclusionNames(plan, site) {
-    return new Set([...exclusionNames(plan.site ?? {}), ...exclusionNames(site)]);
+// Get the function that tests whether a plan's feature is a site's mark - one of the site's exclusion areas or roads,
+// or one of those of the site that the plan was made from. A plan's other exclusion areas are its own, and its roads
+// that were added by a tool, too.
+function siteMarks(plan, site) {
+    const planSite = plan.site ?? {};
+    const exclusions = new Set([...exclusionNames(planSite), ...exclusionNames(site)]);
+    const roads = new Set([...siteRoadNames(planSite), ...siteRoadNames(site)]);
+    return ({type, name = null, added = false}) => (
+        (type === 'exclusion' && exclusions.has(name)) || (type === 'road' && added && roads.has(name))
+    );
 }
 
 
@@ -272,17 +281,21 @@ function sitePlan(plan, site, layout, members) {
 
 
 // Keep a plan's site data - its terrain, streams, roads, trails, and map - for the site: its title, points' labels,
-// exclusion areas, criteria, and cost rates are the site's. Returns the command's result.
+// exclusion areas, roads, criteria, and cost rates are the site's. Returns the command's result.
 function keepSite(io, planPath, plan, site, layout) {
     const exclusions = exclusionFeatures(layout, site);
-    const siteNames = siteExclusionNames(plan, site);
-    const features = (plan.topography.features ?? []).filter(({type, name}) => type !== 'exclusion' || !siteNames.has(name));
-    const keptPlan = sitePlan(plan, site, layout, {'topography': {...plan.topography, 'features': [...features, ...exclusions]}});
+    const siteRoads = siteRoadFeatures(layout, site);
+    const isMark = siteMarks(plan, site);
+    const features = (plan.topography.features ?? []).filter((feature) => !isMark(feature));
+    const keptPlan = sitePlan(
+        plan, site, layout, {'topography': {...plan.topography, 'features': [...features, ...exclusions, ...siteRoads]}}
+    );
     writePlan(io, planPath, keptPlan);
     return {'code': 0, 'lines': [
         'Site: the plan\'s site data is kept - its terrain, streams, roads, trails, and map (its grid is the site\'s - fetch ' +
             'them again with --fetch)',
-        `Features: ${featureCount(exclusions, 'exclusion area')} from the site`,
+        `Features: ${featureCount(exclusions, 'exclusion area')}${siteRoads.length > 0 ? `, ${featureCount(siteRoads, 'road')}` : ''} ` +
+            'from the site',
         ...pointLines(keptPlan, layout),
         `Wrote ${planPath}`
     ]};

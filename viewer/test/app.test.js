@@ -285,7 +285,9 @@ test('the loaded plan', async (context) => {
             '<strong>Exclusion areas:</strong> 1.'
     ]);
     assert.deepEqual([...element.querySelectorAll('li')].map((item) => item.innerHTML), ['Stay off the barn.', 'A &lt;gravel&gt; road.']);
-    assert.deepEqual(loadedActions(browser), ['View Plan (disabled)', 'Edit Plan', 'Save', 'Save As…', 'Close', 'Run Plan']);
+    assert.deepEqual(loadedActions(browser), [
+        'View Plan (disabled)', 'Edit Plan', 'Edit Map (disabled)', 'Save', 'Save As…', 'Close', 'Run Plan'
+    ]);
     assert.deepEqual([...browser.document.getElementById('roadie-run-model').options].map(({value, textContent}) => [value, textContent]), [
         ['', 'No model - the notes aren\'t read'], ['qwen:27b', 'qwen:27b'], ['a<b', 'a<b']
     ]);
@@ -320,7 +322,8 @@ test('running a plan', async (context) => {
     assert.equal(document.getElementById('roadie-stop').disabled, false);
     assert.equal(select.disabled, true);
     assert.deepEqual(loadedActions(browser), [
-        'View Plan (disabled)', 'Edit Plan (disabled)', 'Save (disabled)', 'Save As… (disabled)', 'Close (disabled)', 'Stop'
+        'View Plan (disabled)', 'Edit Plan (disabled)', 'Edit Map (disabled)', 'Save (disabled)', 'Save As… (disabled)',
+        'Close (disabled)', 'Stop'
     ]);
     assert.deepEqual(['roadie-open', 'roadie-new'].map((id) => document.getElementById(id).disabled), [true, true]);
     assert.equal(document.getElementById('roadie-run-progress').hidden, false);
@@ -350,7 +353,8 @@ test('running a plan', async (context) => {
 
     // The run is done, after a minute and 11 seconds - its result and its report stay
     browser.clock.time += 70000;
-    finish.resolve({'code': 0, 'lines': ['Grid: 10 x 10', 'Wrote plan.json'], 'plan': sitePlan});
+    const runSite = {...siteConfig, 'passThrough': [{'name': 'Barn', 'latitude': 46.15, 'longitude': -119.15, 'found': {'place': 'Barn'}}]};
+    finish.resolve({'code': 0, 'lines': ['Grid: 10 x 10', 'Wrote plan.json'], 'plan': {...sitePlan, 'site': runSite}});
     await runDone(browser);
     browser.clock.runTimeout();
     assert.equal(browser.clock.timeouts.size, 0);
@@ -362,15 +366,21 @@ test('running a plan', async (context) => {
     assert.equal(document.getElementById('roadie-run-log').textContent, 'Grid: 10 x 10\nWrote plan.json');
     assert.equal(document.getElementById('roadie-run-report').open, false);
 
-    // The plan's road options are the loaded plan's - they're kept in the database - and the plan isn't saved
-    assert.deepEqual(app.loaded, {'name': 'hill.json', 'file': 'hill.json', 'site': siteConfig, 'changed': false, 'saved': false});
+    // The plan's road options are the loaded plan's - they're kept in the database - and the plan isn't saved. Its config
+    // is the run's - the places it found are its marks.
+    assert.deepEqual(app.loaded, {'name': 'hill.json', 'file': 'hill.json', 'site': runSite, 'changed': false, 'saved': false});
     assert.deepEqual(indexedDB.records('files').map(({name, type}) => [name, type]), [['hill.json', 'application/json']]);
     const element = loadedElement(browser);
+    assert.ok(element.innerHTML.includes(
+        '<strong>Exclusion areas:</strong> 1. <strong>Places to pass through:</strong> 1.'
+    ));
     assert.equal(element.querySelector('h2').textContent, 'Hill Road');
     assert.equal(
         element.querySelector('.roadie-loaded-kind').innerHTML, '<code>hill.json</code> <span class="roadie-unsaved">Not saved</span>'
     );
-    assert.deepEqual(loadedActions(browser), ['View Plan', 'Edit Plan', 'Save', 'Save As…', 'Close', 'Run Plan', 'Clear Road Options']);
+    assert.deepEqual(loadedActions(browser), [
+        'View Plan', 'Edit Plan', 'Edit Map (disabled)', 'Save', 'Save As…', 'Close', 'Run Plan', 'Clear Road Options'
+    ]);
 
     // The last model chosen is the model - and no model, once it's chosen
     await flushUntil(() => document.getElementById('roadie-run-model').options.length === 3);
@@ -587,8 +597,9 @@ test('saving a plan without a save dialog', async (context) => {
 
 
 test('editing a plan\'s config, and running it again', async (context) => {
-    // Edit the plan's config - the plan's road options are from the config before
-    const updated = {...sitePlan, 'title': 'Updated Plan'};
+    // Edit the plan's config - the plan's road options are from the config before. The run's plan's config is the edited
+    // config.
+    const updated = {...sitePlan, 'title': 'Updated Plan', 'site': {...siteConfig, 'notes': ['A paved road.']}};
     const {browser, app, calls} = await startRunApp(context, {'results': [{'code': 0, 'lines': ['Wrote plan.json'], 'plan': updated}]});
     const {document, window} = browser;
     click(browser, 'roadie-edit');
@@ -628,7 +639,9 @@ test('clearing a plan\'s road options, and closing it', async (context) => {
     assert.deepEqual(app.loaded, {...loadedConfig, 'file': 'hill.json', 'saved': false});
     assert.ok(loadedElement(browser).textContent.includes('The plan has no road options - run the plan to engineer them. Its ' +
         'site\'s data (its terrain, streams, roads, and map) is kept, so a run doesn\'t fetch it from the USGS again.'));
-    assert.deepEqual(loadedActions(browser), ['View Plan (disabled)', 'Edit Plan', 'Save', 'Save As…', 'Close', 'Run Plan']);
+    assert.deepEqual(loadedActions(browser), [
+        'View Plan (disabled)', 'Edit Plan', 'Edit Map (disabled)', 'Save', 'Save As…', 'Close', 'Run Plan'
+    ]);
     assert.equal(document.getElementById('roadie-run-progress').hidden, true);
     const cleared = JSON.parse(await browser.indexedDB.records('files').find(({name}) => name === 'hill.json').blob.text());
     assert.deepEqual([cleared.options, 'description' in cleared, cleared.topography.spacing], [[], false, sitePlan.topography.spacing]);
@@ -753,7 +766,7 @@ test('a loaded plan without a plan config', async (context) => {
     await flushUntil(() => loadedElement(browser).querySelector('h2') !== null);
     assert.deepEqual(app.loaded, {'name': 'old.json', 'file': 'old.json', 'site': null, 'changed': false, 'saved': true});
     assert.equal(loadedElement(browser).querySelector('h2').textContent, 'Fixture Plan');
-    assert.deepEqual(loadedActions(browser), ['View Plan', 'Edit Plan (disabled)', 'Save', 'Save As…', 'Close']);
+    assert.deepEqual(loadedActions(browser), ['View Plan', 'Edit Plan (disabled)', 'Edit Map (disabled)', 'Save', 'Save As…', 'Close']);
     assert.ok(loadedElement(browser).textContent.includes('The plan has no config - it was made before plans kept theirs - ' +
         'so it can\'t be edited or run here.'));
     assert.equal(browser.document.getElementById('roadie-run'), null);

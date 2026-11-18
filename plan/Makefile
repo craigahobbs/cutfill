@@ -16,7 +16,8 @@ $(eval $(call WGET, https://craigahobbs.github.io/javascript-build/eslint.config
 GHPAGES_SRC :=
 
 
-# Lint the command line, too. The coordinate names "x", "y", and "z" are allowed - they're the model's.
+# Lint the command line (the tools' development's), too. The coordinate names "x", "y", and "z" are allowed - they're
+# the model's.
 ESLINT_ARGS := --rule '{"id-length": ["error", {"exceptions": ["x", "y", "z"]}]}' bin/ lib/ test/
 
 
@@ -33,24 +34,8 @@ VIEWER := ../viewer
 VIEWER_BUILD := $(VIEWER)/build/npm.build
 
 
-ROADIE := node $(VIEWER)/bin/roadie.js
-
-
 clean:
 	rm -rf Makefile.base jsdoc.json eslint.config.js
-
-
-help:
-	@echo "            [auto|evaluate|plan|update]"
-	@echo ""
-	@echo "  make plan FILE=<site.json> OUTPUT=<plan.json>  Engineer road plan options for a road site (Claude Code)"
-	@echo "  make auto FILE=<site.json> OUTPUT=<plan.json>  Plan a road by procedure - the tools, and an Ollama model's answers"
-	@echo "    (auto accepts OLLAMA_MODEL=<model> - without it, the site's notes aren't read - and ARGS=<the auto command's arguments>)"
-	@echo "  make update FILE=<plan.json>               Update a road plan model with review feedback (Claude Code)"
-	@echo "    (plan and update accept MODEL=<model> [default: $(MODEL)] and EFFORT=<effort> [default: $(EFFORT)],"
-	@echo "     OLLAMA=1 to launch Claude Code with an Ollama model - MODEL then names the Ollama model,"
-	@echo "     and GROK=1 to launch the Grok CLI instead - MODEL then names the Grok model)"
-	@echo "  make evaluate FILE=<plan.json> [DETAIL=1]  Print a road plan model's analysis and cost"
 
 
 # The planning tools' tests need the viewer's packages
@@ -58,93 +43,3 @@ build/npm.build: $(VIEWER_BUILD)
 
 $(VIEWER_BUILD):
 	@$(MAKE) --no-print-directory -C $(VIEWER) build/npm.build
-
-
-# Engineer road plan options for a road site - launches Claude Code (or Grok) with the planning instructions
-# (PLAN.md). FILE is the road site model (a JSON file), and OUTPUT is the road plan model to write (another JSON
-# file); intermediate work files go in the output's ".work/" directory (e.g., "<plan>.work/").
-PLAN_WORK = $(basename $(OUTPUT)).work
-
-# Check a plan's files - FILE is a road site model's file, and OUTPUT is another file. The argument is the usage.
-PLAN_FILES = (test -n "$(FILE)" -a -n "$(OUTPUT)" || (echo 'usage: $(1)' && exit 1)) && \
-	(test -f "$(FILE)" || (echo 'error: "$(FILE)" does not exist' && exit 1)) && \
-	(test "$(OUTPUT)" != "$(FILE)" || (echo 'error: OUTPUT is the road plan model to write - not the road site model, "$(FILE)"' && exit 1))
-
-# The Claude Code model and effort level for the plan and update sessions. OLLAMA=1 launches Claude Code
-# with an Ollama model instead ("ollama launch claude") - MODEL then names the Ollama model, and when it
-# isn't given Ollama chooses the model (it prompts if needed). GROK=1 launches the Grok CLI instead -
-# MODEL then names the Grok model, and when it isn't given Grok uses its default model.
-MODEL = opus
-EFFORT = high
-MODEL_ARG = $(if $(filter command line,$(origin MODEL)),--model "$(MODEL)")
-ifdef GROK
-AGENT = grok $(MODEL_ARG)
-else ifdef OLLAMA
-AGENT = ollama launch claude $(MODEL_ARG) --
-else
-AGENT = claude --model "$(MODEL)"
-endif
-
-# The agent session's display name argument (the Grok CLI doesn't name sessions)
-AGENT_NAME = $(if $(GROK),,--name "$(1)")
-
-# The planning tools' command - its full path, so the agent session can run it from any directory
-PLAN_TOOL = node $(CURDIR)/bin/plan.js
-
-# The commands the agent session may run without asking - the planning tools, its own scripts, and the evaluator
-AGENT_TOOLS = Bash($(PLAN_TOOL) *) Bash(node bin/plan.js *) Bash(node $(1)/scripts/*) Bash(make evaluate *)
-
-# The agent session's tools - the planning tools' command line, and the modules its scripts may import
-AGENT_PROMPT = The planning tools' command (\"plan.js\" in PLAN.md) is \"$(PLAN_TOOL)\" - run it as it is, from any \
-directory. Their modules are in \"$(CURDIR)/lib/\", and the viewer's are in \"$(abspath $(VIEWER))/lib/\".
-
-.PHONY: plan
-plan: build/npm.build
-	@$(call PLAN_FILES,make plan FILE=<site.json> OUTPUT=<plan.json> [MODEL=<model>] [EFFORT=<effort>] [OLLAMA=1|GROK=1])
-	mkdir -p "$(PLAN_WORK)"
-	$(AGENT) \
-		--allowedTools "$(call AGENT_TOOLS,$(PLAN_WORK))" \
-		--permission-mode acceptEdits \
-		--effort "$(EFFORT)" \
-		$(call AGENT_NAME,Roadie: $(notdir $(FILE))) \
-		"Engineer cost-optimal road plan options for the road site \"$(FILE)\" by following the instructions in \
-PLAN.md exactly. Write the road plan model to \"$(OUTPUT)\" and put intermediate work files in \
-\"$(PLAN_WORK)/\". $(AGENT_PROMPT)"
-
-
-# Plan a road by procedure - no agent session. The planning tools do every step of the plan: its site (USGS lidar
-# terrain, streams, and roads), its standard options (the road that follows the existing roads, and an all-new road -
-# with the unmapped draws they cross), and their descriptions. With OLLAMA_MODEL (an Ollama model - a local model, or
-# one of Ollama's cloud models), the model is asked what the site's notes ask for, and where the places they name are
-# on the site's map - each a small question, whose answer the plan acts on. Without it, the notes aren't read. ARGS
-# are the auto command's other arguments (the road's width and surface, or --fresh).
-.PHONY: auto
-auto: build/npm.build
-	@$(call PLAN_FILES,make auto FILE=<site.json> OUTPUT=<plan.json> [OLLAMA_MODEL=<model>] [ARGS=<arguments>])
-	$(PLAN_TOOL) auto "$(FILE)" "$(OUTPUT)"$(if $(OLLAMA_MODEL), --model "$(OLLAMA_MODEL)") $(ARGS)
-
-
-# Update an existing road plan model with review feedback (Claude Code or Grok) - the session asks for the feedback
-UPDATE_WORK = $(basename $(FILE)).work
-
-.PHONY: update
-update: build/npm.build
-	@test -n "$(FILE)" || (echo 'usage: make update FILE=<plan.json> [MODEL=<model>] [EFFORT=<effort>] [OLLAMA=1|GROK=1]' && exit 1)
-	@test -f "$(FILE)" || (echo 'error: "$(FILE)" does not exist' && exit 1)
-	mkdir -p "$(UPDATE_WORK)"
-	$(AGENT) \
-		--allowedTools "$(call AGENT_TOOLS,$(UPDATE_WORK))" \
-		--permission-mode acceptEdits \
-		--effort "$(EFFORT)" \
-		$(call AGENT_NAME,Roadie update: $(notdir $(FILE))) \
-		"Update the road plan model \"$(FILE)\" with review feedback by following the \"Updating a plan\" \
-instructions in PLAN.md exactly. Intermediate work files (including any from the original planning \
-session) are in \"$(UPDATE_WORK)/\", and the plan's road site model is \"$(UPDATE_WORK)/site.json\" (the \"site\" \
-command writes it from the plan, if it isn't there). $(AGENT_PROMPT) Ask me for the review feedback first."
-
-
-# Print a road plan model's analysis and cost (DETAIL=1 adds the station table)
-.PHONY: evaluate
-evaluate: $(VIEWER_BUILD)
-	@test -n "$(FILE)" || (echo 'usage: make evaluate FILE=<plan.json> [DETAIL=1]' && exit 1)
-	@$(ROADIE) evaluate "$(FILE)"$(if $(DETAIL), --detail)

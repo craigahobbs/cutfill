@@ -7,8 +7,8 @@ import {setImmediate as nextTask} from 'node:timers/promises';
 
 // The canvas 2D context methods the drawings call
 const contextMethods = [
-    'arc', 'beginPath', 'closePath', 'fill', 'fillRect', 'fillText', 'lineTo', 'moveTo', 'roundRect', 'setLineDash', 'setTransform',
-    'stroke', 'strokeText'
+    'arc', 'beginPath', 'closePath', 'fill', 'fillRect', 'fillText', 'lineTo', 'moveTo', 'putImageData', 'roundRect', 'setLineDash',
+    'setTransform', 'stroke', 'strokeText'
 ];
 
 
@@ -21,6 +21,10 @@ export function fakeContext(calls) {
             calls.push([name, ...args]);
         };
     }
+    methods.createImageData = (width, height) => {
+        calls.push(['createImageData', width, height]);
+        return {'data': new Uint8ClampedArray(width * height * 4), width, height};
+    };
     return new Proxy(methods, {
         set(target, name, value) {
             calls.push([name, value]);
@@ -223,11 +227,14 @@ export function fakeBrowser(testContext, {hash = '', search = '', files = {}, st
         }
     };
 
-    // The canvas 2D context - each canvas records its contexts' calls
+    // The canvas 2D context - each canvas records its contexts' calls - and its image's data URL
     window.HTMLCanvasElement.prototype.getContext = function getContext(contextType) {
         this.calls ??= [];
         this.calls.push(['getContext', contextType]);
         return fakeContext(this.calls);
+    };
+    window.HTMLCanvasElement.prototype.toDataURL = function toDataURL(type) {
+        return `data:${type};base64,${this.width}x${this.height}`;
     };
 
     // Object URLs and scrolling

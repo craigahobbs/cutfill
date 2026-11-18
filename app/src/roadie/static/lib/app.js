@@ -5,6 +5,7 @@ import {ExplorePage, ReportPage, cellCostKey} from './viewPages.js';
 import {argsParse, argsURL, localPrefix, parseHash} from './args.js';
 import {validatePlan, validateSite, validateSitePlan} from './model.js';
 import {AdaptiveSmoothing} from './smoothing.js';
+import {MapPage} from './mapPage.js';
 import {PlanData} from './planData.js';
 import {buildDoc} from './doc.js';
 import {escapeHtml} from './format.js';
@@ -172,6 +173,27 @@ export class RoadieApp {
     }
 
 
+    // The loaded plan's road plan model - its site's data, and its road options (an empty array if it has none) - or
+    // null if it has neither. A file's plan is read once.
+    async loadedPlan() {
+        const {file} = this.loaded;
+        const blob = file !== null ? await this.localFile(file) : null;
+        if (blob === null) {
+            return null;
+        }
+        if (!this.planValues.has(blob)) {
+            let value = null;
+            try {
+                value = validateSitePlan(JSON.parse(await blob.text())).plan ?? null;
+            } catch {
+                // The file isn't a plan
+            }
+            this.planValues.set(blob, value);
+        }
+        return this.planValues.get(blob);
+    }
+
+
     // The local files kept in IndexedDB - [{name, time}]
     async localFileList() {
         const records = await dbRequest(await this.db(), 'readonly', (store) => store.getAll());
@@ -257,9 +279,12 @@ export class RoadieApp {
             return;
         }
 
-        // The plan config editor?
+        // The plan config editor, or its marks' map?
         if ((args.edit ?? null) !== null) {
             this.setPage(new EditPage(this, globals, args.edit));
+            return;
+        } else if (args.map) {
+            this.setPage(new MapPage(this, globals));
             return;
         }
 

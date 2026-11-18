@@ -2,7 +2,7 @@
 // edit its config, run it, save it, and close it - and its plan config editor page
 
 import {argsLink, argsURL, localPrefix} from './args.js';
-import {defaultRates, orderPlan, planCriteria, planText, roadieTypes, unitScale, validateSite, validateSitePlan} from './model.js';
+import {defaultRates, orderPlan, planCriteria, planText, roadieTypes, unitScale, validateSite} from './model.js';
 import {escapeHtml, number, unitLabel} from './format.js';
 import {formHtml, formPastePoint, formPlaceholders, formValue, memberWords} from './form.js';
 import {latLongDistance, latLongText} from './geo.js';
@@ -24,7 +24,8 @@ function memberText(members) {
 }
 
 
-// Create a plan config's summary HTML - its points, the distance between them, its notes, and its criteria
+// Create a plan config's summary HTML - its points, the distance between them, its notes, its criteria and cost rates,
+// and its marks' counts
 function siteSummaryHtml(site) {
     const pointHtml = (point, label) => `${escapeHtml(point.label ?? label)} (${latLongText([point.latitude, point.longitude])})`;
     const distance = latLongDistance(site.start, site.end) / unitScale(site);
@@ -42,9 +43,12 @@ function siteSummaryHtml(site) {
     if ('costRates' in site) {
         details.push(`<strong>Cost rates:</strong> ${escapeHtml(memberText(site.costRates))}.`);
     }
-    const exclusions = (site.exclusions ?? []).length;
-    if (exclusions > 0) {
-        details.push(`<strong>Exclusion areas:</strong> ${exclusions}.`);
+    const marks = [['exclusions', 'Exclusion areas'], ['roads', 'Existing roads'], ['passThrough', 'Places to pass through']];
+    for (const [member, name] of marks) {
+        const count = (site[member] ?? []).length;
+        if (count > 0) {
+            details.push(`<strong>${name}:</strong> ${count}.`);
+        }
     }
     if (details.length > 0) {
         html.push(`<p>${details.join(' ')}</p>`);
@@ -111,29 +115,6 @@ export class HomePage {
         this.closed = true;
     }
 
-
-    // The loaded plan's road plan model - its site's data, and its road options (an empty array if it has none) - or
-    // null if it has neither. A file's plan is read once.
-    async planValue() {
-        const {app} = this;
-        const {file} = app.loaded;
-        const blob = file !== null ? await app.localFile(file) : null;
-        if (blob === null) {
-            return null;
-        }
-        if (!app.planValues.has(blob)) {
-            let value = null;
-            try {
-                value = validateSitePlan(JSON.parse(await blob.text())).plan ?? null;
-            } catch {
-                // The file isn't a plan
-            }
-            app.planValues.set(blob, value);
-        }
-        return app.planValues.get(blob);
-    }
-
-
     // Render the loaded plan - its actions, its config, and its run
     async renderLoaded() {
         const {app, globals} = this;
@@ -143,7 +124,7 @@ export class HomePage {
             element.innerHTML = '';
             return;
         }
-        const value = await this.planValue();
+        const value = await app.loadedPlan();
         const hasOptions = (value?.options.length ?? 0) > 0;
         if (this.closed) {
             return;
@@ -169,6 +150,7 @@ export class HomePage {
                 `${loaded.saved === false ? ' <span class="roadie-unsaved">Not saved</span>' : ''}</p>`,
             '<p class="roadie-actions">' +
                 `${viewHtml}${button('roadie-edit', 'Edit Plan', site === null)}` +
+                `${button('roadie-map', 'Edit Map', site === null || !('georeference' in (value ?? {})))}` +
                 `${button('roadie-save', 'Save')}${button('roadie-save-as', 'Save As…')}${button('roadie-close', 'Close')}</p>`,
             '<p id="roadie-save-status"></p>'
         ];
@@ -213,6 +195,9 @@ export class HomePage {
         const on = (id, listener) => document.getElementById(id)?.addEventListener('click', listener);
         on('roadie-edit', () => {
             window.location.hash = argsURL(globals, {'edit': 'loaded'});
+        });
+        on('roadie-map', () => {
+            window.location.hash = argsURL(globals, {'map': true});
         });
         on('roadie-save', () => this.save(false));
         on('roadie-save-as', () => this.save(true));
@@ -364,7 +349,7 @@ export class HomePage {
                 window.setTimeout(resolve, 0);
             });
         };
-        const plan = await this.planValue();
+        const plan = await app.loadedPlan();
         let result;
         try {
             result = await tools.planRoad(window, {'site': loaded.site, plan}, {
@@ -375,11 +360,12 @@ export class HomePage {
         }
         isRunning = false;
 
-        // The road options are the loaded plan's - unless another plan was loaded while it ran (the page was left)
+        // The road options are the loaded plan's - unless another plan was loaded while it ran (the page was left) - and
+        // its config is the run's: the places its notes name that the run found are its marks, and its margin may be larger
         if (result.code === 0 && app.loaded === loaded) {
             const name = loaded.name ?? titleFileName(loaded.site.title);
             await app.storeLocal(name, new window.Blob([planText(result.plan)], {'type': 'application/json'}));
-            app.setLoaded({...loaded, name, 'file': name, 'changed': false, 'saved': false});
+            app.setLoaded({...loaded, name, 'file': name, 'site': result.plan.site, 'changed': false, 'saved': false});
         }
         if (this.closed) {
             return;
@@ -403,7 +389,7 @@ export class HomePage {
 
         // The plan's file text - its road plan model (its site's data, and its road options), with its config, or its
         // config
-        const value = await this.planValue();
+        const value = await app.loadedPlan();
         let text;
         if (value !== null) {
             text = planText(loaded.site !== null ? orderPlan({...value, 'site': loaded.site}) : value);

@@ -1,4 +1,4 @@
-import {exclusionFeatures, lineFeatures, snapStreams} from '../lib/features.js';
+import {exclusionFeatures, lineFeatures, siteRoadFeatures, siteRoadNames, snapStreams} from '../lib/features.js';
 import {layoutLatLong, siteLayout} from '../lib/terrain.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -140,16 +140,39 @@ test('exclusionFeatures', () => {
         'exclusions': [area('Barn', [10, 10], [20, 10], [20, 20]), area(null, [30, 10], [40, 10], [40, 20.04], [5, 200])]
     });
     assert.deepEqual(exclusionFeatures(layout, site), [
-        {'type': 'exclusion', 'name': 'Barn', 'points': [{'x': 10, 'y': 10}, {'x': 20, 'y': 10}, {'x': 20, 'y': 20}]},
+        {'type': 'exclusion', 'name': 'Barn', 'points': [{'x': 10, 'y': 10}, {'x': 20, 'y': 10}, {'x': 20, 'y': 20}], 'added': true},
         {
             'type': 'exclusion',
             'name': 'Exclusion 2',
-            'points': [{'x': 30, 'y': 10}, {'x': 40, 'y': 10}, {'x': 40, 'y': 20}, {'x': 5, 'y': 200}]
+            'points': [{'x': 30, 'y': 10}, {'x': 40, 'y': 10}, {'x': 40, 'y': 20}, {'x': 5, 'y': 200}],
+            'added': true
         }
     ]);
 
     // A site without exclusion areas
     assert.deepEqual(exclusionFeatures(layout, testSite()), []);
+});
+
+
+test('siteRoadFeatures', () => {
+    // The site's roads - the existing roads the USGS doesn't map - are added road features, clipped to the grid. A road
+    // without a name is named for its place.
+    const road = (name, ...points) => ({
+        ...(name !== null ? {name} : {}),
+        'points': points.map(([x, y]) => {
+            const [latitude, longitude] = layoutLatLong(layout, x, y);
+            return {latitude, longitude};
+        })
+    });
+    const site = testSite({'roads': [road('Hilltop track', [10, 10], [100, 50], [200, 50]), road(null, [300, 100], [500, 100])]});
+    assert.deepEqual(siteRoadNames(site), ['Hilltop track', 'Road 2']);
+    assert.deepEqual(siteRoadFeatures(layout, site), [
+        {'type': 'road', 'name': 'Hilltop track', 'points': [{'x': 10, 'y': 10}, {'x': 100, 'y': 50}, {'x': 200, 'y': 50}], 'added': true},
+        {'type': 'road', 'name': 'Road 2', 'points': [{'x': 300, 'y': 100}, {'x': 340, 'y': 100}], 'added': true}
+    ]);
+
+    // A site without roads
+    assert.deepEqual([siteRoadNames(testSite()), siteRoadFeatures(layout, testSite())], [[], []]);
 });
 
 

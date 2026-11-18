@@ -7,9 +7,6 @@
     "scripts": {
         "test": "node --test test/"
     },
-    "dependencies": {
-        "@resvg/resvg-js": "~2.6"
-    },
     "devDependencies": {
         "@eslint/js": "~10.0",
         "c8": "~12.0",

@@ -264,3 +264,35 @@ export function samplePoints(sample, halfWidth) {
         [x - nx * offsetRight, y - ny * offsetRight, z + right.drop]
     ];
 }
+
+
+// Shade the terrain - a gray pixel for each of the grid's points at the columns and rows, lit from the northwest
+// (its slopes that face northwest are light). Returns the pixels (a Uint8Array of its rows, north to south).
+export function terrainShade(topo, cols, rows) {
+    const {spacing} = topo;
+    const pixels = new Uint8Array(cols.length * rows.length);
+
+    // The light's direction - from the northwest, 45 degrees above the horizon. The terrain's relief is exaggerated.
+    const light = Math.SQRT1_2;
+    const lightEast = -0.5;
+    const lightNorth = 0.5;
+    const exaggeration = 2;
+    for (let ixRow = 0; ixRow < rows.length; ixRow++) {
+        const rowNorth = topo.rows[rows[Math.max(0, ixRow - 1)]];
+        const rowSouth = topo.rows[rows[Math.min(rows.length - 1, ixRow + 1)]];
+        const row = topo.rows[rows[ixRow]];
+        const distanceNorth = (rows[Math.min(rows.length - 1, ixRow + 1)] - rows[Math.max(0, ixRow - 1)]) * spacing;
+        for (let ixCol = 0; ixCol < cols.length; ixCol++) {
+            const colWest = cols[Math.max(0, ixCol - 1)];
+            const colEast = cols[Math.min(cols.length - 1, ixCol + 1)];
+            const slopeEast = exaggeration * (row[colEast] - row[colWest]) / ((colEast - colWest) * spacing);
+            const slopeNorth = exaggeration * (rowNorth[cols[ixCol]] - rowSouth[cols[ixCol]]) / distanceNorth;
+
+            // The surface's normal is (-slopeEast, -slopeNorth, 1) - its brightness is the cosine of its angle to the light
+            const lit = (light - slopeEast * lightEast - slopeNorth * lightNorth) /
+                Math.sqrt(1 + slopeEast * slopeEast + slopeNorth * slopeNorth);
+            pixels[ixRow * cols.length + ixCol] = Math.round(255 * Math.max(0, Math.min(1, lit)));
+        }
+    }
+    return pixels;
+}

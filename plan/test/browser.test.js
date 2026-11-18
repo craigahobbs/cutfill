@@ -300,17 +300,21 @@ test('planRoad', async () => {
         'Wrote plan.json - its descriptions are "plan.work/descriptions.md"'
     ]);
     assert.deepEqual([statuses[0], statuses.at(-1)], [
-        'Creating the site - its terrain, streams, roads, and map are the USGS\'s', 'Writing the descriptions and the plots'
+        'Creating the site - its terrain, streams, roads, and map are the USGS\'s', 'Writing the descriptions'
     ]);
 
-    // The plan - its map image is a data URL, and its plan config is its site
+    // The plan - its map image is a data URL, and its plan config is its site, with the barn the model found
     const {plan} = result;
     assert.deepEqual(siteDefaults(site), {'margin': 150, 'spacing': 1});
     assert.equal(autoSteps[0].key, 'site');
     assert.deepEqual(plan.options.map(({name}) => name), ['New Road']);
     assert.equal(plan.description[0], 'A road to the house.');
     assert.equal(plan.image, 'data:image/png;base64,iVBORw==');
-    assert.deepEqual(plan.site, site);
+    const {exclusions, ...config} = plan.site;
+    assert.deepEqual(config, site);
+    assert.deepEqual(exclusions.map(({name, found}) => [name, found]), [
+        ['Barn', {'place': 'Barn', 'model': 'test-model', 'why': 'A block.'}]
+    ]);
     assert.equal(files.has('other.json'), false);
     assert.deepEqual(Object.keys(JSON.parse(files.get('plan.work/decisions.json')).answers), ['notes', 'avoid:Barn', 'avoid:Barn:closer']);
     assert.ok([...files.keys()].some((path) => path.startsWith('plan.work/terrain/')));
@@ -318,21 +322,22 @@ test('planRoad', async () => {
     const elevationFetches = window.fetches.filter((url) => url.endsWith('.tif')).length;
     assert.ok(elevationFetches > 0);
 
-    // The plan made again - its site's data is kept (the USGS isn't asked for it), and the model's answers are the
-    // files'
+    // The plan made again, from its plan config - its site's data is kept (the USGS isn't asked for it), its marks are the
+    // plan config's, and the model's answers are the files'
     const fetchCount = window.fetches.length;
-    const again = await planRoad(window, {site, plan}, {'model': 'test-model', files});
+    const again = await planRoad(window, {'site': plan.site, plan}, {'model': 'test-model', files});
     assert.equal(again.code, 0);
     assert.ok(again.lines[0].startsWith('Site: the plan\'s site data is kept'));
     assert.deepEqual(window.fetches.slice(fetchCount), []);
     assert.equal(again.plan.image, plan.image);
 
     // The plan made again, with its site's data fetched again - the terrain is the files'
-    const fetched = await planRoad(window, {site, plan}, {'model': 'test-model', files, 'fetch': true});
+    const fetched = await planRoad(window, {'site': plan.site, plan}, {'model': 'test-model', files, 'fetch': true});
     assert.equal(fetched.code, 0);
     assert.equal(window.fetches.filter((url) => url.endsWith('/api/chat')).length, 3);
     assert.equal(window.fetches.filter((url) => url.endsWith('.tif')).length, elevationFetches);
-    assert.ok(fetched.lines.includes('Kept the plan\'s other features: 1 stream, 1 exclusion area'));
+    assert.ok(fetched.lines.includes('Kept the plan\'s other features: 1 stream'));
+    assert.deepEqual(fetched.plan.site, plan.site);
 
     // A plan of another site isn't made again - it's a new plan
     const movedEnd = {...site, 'end': {...site.end, 'latitude': site.end.latitude + 0.0001}};

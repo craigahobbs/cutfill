@@ -1,5 +1,5 @@
-import {ollamaAsk, ollamaHost} from '../lib/ollama.js';
 import assert from 'node:assert/strict';
+import {ollamaAsk} from '../lib/ollama.js';
 import test from 'node:test';
 
 
@@ -22,14 +22,6 @@ const schema = {
 };
 const question = {'model': 'test-model', 'question': 'Is it there?', schema};
 const membersText = 'Answer with only a JSON object, with exactly these members: "found", "why".';
-
-
-test('ollamaHost', () => {
-    assert.equal(ollamaHost({}), 'http://127.0.0.1:11434');
-    assert.equal(ollamaHost({'OLLAMA_HOST': '  '}), 'http://127.0.0.1:11434');
-    assert.equal(ollamaHost({'OLLAMA_HOST': '192.168.1.5:11434'}), 'http://192.168.1.5:11434');
-    assert.equal(ollamaHost({'OLLAMA_HOST': 'https://ollama.example.com/'}), 'https://ollama.example.com');
-});
 
 
 test('ollamaAsk', async () => {

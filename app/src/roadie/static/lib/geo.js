@@ -102,6 +102,15 @@ export function planLatLong(plan, x, y) {
 }
 
 
+// Get a latitude and longitude's road plan coordinates ([x, y]) - planLatLong's inverse. The plan has a georeference.
+export function planPoint(plan, latitude, longitude) {
+    const {georeference} = plan;
+    const scale = unitScale(plan);
+    const [east, north] = project(transverseMercator(georeference.latitude, georeference.longitude), latitude, longitude);
+    return [georeference.x + east / scale, georeference.y + north / scale];
+}
+
+
 // Format a latitude and longitude, in degrees, to about a meter
 export function latLongText([latitude, longitude]) {
     return `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;

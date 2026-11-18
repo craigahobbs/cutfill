@@ -1,5 +1,5 @@
+import {describeCommand, keepCommand} from '../lib/options.js';
 import assert from 'node:assert/strict';
-import {cliMain} from '../lib/cli.js';
 import {fixturePlan} from '../../viewer/test/fixture.js';
 import {planText} from '../../viewer/lib/model.js';
 import test from 'node:test';
@@ -7,22 +7,26 @@ import {testIo} from './terrainHelpers.js';
 
 
 // Run a command on the fixture plan ("road.json" - its options are "Direct" and "Bridge - East") and the descriptions
-// file ("descriptions.md") - returns its exit code, its output, and the written plan (null if it wasn't written)
-async function run(command, args, {plan = fixturePlan(), descriptions = null} = {}) {
+// file ("descriptions.md") - returns its exit code, its output, and the written plan (null if it wasn't written) - or
+// null, if its arguments are invalid
+function run(command, args, {plan = fixturePlan(), descriptions = null} = {}) {
     const files = {'road.json': typeof plan === 'string' ? plan : JSON.stringify(plan)};
     if (descriptions !== null) {
         files['descriptions.md'] = descriptions;
     }
     const io = testIo({files});
-    const code = await cliMain([command, 'road.json', ...args], io);
+    const result = {'describe': describeCommand, 'keep': keepCommand}[command](['road.json', ...args], io);
+    if (result === null) {
+        return null;
+    }
     const written = io.written.includes('road.json') ? io.files['road.json'] : null;
-    return {code, 'output': io.output.join(''), written, 'plan': written !== null ? JSON.parse(written) : null};
+    return {'code': result.code, 'output': `${result.lines.join('\n')}\n`, written, 'plan': written !== null ? JSON.parse(written) : null};
 }
 
 
-test('describe', async () => {
+test('describe', () => {
     // The plan's and an option's descriptions - without the blank lines around them. The other option's is kept.
-    const {code, output, written, plan} = await run('describe', ['descriptions.md'], {'descriptions': `
+    const {code, output, written, plan} = run('describe', ['descriptions.md'], {'descriptions': `
 
 # Plan
 
@@ -50,9 +54,9 @@ Wrote road.json
 });
 
 
-test('describe, a strikethrough', async () => {
+test('describe, a strikethrough', () => {
     // The viewer's Markdown renders "~...~" as strikethrough
-    const {code, output, plan} = await run('describe', ['descriptions.md'], {'descriptions': '# Option:  Direct \n~100 feet of road\n'});
+    const {code, output, plan} = run('describe', ['descriptions.md'], {'descriptions': '# Option:  Direct \n~100 feet of road\n'});
     assert.deepEqual([code, output], [0, `\
 Option "Direct"'s description: 1 line
 WARNING: Option "Direct"'s description has a "~" - the viewer's Markdown renders "~...~" as strikethrough
@@ -62,7 +66,7 @@ Wrote road.json
 });
 
 
-test('describe, invalid descriptions', async () => {
+test('describe, invalid descriptions', () => {
     for (const [descriptions, message] of [
         ['# Option: North\nA road.\n', 'error: no option named "North" (the plan\'s options are "Direct", "Bridge - East")'],
         ['# Plan\n\n# Option: Direct\nA road.\n', 'error: The plan\'s description has no text'],
@@ -74,38 +78,29 @@ test('describe, invalid descriptions', async () => {
         ['\n\n', 'error: The descriptions "descriptions.md" have no "# Plan" or "# Option: NAME" heading'],
         [null, 'error: Could not load the descriptions "descriptions.md"']
     ]) {
-        assert.deepEqual(await run('describe', ['descriptions.md'], {descriptions}), {
+        assert.deepEqual(run('describe', ['descriptions.md'], {descriptions}), {
             'code': 1, 'output': `${message}\n`, 'written': null, 'plan': null
         });
     }
 
     // The plan can't be loaded
-    assert.deepEqual(await run('describe', ['descriptions.md'], {'plan': 'Not JSON', 'descriptions': '# Plan\nA road.\n'}), {
+    assert.deepEqual(run('describe', ['descriptions.md'], {'plan': 'Not JSON', 'descriptions': '# Plan\nA road.\n'}), {
         'code': 1, 'output': 'error: Could not load the road plan "road.json"\n', 'written': null, 'plan': null
     });
 
-    // The usage
-    const usage = `\
-usage: plan describe <plan.json> <descriptions.md>
-
-  Set a road plan model's descriptions from a Markdown file - the text under its "# Plan" heading is the plan's
-  description, and the text under each "# Option: NAME" heading is that option's. A description that isn't in
-  the file is kept.
-`;
+    // Invalid arguments
     for (const args of [[], ['descriptions.md', 'extra.md'], ['--file']]) {
-        assert.deepEqual(await run('describe', args), {'code': 1, 'output': usage, 'written': null, 'plan': null});
+        assert.equal(run('describe', args), null);
     }
-    const io = testIo();
-    assert.deepEqual([await cliMain(['describe', '--plan', 'descriptions.md'], io), io.output.join('')], [1, usage]);
-    assert.deepEqual([await cliMain(['describe'], io), io.output.join('')], [1, usage + usage]);
+    assert.equal(describeCommand(['--plan', 'descriptions.md'], testIo()), null);
 });
 
 
-test('keep', async () => {
+test('keep', () => {
     // The options are kept in cost score order - the fixture plan's, the other way around
     const reversed = fixturePlan();
     reversed.options.reverse();
-    const {code, output, written, plan} = await run('keep', ['Bridge - East', 'Direct'], {'plan': reversed});
+    const {code, output, written, plan} = run('keep', ['Bridge - East', 'Direct'], {'plan': reversed});
     assert.deepEqual([code, output], [0, `\
 Option 0: "Direct" - cost score 48.6, design warnings: 1
 Option 1: "Bridge - East" - cost score 390.2, design warnings: 1
@@ -115,7 +110,7 @@ Wrote road.json
     assert.deepEqual(plan, fixturePlan());
 
     // An option that isn't named is removed
-    const one = await run('keep', ['Bridge - East']);
+    const one = run('keep', ['Bridge - East']);
     assert.deepEqual([one.code, one.output], [0, `\
 Option 0: "Bridge - East" - cost score 390.2, design warnings: 1
 Removed: "Direct"
@@ -125,8 +120,8 @@ Wrote road.json
 });
 
 
-test('keep, invalid arguments', async () => {
-    assert.deepEqual(await run('keep', ['Direct', 'North']), {
+test('keep, invalid arguments', () => {
+    assert.deepEqual(run('keep', ['Direct', 'North']), {
         'code': 1,
         'output': 'error: no option named "North" (the plan\'s options are "Direct", "Bridge - East")\n',
         'written': null,
@@ -134,25 +129,18 @@ test('keep, invalid arguments', async () => {
     });
 
     // A site's plan has no options yet
-    assert.deepEqual(await run('keep', ['Direct'], {'plan': {...fixturePlan(), 'options': []}}), {
+    assert.deepEqual(run('keep', ['Direct'], {'plan': {...fixturePlan(), 'options': []}}), {
         'code': 1, 'output': 'error: no option named "Direct" (the plan\'s options are none)\n', 'written': null, 'plan': null
     });
 
     // The plan can't be loaded
-    assert.deepEqual(await run('keep', ['Direct'], {'plan': 'Not JSON'}), {
+    assert.deepEqual(run('keep', ['Direct'], {'plan': 'Not JSON'}), {
         'code': 1, 'output': 'error: Could not load the road plan "road.json"\n', 'written': null, 'plan': null
     });
 
-    // The usage
-    const usage = `\
-usage: plan keep <plan.json> NAME...
-
-  Keep a road plan model's named options, and remove its others - the options are put in cost score order, the
-  lowest (the best) first
-`;
+    // Invalid arguments
     for (const args of [[], ['--all'], ['Direct', '-x']]) {
-        assert.deepEqual(await run('keep', args), {'code': 1, 'output': usage, 'written': null, 'plan': null});
+        assert.equal(run('keep', args), null);
     }
-    const io = testIo();
-    assert.deepEqual([await cliMain(['keep'], io), io.output.join('')], [1, usage]);
+    assert.equal(keepCommand([], testIo()), null);
 });

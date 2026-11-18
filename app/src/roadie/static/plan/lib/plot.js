@@ -1,16 +1,14 @@
 // plot.js - a road plan model's plot - its terrain (shaded, with contours), features, and options, with the plan's
-// coordinates along its sides - for the planning session to study the site and its options with
+// coordinates along its sides - for a model to find the places of a plan's notes on
 
 import {
     cellContours, contourInterval, contourLevel, niceStep, planMarkers, roadColor, roadFeatureColor, streamColor, svgPoints, svgPolyline,
-    svgText
+    svgText, terrainShade
 } from '../../viewer/lib/draw.js';
 import {escapeHtml, px} from '../../viewer/lib/format.js';
 import {Buffer} from 'node:buffer';
 import {grayPng} from './png.js';
-import {planTopo} from '../../viewer/lib/model.js';
 import {rangeContourInterval} from './siteCommand.js';
-import {readPlan} from './planFile.js';
 
 
 // The plot's margins, in pixels - the left and bottom margins have the plan's coordinates
@@ -328,73 +326,6 @@ function gridSteps(first, last, step) {
 }
 
 
-// Shade the terrain - a gray pixel for each of the grid's points at the columns and rows, lit from the northwest
-// (its slopes that face northwest are light). Returns the pixels (a Uint8Array of its rows, north to south).
-function terrainShade(topo, cols, rows) {
-    const {spacing} = topo;
-    const pixels = new Uint8Array(cols.length * rows.length);
-
-    // The light's direction - from the northwest, 45 degrees above the horizon. The terrain's relief is exaggerated.
-    const light = Math.SQRT1_2;
-    const lightEast = -0.5;
-    const lightNorth = 0.5;
-    const exaggeration = 2;
-    for (let ixRow = 0; ixRow < rows.length; ixRow++) {
-        const rowNorth = topo.rows[rows[Math.max(0, ixRow - 1)]];
-        const rowSouth = topo.rows[rows[Math.min(rows.length - 1, ixRow + 1)]];
-        const row = topo.rows[rows[ixRow]];
-        const distanceNorth = (rows[Math.min(rows.length - 1, ixRow + 1)] - rows[Math.max(0, ixRow - 1)]) * spacing;
-        for (let ixCol = 0; ixCol < cols.length; ixCol++) {
-            const colWest = cols[Math.max(0, ixCol - 1)];
-            const colEast = cols[Math.min(cols.length - 1, ixCol + 1)];
-            const slopeEast = exaggeration * (row[colEast] - row[colWest]) / ((colEast - colWest) * spacing);
-            const slopeNorth = exaggeration * (rowNorth[cols[ixCol]] - rowSouth[cols[ixCol]]) / distanceNorth;
-
-            // The surface's normal is (-slopeEast, -slopeNorth, 1) - its brightness is the cosine of its angle to the light
-            const brightness = (light - slopeEast * lightEast - slopeNorth * lightNorth) /
-                Math.sqrt(1 + slopeEast * slopeEast + slopeNorth * slopeNorth);
-            pixels[ixRow * cols.length + ixCol] = Math.round(255 * Math.max(0, Math.min(1, brightness)));
-        }
-    }
-    return pixels;
-}
-
-
-// The plot's text font files, by platform - the plot's text is sans-serif, which the renderer draws with Arial
-const fontFiles = {
-    'darwin': () => ['/System/Library/Fonts/Supplemental/Arial.ttf', '/System/Library/Fonts/Supplemental/Arial Bold.ttf'],
-    'win32': (env) => ['arial.ttf', 'arialbd.ttf'].map((file) => `${env.SystemRoot ?? 'C:\\Windows'}\\Fonts\\${file}`)
-};
-
-
-// Get the plot renderer's font options - "platform" is the computer's platform, "env" is its environment variables,
-// and "fileExists" is a function that determines if a file exists. Where the computer has the plot's font files, only
-// they are loaded: matching the plot's text against every font of the computer takes seconds, most of a plot's time.
-export function plotFonts(platform, env, fileExists) {
-    const files = Object.hasOwn(fontFiles, platform) ? fontFiles[platform](env) : [];
-    return files.length > 0 && files.every(fileExists) ? {'loadSystemFonts': false, 'fontFiles': files} : {'loadSystemFonts': true};
-}
-
-
-// The "plot" command's usage text lines
-export const plotUsage = [
-    'usage: plan plot <plan.json> <plot.png> [--box X1,Y1,X2,Y2] [--map]',
-    '',
-    '  Plot a road plan model - its terrain (shaded, with contours), features, and options, with the plan\'s',
-    '  coordinates along its sides',
-    '',
-    'options:',
-    '  --box X1,Y1,X2,Y2    plot a part of the plan - the box from (X1, Y1) to (X2, Y2), in the plan\'s coordinates -',
-    '                       for a closer look, with the contour interval of its elevations',
-    '  --map                plot the plan\'s topographic map image in place of its terrain, with the coordinates\' grid',
-    '                       - to find the places on the map (its buildings and labels) in the plan\'s coordinates'
-];
-
-
-// A box argument - four numbers
-const rBox = /^\d+(\.\d+)?(,\d+(\.\d+)?){3}$/;
-
-
 // Read a plan's topographic map image - its base64 text, or null if it has none. The image is a file beside the plan,
 // or a data URL - the image itself (the Roadie application's plans).
 export function planMapBase64(io, planPath, plan) {
@@ -408,61 +339,4 @@ export function planMapBase64(io, planPath, plan) {
     } catch {
         return null;
     }
-}
-
-
-// The "plot" command - "io" is the tools' input and output functions. Returns the command's exit code and its
-// output text lines, or null if its arguments are invalid.
-export function plotCommand(args, io) {
-    const paths = [];
-    let box = null;
-    let isMap = false;
-    for (let ixArg = 0; ixArg < args.length; ixArg++) {
-        const arg = args[ixArg];
-        if (arg === '--box' && rBox.test(args[ixArg + 1] ?? '')) {
-            box = args[ixArg + 1].split(',').map(Number);
-            ixArg += 1;
-        } else if (arg === '--map') {
-            isMap = true;
-        } else if (arg.startsWith('-')) {
-            return null;
-        } else {
-            paths.push(arg);
-        }
-    }
-    if (paths.length !== 2) {
-        return null;
-    }
-    const [planPath, plotPath] = paths;
-
-    // Read the road plan model - a plan without options yet (a site) is plotted, too
-    const {plan, error} = readPlan(io, planPath);
-    if (error !== undefined) {
-        return {'code': 1, 'lines': error};
-    }
-
-    // The box has a size, and it's within the plan's topography
-    const topo = planTopo(plan);
-    if (box !== null) {
-        const [x1, y1, x2, y2] = box;
-        if (x1 >= x2 || y1 >= y2 || x1 >= topo.width || y1 >= topo.height) {
-            return {'code': 1, 'lines': [
-                `error: The box "${box.join(',')}" is not a part of the plan's topography (${topo.width} x ${topo.height} ${plan.units})`
-            ]};
-        }
-    }
-
-    // The plan's topographic map image
-    let map = null;
-    if (isMap) {
-        map = planMapBase64(io, planPath, plan);
-        if (map === null) {
-            return {'code': 1, 'lines': [`error: The plan "${planPath}" has no topographic map image`]};
-        }
-    }
-
-    // Plot the plan
-    const {svg, width, height} = planPlot(plan, topo, 1400, box, map);
-    io.writeBytes(plotPath, io.renderPng(svg));
-    return {'code': 0, 'lines': [`Wrote ${plotPath} (${width} x ${height} pixels)`]};
 }

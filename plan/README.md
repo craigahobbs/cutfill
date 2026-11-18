@@ -1,85 +1,83 @@
 # Roadie Planning Tools
 
-The Roadie road planning tools - the command line tools that a road planning session (`make plan`) engineers a road
-with - and the road planning instructions, [PLAN.md](PLAN.md). The tools are JavaScript (ES modules in `lib/`) built
-with [javascript-build](https://github.com/craigahobbs/javascript-build#readme), and they use the
+The Roadie road planning tools - they build a road's site from USGS lidar terrain and engineer its road options. The
+Roadie application ([../app/](../app/README.md)) runs them in the browser. The tools are JavaScript (ES modules in
+`lib/`) built with [javascript-build](https://github.com/craigahobbs/javascript-build#readme), and they use the
 [Roadie viewer](../viewer/README.md)'s road plan model. See the project's [README](../README.md).
 
+`bin/plan.js` is the tools' command line, for their development - it checks the tools against the USGS's services,
+and compares their plans when they change. It doesn't ask a model. Every command has a `-h` argument.
+
 ```sh
-node bin/plan.js auto <site.json> <plan.json>    # plan a road by procedure (--model MODEL: ask an Ollama model)
+node bin/plan.js auto <site.json> <plan.json>    # plan a road by procedure - as the application's run does
 node bin/plan.js site <site.json> <plan.json>    # create a plan's site from a road site model - its lidar terrain
-node bin/plan.js plot <plan.json> <plot.png>     # plot a plan - its terrain (--map: its map), features, and options
-node bin/plan.js locate <plan.json> <lat,long>   # a latitude and longitude's plan coordinates (--xy: the reverse)
-node bin/plan.js feature <plan.json> TYPE X,Y... # add a topographic feature (--remove NAME: remove a name's)
-node bin/plan.js draws <plan.json>               # the terrain's unmapped draws (--add NUMBER: add one as a stream)
 node bin/plan.js options <plan.json>             # engineer the plan's standard options, in cost score order
 node bin/plan.js route <plan.json> -n NAME       # engineer a road option - its alignment, profile, and structures
-node bin/plan.js profile <plan.json> -n NAME     # re-design an option's profile and structures
-node bin/plan.js evaluate <plan.json>            # a plan's analysis and cost (the viewer's)
-node bin/plan.js keep <plan.json> NAME...        # keep the named options, in cost score order
-node bin/plan.js draft <plan.json> <text.md>     # write a draft of the descriptions - the plan's and options' facts
-node bin/plan.js describe <plan.json> <text.md>  # set the plan's and its options' descriptions
-node bin/plan.js doc [site | plan]               # the road site model's documentation - or the road plan model's
 ```
 
-`make plan FILE=<site.json> OUTPUT=<plan.json>` and `make update FILE=<plan.json>` launch a planning session
-(Claude Code) that follows [PLAN.md](PLAN.md) with these tools, `make auto FILE=<site.json> OUTPUT=<plan.json>`
-plans a road by procedure (`auto` -
-with `OLLAMA_MODEL`, it asks an Ollama model what the site's notes ask for), and `make evaluate FILE=<plan.json>`
-prints a plan's analysis and cost (`evaluate`, the viewer's). Every command has a `-h` argument.
 
-The tools do the plan's engineering and its file's edits, so that a planning session's result doesn't depend on the
-code its model writes - or on how capable its model is. The session does what the tools can't: it applies the site's
-notes, checks the site against its plots, chooses any other corridors to compare, and explains the result - and
-PLAN.md's steps are defined actions (what to look at, what to decide, and the command to run). The tools do the rest:
-they find each corridor's least-cost road, report its cost score, draft the descriptions' facts, write the plan, and
-log the commands that changed it (`<plan>.work/commands.txt`).
+## A plan's run
+
+`auto` plans a road by procedure (`lib/auto.js`) - the application's run (`lib/browser/io.js`'s `planRoad`). Its
+steps are its code's, in order: `site`, the notes' directives (with a model), the notes' places (the plan config's
+marks), `options` and an option through each place to pass through (with the unmapped draws they cross added as
+streams, until they cross none - `lib/draws.js`), `keep`, and the descriptions (`lib/draft.js`'s, with what the run
+did - `describe`, `lib/options.js`). If the Existing Roads or New Road option is at the site's edge, or there's no
+road within the grade limit, the plan config's margin is enlarged by half and the site is created again (at most
+twice). The run updates the plan config's file when its marks or its margin change - the plan keeps it, too (its
+`site` member), so the application's loaded plan's config is the run's.
+
+A model doesn't run the plan: it's asked questions (`lib/ollama.js`, Ollama's chat API), each a paragraph and at most
+one image, each answered with a JSON object of the question's schema that `auto` checks. The notes question's answer
+is the notes' directives - the road's width and surface, a maximum grade and minimum radius (the plan config's own
+criteria win), a bridge's fill depth, the existing roads to rule out (`options` and `route` don't follow them -
+`--rule-out` - and they stay the plan's roads, so a plan that's made again is made the same), the places to avoid
+and to pass through (and the coordinates the notes give for them), and the notes it doesn't cover (they're reported,
+and they're in the plan's limitations). A place's coordinates are used only if each number is one of the notes'. A
+place without coordinates is found on the site's map: the model is shown a plot of the map with the plan's
+coordinates' grid (`lib/plot.js`), and its answer is a rectangle - which the model corrects on a closer look - or a
+point. A rectangle that contains the start or end point is cut back from it by the minimum radius, and one that covers
+more than a quarter of the site isn't a place. The questions are asked without thinking, with a limited answer: a
+local model that thinks about an image may think for minutes, and a request that's abandoned keeps the model busy.
+
+A place that's found is one of the plan config's marks - an exclusion area, or a place to pass through - with how it
+was found (its `found` member: the notes' place, and the model and what it saw there). A place that has a mark (one
+found for it, or the author's mark of its name) isn't found again, and a mark that was found for a place the notes
+don't name any more is removed (`--fresh` finds them again). The model's answers are saved in the work directory
+(`decisions.json`) - the notes' answer while the notes and the model are the same, and a place's while the site's
+grid is the same, too - so a place it didn't find isn't asked again.
+
+`lib/browser/` is the tools in a web browser, for the Roadie application's page: `io.js` is the tools' input and
+output functions there - files in memory, the USGS's services, its elevation models, and Ollama by `fetch`, and a
+plot's PNG image by a canvas - and `planRoad`, which runs a plan config with `auto` and returns the road plan, its
+map image a data URL (a run of the same site keeps the plan's site data and the features that were added to it - its
+options are the run's - and an abort signal stops it). `util.js`, `buffer.js`, and `zlib.js` are the Node modules
+the tools import (`parseArgs`, a buffer's base64 text, and `crc32` and `deflateSync`) - the page's import map names
+them. `auto` reports what it's doing - its step's key (`autoSteps`) and text - to the input and output functions'
+`status` function, if they have it.
+
+
+## The site
 
 A road site model (a plan config - a JSON file, of any name) is a road's start and end points, as latitudes and
 longitudes, and its planning instructions - the plan keeps it (its `site` member), and a plan's design criteria and
 cost rates are its site's. An existing plan must be the site's - the same points and units - and `site` says so
 before it fetches anything. Run on a plan whose grid is the site's (the same margin and spacing, too), `site` keeps
-the plan's site data - its terrain, streams, roads, trails, and map - and only updates its title, labels, exclusion
-areas, criteria, and cost rates (`--fetch` fetches it again). If there's no site file, `site` writes it from the
-plan's own site model (an update session's site file). Otherwise, `site` finds the USGS 3D Elevation Program's 1 meter elevation models of the site (lidar
+the plan's site data - its terrain, streams, roads, trails, and map - and only updates its title, labels, marks,
+criteria, and cost rates (`--fetch` fetches it again). If there's no site file, `site` writes it from the plan's own
+site model. Otherwise, `site` finds the USGS 3D Elevation Program's 1 meter elevation models of the site (lidar
 ground elevations), reads the site's part of them (it's cached in the plan's work directory,
 `<plan>.work/terrain/`), and grids them in the plan's coordinates - a transverse Mercator projection centered on
-the site. The newest survey's elevations are used, and an older survey's where the newer have none. The site's
-features are the USGS National Map's streams, roads, and trails, and the site's exclusion areas, and its
-topographic map image (`<plan>.png`) is the National Map's. The streams were mapped at a coarser scale than the
-terrain, so each is moved to the bottom of its valley - the lowest ground within 30 meters across it. The roads (the
-National Map's highways, local roads, and four-wheel-drive roads) are existing roads that a road option may follow -
-its trails are for reference. `site` on an existing plan creates its site again (a larger site, a finer grid): the
-plan's options are kept, and its features that aren't the site's - its rock outcrops, its other exclusion areas,
-and the features that `feature` and `draws` added (the model's `added` features) - in the new grid's coordinates.
+the site. The newest survey's elevations are used, and an older survey's where the newer have none.
 
-`auto` plans a road by procedure (`lib/auto.js`): the plan's steps are its code's, in order - `site`, the notes'
-directives, `options` (with the unmapped draws the options cross added as streams, until they cross none), the
-options through the notes' places, `keep`, the descriptions (`draft`'s, with what the plan did), and the plots. A
-model doesn't run the plan: it's asked questions (`lib/ollama.js`, Ollama's chat API - `--model` is an Ollama model,
-and `OLLAMA_HOST` is the host), each a paragraph and at most one image, each answered with a JSON object of the
-question's schema that `auto` checks. The notes question's answer is the notes' directives - the road's width and
-surface, a maximum grade and minimum radius (the site model's own criteria win), the existing roads to rule out
-(`options` and `route` don't follow them - `--rule-out` - and they stay the plan's roads, so a plan that's made again
-is made the same), the places to avoid and to pass through, and the notes it doesn't cover (they're reported, and they're in the plan's
-limitations). A place question shows the model the site's map plot (`plot --map`), and its answer is a rectangle -
-which the model corrects on a closer look, a plot of the rectangle and the map around it - or a point. A rectangle
-that contains the start or end point is cut back from it by the minimum radius, and one that covers more than a
-quarter of the site isn't a place. The questions are
-asked without thinking, with a limited answer: a local model that thinks about an image may think for minutes, and
-a request that's abandoned keeps the model busy. The answers are saved in the work directory (`decisions.json`) with
-the plots the model was shown (`ask/`), and a saved answer is used again - so a run is repeatable, and an answer can
-be corrected by hand.
-
-`lib/browser/` is the tools in a web browser, for the Roadie application's page (`../app/`): `io.js` is the tools'
-input and output functions there - files in memory, the USGS's services, its elevation models, and Ollama by
-`fetch`, and a plot's PNG image by a canvas - and `planRoad`, which runs a plan config with
-`auto` and returns the road plan, its map image a data URL (a run of the same site keeps the plan's site data and
-the features that were added to it - its options are the run's - and an abort signal stops it). `util.js`,
-`buffer.js`, and `zlib.js` are the Node modules the tools import (`parseArgs`, a buffer's base64 text, and `crc32`
-and `deflateSync`) - the page's import map names them. `auto` reports what it's doing - its step's key (`autoSteps`)
-and text - to the input and output functions' `status` function, if they have it, and `--no-plots` skips the work
-directory's plots (the page doesn't keep them).
+The site's features are the USGS National Map's streams, roads, and trails, the plan config's exclusion areas and
+roads (its marks - `added` features), and its topographic map image (`<plan>.png`) is the National Map's. The
+streams were mapped at a coarser scale than the terrain, so each is moved to the bottom of its valley - the lowest
+ground within 30 meters across it. The roads (the National Map's highways, local roads, and four-wheel-drive roads,
+and the plan config's) are existing roads that a road option may follow - its trails are for reference. `site` on
+an existing plan creates its site again (a larger site, a finer grid): the plan's options are kept, and its features
+that aren't the site's - its rock outcrops, its other exclusion areas, and the draws that were added - in the new
+grid's coordinates.
 
 An elevation model is a GeoTIFF file - a grid of elevations, and where it is - of 100 megabytes or more, so only the
 parts of it that a site needs are fetched (HTTP range requests). The tools read it themselves
@@ -88,21 +86,26 @@ file of 32-bit floating point elevations, in LZW-compressed tiles, with no predi
 floating point predictor - and the reader is that form's alone (a model of another form is an error that says so).
 A file's header and tags are one request, and a window's tiles are a request for each row of tiles.
 
-`plot` draws a plan for the planning session to study: its terrain, shaded (lit from the northwest) with contours,
-its features, each option's line with its stations and structures, and the plan's coordinates along its sides.
-`--box X1,Y1,X2,Y2` plots a part of the plan, for a closer look - with the contour interval of its elevations.
-`--map` plots the plan's topographic map image in place of its terrain, with the coordinates' grid - the map has
-what the terrain lacks (buildings and labels).
+A site's draws are the valleys of its terrain that carry water in a storm, which a road crosses with a culvert
+(`lib/draws.js`). The terrain's hollows are filled (a road's fill across a valley is one - its culvert isn't in the
+terrain), each grid point drains to its steepest neighbor below it, and a draw is the line of points that drain at
+least an area - 3 acres (1.2 hectares). A draw's area is the site's ground that drains to it.
 
-`draws` finds the site's draws - the valleys of its terrain that carry water in a storm, which a road crosses with a
-culvert (`lib/draws.js`). The terrain's hollows are filled (a road's fill across a valley is one - its culvert isn't
-in the terrain), each grid point drains to its steepest neighbor below it, and a draw is the line of points that drain
-at least an area - 3 acres (1.2 hectares) by default. The draws that aren't along the plan's streams are listed,
-and `--add NUMBER` adds one as a stream. A draw's area is the site's ground that drains to it.
+
+## The road options
 
 `options` engineers a plan's standard options - `route`'s road ("Existing Roads", if it follows any of the plan's
-existing roads) and `route --all-new`'s ("New Road") - and puts the plan's options in cost score order. The options
-of those names are replaced, so it's run again after the plan's features or criteria change.
+existing roads), `route --all-new`'s ("New Road"), and another corridor - and puts the plan's options in cost score
+order. The options of those names are replaced, so it's run again after the plan's features or criteria change.
+
+Another corridor is the least-cost road outside a band around the other standard options' middles (their middle 60%
+- its half-width is a twentieth of the distance between the start and end points, at least four minimum radii, and
+the points are outside it). Its road's middle point is its via point, and its option is `route`'s road through the via
+point (without the band, and with one grade penalty weight, 0.5), named for its middle's side of the least-cost road's
+middle ("West Corridor"). It's kept if
+it's a real choice: it's within the grade limit, it doesn't turn back at its via point, its middle is an average of
+the band's half-width from the other standard options, at least, and it costs at most three times the least-cost
+standard option. If it isn't kept, `options` says why, and the plan's description does, too.
 
 `route` searches for the least-cost horizontal alignment on a lattice with heading states (so its turns have the
 minimum radius), designs the vertical profile by dynamic programming (the minimum earthwork cost within the grade
@@ -123,16 +126,15 @@ leaves it, so a junction's curve is new road. `--all-new` searches for an all-ne
 
 A road is within its grade limit. Where a route's profile can't be - at the design grade, it can't reach the end
 point's ground, or an existing road's - `route` searches again with stricter grades, and if there's still no road,
-it's an error and no option is written. `profile` fails the same way on an alignment that's too steep.
+it's an error and no option is written.
 
-`route` and `profile` report the option's existing roads (and their grades as they're built, which aren't designed),
-structure counts, cost score, and design warning count - and note a road within its minimum radius of the site's edge
-(the site may be too small for the best route). `route` notes a via point that the road turns back at: the straight
-line between the road's points 10 minimum radii before and after the via point is less than half their distance
-along the road. Both note the unmapped draws that the road crosses (`draws`' draws of the default area) - a
-draw that isn't a stream of the plan has no culvert there.
+`route` reports the option's existing roads (and their grades as they're built, which aren't designed), structure
+counts, cost score, and design warning count - and notes a road within its minimum radius of the site's edge (the
+site may be too small for the best route), a via point that the road turns back at (the straight line between the
+road's points 10 minimum radii before and after the via point is less than half their distance along the road), and
+the unmapped draws that the road crosses - a draw that isn't a stream of the plan has no culvert there.
 
-`draft` writes a draft of the plan's descriptions (`lib/draft.js`) - the Markdown file that `describe` sets, with the
-facts the tools know: the site's points and criteria, the features that were added, and each option's length, grades,
-existing roads (and their grades as they're built), structures, earthwork, largest cost items, and design warnings.
-A planning session adds what the tools don't know - the road's purpose, its corridors, and what to verify.
+The descriptions' draft (`lib/draft.js`) has the facts the tools know: the site's points and criteria, the features
+that were added, and each option's length, grades, existing roads (and their grades as they're built), structures,
+earthwork, largest cost items, and largest cost differences from the least-cost option. A run adds what it did with
+the notes.
