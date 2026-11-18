@@ -64,22 +64,8 @@ export function buildReport(data, globals, args, width, canvasViews = false) {
         html.push(markdownHtml(plan.description));
     }
 
-    // The site - the start and end points' latitudes and longitudes, and the topography's sources
-    const site = [];
-    if ('georeference' in plan) {
-        site.push(`<strong>Site:</strong> ${planMarkers(plan).map(([point, label]) => (
-            `${escapeHtml(label)} (${latLongText(planLatLong(plan, point.x, point.y))})`
-        )).join(' to ')}.`);
-    }
-    const sources = plan.topography.sources ?? [];
-    if (sources.length > 0) {
-        site.push(`<strong>Topography:</strong> ${sources.map((source) => (
-            escapeHtml(source.name) + ('date' in source ? ` (${escapeHtml(source.date)})` : '')
-        )).join(', ')}.`);
-    }
-    if (site.length > 0) {
-        html.push(`<p>${site.join(' ')}</p>`);
-    }
+    // The site
+    html.push(...siteHtml(plan));
 
     // Options comparison
     html.push(heading(2, 'Plan Options'));
@@ -188,8 +174,30 @@ export function buildReport(data, globals, args, width, canvasViews = false) {
 }
 
 
-// Get a plan's source map image URL - relative to the plan file
+// Create a plan's site paragraph HTML - the start and end points' latitudes and longitudes, and the topography's
+// sources (none, if the plan has neither)
+function siteHtml(plan) {
+    const site = [];
+    if ('georeference' in plan) {
+        site.push(`<strong>Site:</strong> ${planMarkers(plan).map(([point, label]) => (
+            `${escapeHtml(label)} (${latLongText(planLatLong(plan, point.x, point.y))})`
+        )).join(' to ')}.`);
+    }
+    const sources = plan.topography.sources ?? [];
+    if (sources.length > 0) {
+        site.push(`<strong>Topography:</strong> ${sources.map((source) => (
+            escapeHtml(source.name) + ('date' in source ? ` (${escapeHtml(source.date)})` : '')
+        )).join(', ')}.`);
+    }
+    return site.length > 0 ? [`<p>${site.join(' ')}</p>`] : [];
+}
+
+
+// Get a plan's source map image URL - relative to the plan file, unless it's a data URL (the image itself)
 export function planImageURL(file, image) {
+    if (/^data:/i.test(image)) {
+        return image;
+    }
     const ixSlash = file.lastIndexOf('/');
     return encodeUrl(ixSlash === -1 ? image : file.slice(0, ixSlash + 1) + image);
 }

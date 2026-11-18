@@ -2,7 +2,8 @@
 
 You are planning a low-volume road (a driveway, a rural access road, or a forest road) from a start
 point to an end point, and writing it as a Roadie **road plan model** JSON file. The Roadie viewer
-(`make run FILE=<plan.json>`) renders the model in 3D, and its cost score compares the plan's options.
+(the Roadie application - `make run`, then open the plan) renders the model in 3D, and its cost score
+compares the plan's options.
 
 **The planning tools do the engineering.** They build the site from the USGS's lidar terrain, find
 and design the roads, cost them, and draft their descriptions. Your job is what the tools can't do:
@@ -264,12 +265,9 @@ road (`--surface asphalt`), or an all-new corridor (`--all-new`).
 
 Finish with a short summary for the user: a table of the options (length, maximum grade, earthwork,
 walls and bridges, cost score - `evaluate`'s numbers, and the walls and bridges of the draft's
-structures), the recommended option and why, any caveats (the limitations), and the command to view
-the plan:
-
-```
-make run FILE=<plan>.json
-```
+structures), the recommended option and why, any caveats (the limitations), and how to view the plan:
+run the Roadie application (`make run`, in the `roadie` folder), and open `<plan>.json` with "Open
+Plan".
 
 
 ## Updating a plan
@@ -282,7 +280,8 @@ before making any changes.
 
 1. **Read the current plan.** Run `evaluate PLAN.json` to record every option's length, maximum
    grade, earthwork, warnings, and cost score, and plot it (`plot`). Read the road site model
-   (if your initial prompt names it), and in the work directory, `descriptions.md` (the plan's
+   (the plan's `site` member - a plan made before plans kept their site models doesn't have it), and
+   in the work directory, `descriptions.md` (the plan's
    descriptions) and `commands.txt` (the commands that made the plan, in order).
 2. **Save a copy** of the plan JSON in the work directory before changing it, named with today's date
    (`<plan>.<YYYY-MM-DD>.json`), so the update can be compared against or reverted.

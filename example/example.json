@@ -5924,5 +5924,27 @@
         }
       ]
     }
-  ]
+  ],
+  "site": {
+    "title": "Hilltop Access Road, Kennewick, Washington",
+    "units": "feet",
+    "start": {
+      "latitude": 46.16755,
+      "longitude": -119.16811,
+      "label": "Road end",
+      "description": "The south end of the road stub off W 47th Ave, at the foot of the hill - the access road continues from it"
+    },
+    "end": {
+      "latitude": 46.1649,
+      "longitude": -119.1661,
+      "label": "Hilltop",
+      "description": "The top of the hill, 200 feet above the road end - a level site (for a water reservoir, say), with room to turn around"
+    },
+    "notes": [
+      "An example road plan: a single-lane gravel access road for maintenance trucks, from the end of the road at the foot of a hill at the south edge of Kennewick to a site on the hilltop.",
+      "Keep the road's grade at or under 12%, and keep it off the house lots at the foot of the hill, west of the road end.",
+      "The plan illustrates Roadie on USGS lidar terrain - it isn't a proposed project."
+    ],
+    "margin": 1000
+  }
 }

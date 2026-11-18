@@ -3,31 +3,31 @@
 Roadie engineers low-volume roads (driveways, rural access roads, and forest roads) on USGS lidar
 terrain, and views the resulting road grading plans in 3D.
 
+- **`make run`** runs the Roadie application, in your web browser. Open a plan, or make a new one -
+  its config is the road's start and end points (their latitudes and longitudes) and its planning
+  notes. Run the plan to engineer its road options - the planning tools build the site from the USGS
+  3D Elevation Program's 1 meter lidar terrain and engineer the roads, and an
+  [Ollama](https://ollama.com) model answers what its notes ask - then view them, edit the config and
+  run it again, and save the plan to a file. See [The Roadie application](#the-roadie-application).
 - **`make plan FILE=<site.json> OUTPUT=<plan.json>`** launches a Claude Code session with detailed
   road engineering instructions ([PLAN.md](#url=plan/PLAN.md)). The road site model (`FILE`, a JSON file)
   has the road's start and end points - their latitudes and longitudes - and its planning notes.
   Claude builds the site from the USGS 3D Elevation Program's 1 meter lidar terrain, engineers one or
   more cost-optimal road plan options from the start point to the end point, and writes the road plan
   model (`OUTPUT`, another JSON file).
-- **`make update FILE=<plan.json> [SITE=<site.json>]`** launches a Claude Code session that
+- **`make update FILE=<plan.json>`** launches a Claude Code session that
   updates an existing road plan model with review feedback (from the city or county, a surveyor, or
   the owner, for example).
 - **`make auto FILE=<site.json> OUTPUT=<plan.json> [OLLAMA_MODEL=<model>]`** plans a road by
-  procedure - no Claude Code session. The planning tools do every step, and an
-  [Ollama](https://ollama.com) model (a local model, or one of Ollama's cloud models) is asked only
-  what the site's notes ask for.
-- **`make run FILE=<plan.json>`** opens the road plan model in the Roadie viewer, a JavaScript web
-  application.
-- **`make app FILE=<site.json> OUTPUT=<plan.json>`** serves the Roadie application - a road, in the
-  browser. Its page edits the road site model (`FILE` - a new road's is made when it's saved), plans
-  the road from it - the planning tools run in the page, and an Ollama model answers what its notes
-  ask - writes the road plan model (`OUTPUT`), and views it.
+  procedure from the command line - what the application's "Run" does. The planning tools do every
+  step, and an Ollama model (a local model, or one of Ollama's cloud models) is asked only what the
+  site's notes ask for.
 
 ![The Roadie viewer](example/screenshot.png)
 
 Roadie has three parts: the **viewer** ([viewer/](viewer/)) and the **planning tools and
 instructions** (`plan/`) - both JavaScript - and the **application** (`app/`), a Python package whose
-command line serves the viewer and a road's files. It requires `make` and Node.js 22 or later -
+command line serves the viewer, with the planning tools. It requires `make` and Node.js 22 or later -
 Python 3.11 or later for the application - and [Claude Code](https://claude.com/claude-code) to plan
 and update roads (see [Installing](#installing)).
 A site must be in the United States, where the USGS has 1 meter lidar terrain.
@@ -39,6 +39,7 @@ Roadie runs from a clone of its repository, on macOS, Linux, and Windows. It nee
 
 - `make`, `git`, and `curl` (or `wget`)
 - [Node.js](https://nodejs.org/en/download) 22 or later
+- [Python](https://www.python.org/downloads/) 3.11 or later, for the application (`make run`)
 - [Claude Code](https://code.claude.com/docs/en/setup), to plan and update roads - viewing a plan
   doesn't need it
 
@@ -86,8 +87,8 @@ The first `make` command downloads the build's files and npm packages, so it tak
    git clone https://github.com/craigahobbs/roadie.git
    ```
 
-`make run` opens the browser with `xdg-open` - without it (on a server, or in the Windows Subsystem
-for Linux), open the URL that `make run` prints.
+`make run` opens the application in your web browser - if it can't (on a server, or in the Windows
+Subsystem for Linux), open the URL that `make run` prints.
 
 
 ### Windows
@@ -145,12 +146,14 @@ node --version
 claude --version
 ```
 
-Then view the example plan - it opens in your web browser (Ctrl-C stops the viewer's server):
+Then run Roadie - it opens in your web browser (Ctrl-C stops it):
 
 ```
 cd roadie
-make run FILE=example/example.json
+make run
 ```
+
+Open the example plan, `example/example.json`, with "Open Plan", and view it with "View Plan".
 
 
 ### Your first road
@@ -174,11 +177,43 @@ make run FILE=example/example.json
    free plan doesn't include Claude Code) - not with API billing, which charges for each token the
    planning session uses. The session takes a while, and writes the road plan model,
    `driveway/driveway.json`.
-4. View the plan when the session finishes:
+4. View the plan when the session finishes - `make run`, and open `driveway/driveway.json`.
 
-   ```
-   make run FILE=../driveway/driveway.json
-   ```
+Or skip the session: `make run`, make a new plan with the road's start and end points, and run it.
+
+
+## The Roadie application
+
+`make run` runs the application, and opens it in your web browser (`Ctrl-C` stops it). Its home page:
+
+- **Open Plan** - choose or drop a plan's JSON file (and its source map image, to show it in the
+  report). The files stay on your computer - they're kept in the browser's storage, and the home
+  page lists the recent files (remove one with its ✕).
+- **New Plan** - a form for the plan's config: its title, units, start and end points, notes, design
+  criteria, cost rates, and its site's margin and grid spacing. An empty member is its default - its
+  box shows it. To set a point, copy its latitude and longitude from a map (Google Maps, say) and
+  paste them into its latitude.
+
+A plan is its config and, once it's run, its **road options**. The opened or new plan is the
+**loaded plan** - the home page shows its config (its points, the distance between them, its notes
+and criteria), and what can be done with it:
+
+- **View Plan** - its road options' report (each option's length, maximum grade, earthwork, walls,
+  warnings, and cost score, its plan and profile, and its 3D views), and the 3D explorer.
+- **Edit Plan** - its config: the notes, say. If the plan has road options, they're from the config
+  before - run the plan to engineer them again.
+- **Run Plan** - choose an Ollama model to read its notes (or none - the last model chosen is the
+  default). The planning tools run in the page: the run's steps are shown as it goes, with its time,
+  and its result and report when it's done. **Stop** stops it, when its current step's work is done -
+  and its work is thrown away. The road options it engineers are
+  the plan's - a plan that's run again keeps its other options and features. **Clear Road Options**
+  clears them: the plan is its config again.
+- **Save** the plan to its file - the file it was opened from, or saved to - or **Save As** another,
+  to duplicate it (and run it with another config, say). A plan with road options keeps its config
+  and its map image, so it's one file - and a plan without road options is its config's file.
+- **Close** it - if it has changes that aren't saved, you're asked first.
+
+Ollama answers the application's page when it runs on this computer (`http://127.0.0.1:11434`).
 
 
 ## The viewer
@@ -231,10 +266,7 @@ The report's "Explore" links open the full-window **3D explorer**, controlled wi
 
 ### Viewing a road plan
 
-`make run FILE=<plan.json>` serves the viewer and the plan's directory locally, and opens the plan in
-the browser. `make run` with no `FILE` opens the viewer's home page.
-
-The viewer is also a web site (see [Publishing](#publishing)) that views plans without installing
+The application views a road plan that's opened, or made by a run. The viewer is also a web site (see [Publishing](#publishing)) that views plans without installing
 anything:
 
 - **Open a local plan** - on the viewer's home page, select or drop the plan's JSON file (and its
@@ -427,7 +459,7 @@ Plans often change after review - the city or county may require a 10% fire code
 line setback, or a larger culvert, and the owner may move the house site. To update a plan, run:
 
 ```
-make update FILE=driveway.json SITE=site.json
+make update FILE=driveway.json
 ```
 
 The session asks for the feedback - paste it in, or give the path of a file that contains it. It
@@ -470,11 +502,7 @@ least-cost road, which follows the track to the hilltop, and an all-new road. Th
 [example.png](example/example.png), isn't an input - it's the USGS topographic map of the site, which
 the planning tools download for the report's source map.
 
-```
-make run FILE=example/example.json
-```
-
-On the project's web site, [view the example](viewer/#url=../example/example.json) - the site's viewer
+Run the application (`make run`), and open `example/example.json` to view it. On the project's web site, [view the example](viewer/#url=../example/example.json) - the site's viewer
 links to it from its home page, too.
 
 
@@ -495,7 +523,7 @@ targets:
 | --- | --- |
 | [viewer/](viewer/) | The Roadie viewer - the web application, the road plan model (its schema, validation, earthwork, and cost analysis), and the command line behind `make evaluate` and `make doc`. JavaScript, built with [javascript-build](https://github.com/craigahobbs/javascript-build#readme) - see its [README](#url=viewer/README.md). |
 | `plan/` | The planning tools (`bin/plan.js`) - the road site model, the site's USGS lidar terrain and features, plotting, and road engineering - and the road planning instructions for Claude Code ([PLAN.md](#url=plan/PLAN.md)). JavaScript, built with [javascript-build](https://github.com/craigahobbs/javascript-build#readme). |
-| `app/` | The Roadie application - a Python package (`roadie`), built with [python-build](https://github.com/craigahobbs/python-build#readme). Its command line, `roadie SITE PLAN`, serves the front end (the viewer's application and the planning tools, staged in the package) and a [chisel](https://github.com/craigahobbs/chisel#readme) back end that reads and writes a road's files - its road site model and its road plan model - to this computer only. A road's plan is made in the browser (`plan/lib/browser/`). |
+| `app/` | The Roadie application - a Python package (`roadie`), built with [python-build](https://github.com/craigahobbs/python-build#readme). Its command line, `roadie`, serves the front end (the viewer's application and the planning tools, staged in the package) with a [chisel](https://github.com/craigahobbs/chisel#readme) back end - to this computer only. A plan is run in the browser (`plan/lib/browser/`). |
 | `example/` | The example - its road site model, and its plan |
 
 `CLAUDE.md` is the repository guide for Claude Code.

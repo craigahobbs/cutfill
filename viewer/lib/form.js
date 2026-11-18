@@ -25,42 +25,99 @@ function memberLabel(name) {
 }
 
 
+// Create a form control's ID from its member's path
+function controlId(memberPath) {
+    return `roadie-form-${memberPath.replace(/\./g, '-')}`;
+}
+
+
 // Create a form's HTML - the controls of a struct's members, with its value's values. "types" is the type model,
 // "typeName" is the struct's name, and "value" is the struct's value. A control's "data-member" attribute is its
-// member's path ("start.latitude"). A required member's label has a "*", an optional struct is closed unless it has a
-// value, and a member the form doesn't edit (an array of structs, say) is only noted, if it has a value.
+// member's path ("start.latitude").
+//
+// The form is laid out in groups: a struct's controls are a group (a struct's required struct members are groups side
+// by side, and an optional struct is a group that's closed unless it has a value), and a group's controls are a grid
+// of fields - a field is its label, its control, and its member's documentation. Text and a list of lines (an array
+// of strings - a line each) are the grid's full width. A required member's label has a "*", and a member the form
+// doesn't edit (an array of structs, say) is only noted, if it has a value.
 export function formHtml(types, typeName, value = {}, path = '') {
     const parts = [];
+    let fields = [];
+    let groups = [];
+    const endFields = () => {
+        if (fields.length > 0) {
+            parts.push(`<div class="roadie-form-fields">\n${fields.join('\n')}\n</div>`);
+            fields = [];
+        }
+    };
+    const endGroups = () => {
+        if (groups.length > 0) {
+            parts.push(`<div class="roadie-form-groups">\n${groups.join('\n')}\n</div>`);
+            groups = [];
+        }
+    };
     for (const {name, type, optional = false, doc = []} of types[typeName].struct.members) {
         const memberValue = value[name] ?? null;
         const kind = memberKind(types, type);
-        const labelHtml = `<span class="roadie-form-name">${escapeHtml(memberLabel(name))}${optional ? '' : ' *'}</span>`;
-        const docHtml = `<span class="roadie-form-doc">${escapeHtml(doc.join(' '))}</span>`;
-        const memberAttr = `data-member="${path}${name}"`;
+        const memberPath = `${path}${name}`;
+        const labelText = `${memberLabel(name)}${optional ? '' : ' *'}`;
+        const docText = doc.join(' ');
+
+        // A required struct is a group, beside its neighbors
+        if (kind === 'struct' && !optional) {
+            endFields();
+            groups.push(
+                `<fieldset class="roadie-form-group"><legend>${escapeHtml(labelText)}</legend>` +
+                    `<div class="roadie-form-doc">${escapeHtml(docText)}</div>\n` +
+                    `${formHtml(types, type.user, memberValue ?? {}, `${memberPath}.`)}\n</fieldset>`
+            );
+            continue;
+        }
+        endGroups();
+
+        // An optional struct is a group that's closed, unless it has a value
         if (kind === 'struct') {
-            const membersHtml = formHtml(types, type.user, memberValue ?? {}, `${path}${name}.`);
-            parts.push(optional ?
-                `<details${memberValue !== null ? ' open' : ''}><summary>${labelHtml} ${docHtml}</summary>\n${membersHtml}\n</details>` :
-                `<fieldset><legend>${labelHtml} ${docHtml}</legend>\n${membersHtml}\n</fieldset>`);
-        } else if (kind === 'strings') {
+            endFields();
+            parts.push(
+                `<details class="roadie-form-group"${memberValue !== null ? ' open' : ''}><summary>${escapeHtml(labelText)} ` +
+                    `<span class="roadie-form-doc">${escapeHtml(docText)}</span></summary>\n` +
+                    `${formHtml(types, type.user, memberValue ?? {}, `${memberPath}.`)}\n</details>`
+            );
+            continue;
+        }
+
+        // A field - its label, its control, and its documentation
+        const id = controlId(memberPath);
+        const attrs = `id="${id}" data-member="${memberPath}"`;
+        let controlHtml;
+        let isWide = true;
+        if (kind === 'strings') {
             const text = Array.isArray(memberValue) ? memberValue.join('\n') : '';
-            parts.push(`<p><label>${labelHtml} ${docHtml}<textarea ${memberAttr} rows="5">${escapeHtml(text)}</textarea></label></p>`);
+            controlHtml = `<textarea ${attrs} rows="5">${escapeHtml(text)}</textarea>`;
         } else if (kind === 'enum') {
             const values = [...(optional ? [''] : []), ...types[type.user].enum.values.map((enumValue) => enumValue.name)];
             const optionsHtml = values.map((enumValue) => (
                 `<option${enumValue === memberValue ? ' selected' : ''}>${escapeHtml(enumValue)}</option>`
             ));
-            parts.push(`<p><label>${labelHtml} <select ${memberAttr}>${optionsHtml.join('')}</select></label> ${docHtml}</p>`);
+            controlHtml = `<select ${attrs}>${optionsHtml.join('')}</select>`;
+            isWide = false;
         } else if (kind !== null) {
             const text = memberValue !== null ? `${memberValue}` : '';
-            const sizeAttr = kind === 'number' ? ' size="12" inputmode="decimal"' : ' size="50"';
-            parts.push(
-                `<p><label>${labelHtml} <input type="text" ${memberAttr}${sizeAttr} value="${escapeHtml(text)}"></label> ${docHtml}</p>`
-            );
+            isWide = kind === 'string';
+            controlHtml = `<input type="text" ${attrs}${isWide ? '' : ' inputmode="decimal"'} value="${escapeHtml(text)}">`;
         } else if (memberValue !== null) {
-            parts.push(`<p>${labelHtml} ${docHtml} <em>It isn't edited here - it's kept as it is.</em></p>`);
+            controlHtml = '<p><em>It isn\'t edited here - it\'s kept as it is.</em></p>';
+        } else {
+            continue;
         }
+        const docHtml = escapeHtml(kind === 'strings' ? `${docText} - a line each` : docText);
+        fields.push(
+            `<div class="roadie-form-field${isWide ? ' roadie-form-wide' : ''}"><label for="${id}">${escapeHtml(labelText)}</label>` +
+                `${controlHtml}<div class="roadie-form-doc">${docHtml}</div></div>`
+        );
     }
+    endFields();
+    endGroups();
     return parts.join('\n');
 }
 
@@ -106,5 +163,17 @@ export function formPastePoint(element, event) {
     if (match !== null && longitude !== null) {
         event.preventDefault();
         [, event.target.value, longitude.value] = match;
+    }
+}
+
+
+// Set a form's controls' placeholders - "placeholders" is a member path's placeholder text (a member's default, say;
+// "" for none)
+export function formPlaceholders(element, placeholders) {
+    for (const [memberPath, text] of Object.entries(placeholders)) {
+        const control = element.querySelector(`[data-member="${memberPath}"]`);
+        if (control !== null) {
+            control.placeholder = text !== '' ? `Default: ${text}` : '';
+        }
     }
 }
