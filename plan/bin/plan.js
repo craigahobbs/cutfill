@@ -7,8 +7,7 @@ import {ollamaAsk, ollamaHost} from '../lib/ollama.js';
 import {Resvg} from '@resvg/resvg-js';
 import {cliMain} from '../lib/cli.js';
 import {dirname} from 'node:path';
-import {elevationImage} from '../lib/elevationImage.js';
-import {fromUrl} from 'geotiff';
+import {openElevationImage} from '../lib/elevationImage.js';
 import {plotFonts} from '../lib/plot.js';
 import process from 'node:process';
 import {setTimeout as sleep} from 'node:timers/promises';
@@ -18,13 +17,6 @@ import {setTimeout as sleep} from 'node:timers/promises';
 function writeFile(path, data) {
     mkdirSync(dirname(path), {'recursive': true});
     writeFileSync(path, data);
-}
-
-
-// Open a remote elevation model image - only the parts of the file that are read are fetched
-async function openImage(url) {
-    const tiff = await fromUrl(url);
-    return elevationImage(await tiff.getImage());
 }
 
 
@@ -46,5 +38,5 @@ process.exitCode = await cliMain(process.argv.slice(2), {
     'ask': (question) => ollamaAsk(fetch, ollamaHost(process.env), question),
     sleep,
     renderPng,
-    openImage
+    'openImage': (url) => openElevationImage(fetch, url)
 });

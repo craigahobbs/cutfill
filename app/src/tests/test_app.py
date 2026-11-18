@@ -65,9 +65,8 @@ class TestApp(unittest.TestCase):
         loaded = [url for url in loads + imports if not url.startswith('data:')]
         self.assertListEqual([url for url in loaded if f'/{url.removeprefix("./")}' not in urls], [])
 
-        # The planning tools, the schema-markdown package, and the GeoTIFF reader (and its license)
-        for url in ('/plan/lib/browser/io.js', '/plan/lib/auto.js', '/schema-markdown/lib/schema.js', '/geotiff.js',
-                    '/geotiff.LICENSE.txt'):
+        # The planning tools, and the schema-markdown package
+        for url in ('/plan/lib/browser/io.js', '/plan/lib/auto.js', '/schema-markdown/lib/schema.js'):
             self.assertIn(url, urls)
 
 
@@ -105,18 +104,17 @@ class TestApp(unittest.TestCase):
         self.assertSetEqual(missing, set())
         self.assertIn('/plan/lib/browser/zlib.js', modules)
 
-        # The GeoTIFF reader is a script, not a module - the planning tools load it when they read an elevation model
-        self.assertSetEqual({url for url in urls if url.endswith('.js')} - modules, {'/geotiff.js'})
+        # The package has no other scripts
+        self.assertSetEqual({url for url in urls if url.endswith('.js')} - modules, set())
 
 
     def test_statics_offline(self):
         # The front end loads nothing from the internet but the USGS's services (a site's data) - its other web addresses
-        # are Ollama's (on this computer), and text: XML namespaces, and license and documentation links
+        # are Ollama's (on this computer), and text: XML namespaces, and documentation links
         allowed = (
             'https://tnmaccess.nationalmap.gov/', 'https://hydro.nationalmap.gov/', 'https://carto.nationalmap.gov/',
             'https://basemap.nationalmap.gov/', 'http://127.0.0.1:11434', 'http://${', 'http://www.w3.org/2000/svg',
-            'https://github.com/craigahobbs/', 'https://craigahobbs.github.io/', 'https://github.com/geotiffjs/',
-            'https://github.com/nodeca/pako', 'http://www.apache.org/licenses/'
+            'https://github.com/craigahobbs/', 'https://craigahobbs.github.io/'
         )
         app = Roadie()
         found = set()

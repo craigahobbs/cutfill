@@ -40,23 +40,19 @@ clean:
 	rm -rf Makefile.base pylintrc
 
 
-# Stage the front end in the package - the viewer's application, the planning tools' modules ("plan/lib/" - the
-# application's page maps their imports - but for the command line's, which a browser doesn't load), and the GeoTIFF
-# reader's script and its license. The staged front end is committed - the package is installed from the repository
-# (pip) without Node.js - so it's staged before the package's environment's commands (its tests, say): the pre-commit
-# gate keeps it the sources'.
+# Stage the front end in the package - the viewer's application, and the planning tools' modules ("plan/lib/" - the
+# application's page maps their imports - but for the command line's, which a browser doesn't load). The staged front
+# end is committed - the package is installed from the repository (pip) without Node.js - so it's staged before the
+# package's environment's commands (its tests, say): the pre-commit gate keeps it the sources'.
 .PHONY: static
 $(DEFAULT_VENV_BUILD): | static
 static:
 	@$(MAKE) --no-print-directory -C $(VIEWER) app
-	@$(MAKE) --no-print-directory -C $(PLAN) build/npm.build
 	rm -rf src/roadie/static
 	mkdir -p $(STATIC)/plan
 	cp -R $(VIEWER)/build/app/. $(STATIC)/
 	cp -R $(PLAN)/lib $(STATIC)/plan/
 	rm $(STATIC)/plan/lib/cli.js $(STATIC)/plan/lib/locate.js
-	cp $(PLAN)/node_modules/geotiff/dist-browser/geotiff.js $(STATIC)/
-	cp $(PLAN)/node_modules/geotiff/LICENSE $(STATIC)/geotiff.LICENSE.txt
 
 
 # Run the application

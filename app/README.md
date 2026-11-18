@@ -18,8 +18,8 @@ by [waitress](https://github.com/Pylons/waitress#readme) to this computer only (
 front end's statics (and chisel's API documentation, `/doc/`) - the front end does the rest in the browser.
 
 The front end is the package's `static` directory - `make static` copies the viewer's staged application there, with
-the planning tools' modules (`plan/lib/`) and the GeoTIFF reader's script (and its license). It's committed, so the
-package is installed from the repository without Node.js:
+the planning tools' modules (`plan/lib/`). It's committed, so the package is installed from the repository without
+Node.js:
 
 ```sh
 python3 -m venv roadie-venv

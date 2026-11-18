@@ -2,6 +2,7 @@ import {autoSteps, browserIo, ollamaHostDefault, planRoad, siteDefaults} from '.
 import {crc32, deflateSync} from '../lib/browser/zlib.js';
 import {inflateSync, crc32 as nodeCrc32} from 'node:zlib';
 import {siteEast, siteNorth, testItem, testPages, testSite} from './terrainHelpers.js';
+import {testFetch, testTiff} from './tiffHelpers.js';
 import {Buffer} from '../lib/browser/buffer.js';
 import {Buffer as NodeBuffer} from 'node:buffer';
 import assert from 'node:assert/strict';
@@ -107,9 +108,17 @@ const notesAnswer = {
 const barnAnswer = {'found': true, 'west': 300, 'south': 60, 'east': 380, 'north': 120, 'why': 'A block.'};
 
 
-// Create a fake browser window - its fetch has the USGS's services (the test site's) and Ollama's model. The window
-// records its fetches' URLs ("fetches") and its timeouts' delays.
-function fakeWindow({mapType = 'image/png', imageLoads = true, scriptLoads = true} = {}) {
+// The test site's elevation model's file - a gentle valley
+const modelUrl = 'https://example.com/model.tif';
+const modelFetch = testFetch({[modelUrl]: testTiff({
+    'width': 2000, 'height': 2000, 'tileWidth': 256, 'tileHeight': 256, 'east': siteEast - 1000, 'north': siteNorth + 1000,
+    'elevation': (col, row) => 1700 + 0.03 * Math.abs(col - 1040) + 0.02 * (1000 - row)
+})});
+
+
+// Create a fake browser window - its fetch has the USGS's services (the test site's), its elevation model's file (any
+// model's), and Ollama's model. The window records its fetches' URLs ("fetches") and its timeouts' delays.
+function fakeWindow({mapType = 'image/png', imageLoads = true} = {}) {
     const item = testItem('CO_New_2020', 'x47y443', '2022-02-10');
     const pages = testPages({'items': [item]});
     const response = (value) => ({
@@ -121,31 +130,11 @@ function fakeWindow({mapType = 'image/png', imageLoads = true, scriptLoads = tru
         'arrayBuffer': () => Promise.resolve(typeof value === 'string' ? new TextEncoder().encode(value).buffer : value.slice().buffer)
     });
 
-    // A GeoTIFF image of a gentle valley - the test site's elevation model
-    const geotiffImage = {
-        'getOrigin': () => [siteEast - 1000, siteNorth + 1000],
-        'getResolution': () => [1, -1],
-        'getGeoKeys': () => ({'ProjectedCSTypeGeoKey': 26913}),
-        'getWidth': () => 2000,
-        'getHeight': () => 2000,
-        'getGDALNoData': () => -999999,
-        'readRasters': ({'window': [x1, y1, x2, y2]}) => {
-            const data = new Float32Array((x2 - x1) * (y2 - y1));
-            for (let y = y1; y < y2; y++) {
-                for (let x = x1; x < x2; x++) {
-                    data[(y - y1) * (x2 - x1) + (x - x1)] = 1700 + 0.03 * Math.abs(x - 1040) + 0.02 * (1000 - y);
-                }
-            }
-            return Promise.resolve([data]);
-        }
-    };
-
     const window = {
         'fetches': [],
         'timeouts': [],
         'blobs': [],
         'revoked': [],
-        'scripts': [],
         'canvases': [],
         'TextEncoder': TextEncoder,
         'encodeURIComponent': encodeURIComponent,
@@ -197,25 +186,14 @@ function fakeWindow({mapType = 'image/png', imageLoads = true, scriptLoads = tru
                     return canvas;
                 }
                 return {};
-            },
-            'head': {'append': (script) => {
-                window.scripts.push(script.src);
-                queueMicrotask(() => {
-                    if (scriptLoads) {
-                        window.GeoTIFF = {'fromUrl': (url) => {
-                            window.fetches.push(url);
-                            return Promise.resolve({'getImage': () => Promise.resolve(geotiffImage)});
-                        }};
-                        script.onload();
-                    } else {
-                        script.onerror();
-                    }
-                });
-            }}
+            }
         },
-        'fetch': (url, {method = 'GET', body = null} = {}) => {
+        'fetch': (url, options = {}) => {
+            const {method = 'GET', body = null} = options;
             window.fetches.push(method === 'GET' ? url : `${method} ${url}`);
-            if (url.endsWith('/api/chat')) {
+            if (url.endsWith('.tif')) {
+                return modelFetch(modelUrl, options);
+            } else if (url.endsWith('/api/chat')) {
                 const {messages: [{content}]} = JSON.parse(body);
                 const answer = content.includes('Translate the notes') ? notesAnswer : barnAnswer;
                 return Promise.resolve(response({'message': {'content': JSON.stringify(answer)}}));
@@ -292,7 +270,7 @@ test('browserIo, plots and elevation models', async () => {
     await assert.rejects(browserIo(broken).renderPng('<svg'), {'message': 'Could not draw a plot'});
     assert.deepEqual(broken.revoked, ['blob:1']);
 
-    // An elevation model is read with the GeoTIFF reader - its script is loaded once
+    // An elevation model's file is read - its header and tags, and a window's tiles
     const image = await io.openImage('https://example.com/model.tif');
     assert.deepEqual(image.georeference, {
         'zone': 13, 'east': siteEast - 1000, 'north': siteNorth + 1000, 'resolution': 1, 'width': 2000, 'height': 2000, 'noData': -999999
@@ -300,14 +278,7 @@ test('browserIo, plots and elevation models', async () => {
     const elevations = await image.read([1039, 1000, 1042, 1001]);
     assert.deepEqual([...elevations].map((value) => Math.round(value * 100) / 100), [1700.03, 1700, 1700.03]);
     await io.openImage('https://example.com/other.tif');
-    assert.deepEqual(window.scripts, ['geotiff.js']);
-    assert.deepEqual(window.fetches, ['https://example.com/model.tif', 'https://example.com/other.tif']);
-
-    // The reader's script doesn't load
-    await assert.rejects(
-        browserIo(fakeWindow({'scriptLoads': false})).openImage('https://example.com/model.tif'),
-        {'message': 'Could not load the elevation models\' reader'}
-    );
+    assert.deepEqual(window.fetches, ['https://example.com/model.tif', 'https://example.com/model.tif', 'https://example.com/other.tif']);
 });
 
 
@@ -420,7 +391,7 @@ test('browserIo, stopped', async () => {
     await assert.rejects(io.getJson('https://tnmaccess.nationalmap.gov/api/v1/products?max=1'), stopped);
     await assert.rejects(io.sleep(250), stopped);
     await assert.rejects(io.openImage('https://example.com/model.tif'), stopped);
-    await assert.rejects(image.read([0, 0, 1, 1]), stopped);
+    await assert.rejects(image.read([0, 600, 1, 601]), stopped);
     await assert.rejects(io.ask({'model': 'test-model', 'question': 'Where?', 'schema': {}}), stopped);
     assert.deepEqual(fetches, [true]);
 

@@ -72,14 +72,21 @@ the plots the model was shown (`ask/`), and a saved answer is used again - so a 
 be corrected by hand.
 
 `lib/browser/` is the tools in a web browser, for the Roadie application's page (`../app/`): `io.js` is the tools'
-input and output functions there - files in memory, the USGS's services and Ollama by `fetch`, an elevation model by
-the GeoTIFF reader's script, and a plot's PNG image by a canvas - and `planRoad`, which runs a plan config with
+input and output functions there - files in memory, the USGS's services, its elevation models, and Ollama by
+`fetch`, and a plot's PNG image by a canvas - and `planRoad`, which runs a plan config with
 `auto` and returns the road plan, its map image a data URL (a run of the same site keeps the plan's site data and
 the features that were added to it - its options are the run's - and an abort signal stops it). `util.js`,
 `buffer.js`, and `zlib.js` are the Node modules the tools import (`parseArgs`, a buffer's base64 text, and `crc32`
 and `deflateSync`) - the page's import map names them. `auto` reports what it's doing - its step's key (`autoSteps`)
 and text - to the input and output functions' `status` function, if they have it, and `--no-plots` skips the work
 directory's plots (the page doesn't keep them).
+
+An elevation model is a GeoTIFF file - a grid of elevations, and where it is - of 100 megabytes or more, so only the
+parts of it that a site needs are fetched (HTTP range requests). The tools read it themselves
+(`lib/elevationImage.js`), in Node and in a browser: the USGS's 1 meter models are of one form - a little-endian TIFF
+file of 32-bit floating point elevations, in LZW-compressed tiles, with no predictor, the horizontal predictor, or the
+floating point predictor - and the reader is that form's alone (a model of another form is an error that says so).
+A file's header and tags are one request, and a window's tiles are a request for each row of tiles.
 
 `plot` draws a plan for the planning session to study: its terrain, shaded (lit from the northwest) with contours,
 its features, each option's line with its stations and structures, and the plan's coordinates along its sides.

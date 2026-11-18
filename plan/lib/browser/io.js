@@ -3,15 +3,15 @@
 // ("util.js", "buffer.js", and "zlib.js").
 //
 // The tools read and write files as they go, so a browser's files are in memory - the plan config and the road plan
-// are the page's, and the plan's map image is a data URL in the plan. The USGS's services and Ollama are fetched from
-// the browser: they answer other sites' pages.
+// are the page's, and the plan's map image is a data URL in the plan. The USGS's services, its elevation models, and
+// Ollama are fetched from the browser: they answer other sites' pages.
 
 import {fetchBytes, fetchJson} from '../usgs.js';
 import {isLayoutPlan, siteLayout} from '../terrain.js';
 import {ollamaAsk, ollamaHostDefault} from '../ollama.js';
 import {Buffer} from 'node:buffer';
 import {autoCommand} from '../auto.js';
-import {elevationImage} from '../elevationImage.js';
+import {openElevationImage} from '../elevationImage.js';
 
 
 // The steps of a plan - the page shows them as the plan is made - and a site's default margin and grid spacing (the
@@ -22,10 +22,6 @@ export {siteDefaults} from '../terrain.js';
 
 // The default Ollama host - the page asks it for its models
 export {ollamaHostDefault} from '../ollama.js';
-
-
-// The GeoTIFF reader's script (it defines "GeoTIFF")
-const geotiffUrl = 'geotiff.js';
 
 
 // The paths of a plan's files in memory - its plan config, its plan, and its map image - and the paths of its work
@@ -79,16 +75,7 @@ export function browserIo(window, ollamaHost = ollamaHostDefault, files = new Ma
         'getBytes': (url) => fetchBytes(fetchFn, sleep, url),
         sleep,
         'renderPng': (svg) => svgPng(window, svg),
-        'openImage': async (url) => {
-            check();
-            const {fromUrl} = await geotiffReader(window);
-            const image = elevationImage(await (await fromUrl(url)).getImage());
-            return {...image, 'read': async (imageWindow) => {
-                check();
-                const elevations = await image.read(imageWindow);
-                return elevations;
-            }};
-        },
+        'openImage': (url) => openElevationImage(fetchFn, url),
         'ask': async (question) => {
             check();
             const answer = await ollamaAsk(fetchFn, ollamaHost, question);
@@ -122,19 +109,6 @@ async function svgPng(window, svg) {
     } finally {
         window.URL.revokeObjectURL(url);
     }
-}
-
-
-// Get the GeoTIFF reader - its script is loaded when it's first needed
-function geotiffReader(window) {
-    window.roadieGeotiff ??= new Promise((resolve, reject) => {
-        const script = window.document.createElement('script');
-        script.onload = () => resolve(window.GeoTIFF);
-        script.onerror = () => reject(new Error('Could not load the elevation models\' reader'));
-        script.src = geotiffUrl;
-        window.document.head.append(script);
-    });
-    return window.roadieGeotiff;
 }
 
 

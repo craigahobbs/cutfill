@@ -62,6 +62,10 @@ Run `make` in `viewer/` or `plan/` for a subproject's own targets (e.g.
 - The planning tools' tests never use the network - the USGS services and elevation models are faked
   (`plan/test/terrainHelpers.js`). To check the tools against the real services, plan a site in the scratchpad
   (`node plan/bin/plan.js site <site.json> <plan.json>`, then `route` and `plot`).
+- The planning tools read the USGS's elevation models themselves (`plan/lib/elevationImage.js` - a GeoTIFF file's
+  header, tags, and LZW-compressed tiles, by HTTP range requests), in Node and in a browser. The reader is of the one
+  form the 1 meter models have, not a general TIFF reader - a model of another form is an error that says so. Its
+  tests' files are made by `plan/test/tiffHelpers.js`.
 - The planning tools, not the planning session's model, do the plan's engineering and write the plan file
   (`options` engineers the standard options, `route` follows existing roads, `draws` finds the terrain's draws,
   `draft` writes the descriptions' facts, and `feature`, `keep`, and `describe` edit the plan) - so that sessions on
