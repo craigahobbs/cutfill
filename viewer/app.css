@@ -457,8 +457,8 @@ button.roadie-link {
     color: white;
 }
 .roadie-map-hint {
-    color: #555;
     font-size: 0.9em;
+    opacity: 0.7;
 }
 .roadie-map {
     max-width: 100%;

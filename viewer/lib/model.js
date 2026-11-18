@@ -616,6 +616,29 @@ export function validateSitePlan(planValue) {
 }
 
 
+// The default names' prefixes of a plan config's marks - its exclusion areas, its roads, and its places to pass through
+export const siteMarkPrefixes = {'exclusions': 'Exclusion', 'roads': 'Road', 'passThrough': 'Place'};
+
+
+// Get the names of a plan config's marks of a member ("exclusions", "roads", or "passThrough") - a mark without a name
+// is named for its place among them ("Exclusion 2")
+export function siteMarkNames(site, member) {
+    return (site[member] ?? []).map(({name = null}, ixMark) => name ?? `${siteMarkPrefixes[member]} ${ixMark + 1}`);
+}
+
+
+// Get the function that tests whether a plan's feature is a mark of one of the plan configs - an exclusion area, or an
+// added road, of one of their marks' names. (A plan's other exclusion areas are its own, and its roads that a tool
+// added, too.)
+export function siteMarkFeatures(...sites) {
+    const exclusions = new Set(sites.flatMap((site) => siteMarkNames(site, 'exclusions')));
+    const roads = new Set(sites.flatMap((site) => siteMarkNames(site, 'roads')));
+    return ({type, name = null, added = false}) => (
+        (type === 'exclusion' && exclusions.has(name)) || (type === 'road' && added && roads.has(name))
+    );
+}
+
+
 // Validate a road site model (a plan config) - returns an object with "site" on success, or "error" on failure
 export function validateSite(siteValue) {
     let site;
