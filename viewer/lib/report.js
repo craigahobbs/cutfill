@@ -108,7 +108,7 @@ export function buildReport(data, globals, args, width, canvasViews = false) {
     // 3D views
     const exploreArgs = {...views[0].args, 'explore': true};
     html.push(heading(3, '3D Views'));
-    html.push(`<p>${argsLink(globals, 'Explore the plan in 3D', exploreArgs)} (full window, with keyboard controls)</p>`);
+    html.push(`<p>${argsLink(globals, 'Explore the plan in 3D', exploreArgs)} (full window, with mouse controls)</p>`);
     const views3D = [];
     for (let ixView = 0; ixView < views.length; ixView++) {
         const reportView = views[ixView];

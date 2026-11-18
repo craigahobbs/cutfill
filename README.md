@@ -9,7 +9,11 @@ Elevation Program's 1 meter lidar terrain, engineers the road's options from the
 end point, and costs them, and an [Ollama](https://ollama.com) model reads what the notes ask for.
 Then view the options' report and 3D views, edit the plan and run it again, and save it to a file.
 
-![The Roadie viewer](example/screenshot.png)
+[![The example road plan's 3D views](example/screenshot.png)](https://craigahobbs.github.io/roadie/viewer/#url=../example/example.json)
+
+**[View the example road plan](https://craigahobbs.github.io/roadie/viewer/#url=../example/example.json)** - an access road up a hill, with its road options' report,
+3D views, and 3D explorer - in the Roadie viewer, on this project's web site. There's nothing to
+install. See [The example](#the-example).
 
 The application needs only Python 3.11 or later (and `git`, to install it). A site must be in the
 United States, where the USGS has 1 meter lidar terrain.
@@ -232,19 +236,21 @@ grid cell's corner elevations. Smooth terrain looks smoother up close but is no 
 On large sites, where the road is too narrow to see at a view's scale, the selected option's road is
 also drawn as a highlighted centerline.
 
-The report's "Explore" links open the full-window **3D explorer**, controlled with the keyboard:
+The report's "Explore" links open the full-window **3D explorer**, controlled with the mouse:
 
-| Keys | Action |
+| Control | Action |
 | --- | --- |
-| Arrows or W A S D | Move left, right, forward, and back |
-| + / - | Zoom in and out |
-| Q / E or Shift+Left / Right | Rotate |
-| Shift+Up / Down | Tilt - view more from above or from the side |
-| R / F or Page Up / Down | Raise and lower the view |
-| [ / ] | Less and more vertical exaggeration |
-| T, N, 0 | Top view, face north, and reset |
-| H | Show or hide the keyboard help |
+| Drag | Move - the ground follows the mouse |
+| Right-drag or Shift+drag | Rotate (drag left and right) and tilt (drag up and down) |
+| Wheel or pinch | Zoom in and out, around the mouse |
+| Double-click | Center the view there and zoom in (Shift+double-click zooms out) |
+| Arrows, + / - | Move, and zoom in and out |
+| The + / - buttons, North, Top, and Reset | Zoom, face north, view from above, and view the whole site |
+| The Exaggeration slider | The vertical exaggeration |
+| The ? button | Show or hide the controls' help |
 | Esc | Back to the report |
+
+The explorer's URL keeps its view, so it can be reloaded or shared.
 
 
 ### Viewing a road plan
@@ -342,7 +348,7 @@ application and run it to make the plan again.
 
 Run the application, and open the example's file to view it - `example/example.json` in the
 repository, or [download it](https://craigahobbs.github.io/roadie/example/example.json). On the project's web site,
-[view the example](viewer/#url=../example/example.json) - the site's viewer links to it from its home
+[view the example](https://craigahobbs.github.io/roadie/viewer/#url=../example/example.json) - the site's viewer links to it from its home
 page, too.
 
 
