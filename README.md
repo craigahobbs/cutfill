@@ -12,9 +12,10 @@ terrain, and views the resulting road grading plans in 3D.
 - **`make update FILE=<plan.json>`** launches a Claude Code session that
   updates an existing road plan model with review feedback (from the city or county, a surveyor, or
   the owner, for example).
-- **`make auto FILE=<plan>.site.json [OUTPUT=<plan.json>]`** engineers a road site's standard options
-  with the planning tools alone - no Claude Code session. It's a first look: the site's notes aren't
-  read, and the site isn't checked.
+- **`make auto FILE=<plan>.site.json [OUTPUT=<plan.json>] [OLLAMA_MODEL=<model>]`** plans a road by
+  procedure - no Claude Code session. The planning tools do every step, and an
+  [Ollama](https://ollama.com) model (a local model, or one of Ollama's cloud models) is asked only
+  what the site's notes ask for.
 - **`make run FILE=<plan.json>`** opens the road plan model in the Roadie viewer, a JavaScript web
   application.
 
@@ -346,18 +347,35 @@ decide, and the command to run - so that a smaller model can follow them. It use
   - The commands that change a plan are logged, in order, in its work directory (`commands.txt`).
 - `make evaluate FILE=<plan.json> [DETAIL=1]` - the same analysis and cost score, from `make`
 
-To engineer the site's standard options without a session - the plan the tools can make from the
-site's data alone:
+To plan a road by procedure, without a session:
 
 ```
-make auto FILE=driveway.site.json
+make auto FILE=driveway.site.json OLLAMA_MODEL=qwen3.8:27b-mlx
 ```
 
-It creates the site, engineers the standard options (`ARGS` are the `options` command's arguments -
-`ARGS="--width 16 --surface asphalt"`, say), sets their drafted descriptions, and plots the plan
-(`driveway.work/plan.png`). Nothing a planning session does is done: the site's notes aren't read,
-and the site isn't checked - a building in the way, an unmapped road, or a draw that needs a culvert
-isn't in the plan (the tools note the unmapped draws its roads cross).
+The planning tools do every step of the plan, in order: they create the site, engineer its standard
+options (and add the unmapped draws the options cross, as streams, with their culverts), keep the
+best options, set their descriptions - the plan's facts - and plot the plan (`driveway.work/plan.png`,
+and `map.png`, the plan on its topographic map). A model doesn't run the plan - it's asked the
+questions the tools can't answer, through [Ollama](https://ollama.com) (`OLLAMA_MODEL` is a local
+model, or one of Ollama's cloud models, and `OLLAMA_HOST` is Ollama's host):
+
+- **What the notes ask for** - the road's width and surface, a maximum grade, the existing roads to
+  rule out, and the places the road must avoid or pass through. A note the plan can't act on is
+  reported, and it's in the plan's limitations.
+- **Where each of those places is** - the model is shown the site's topographic map, with the plan's
+  coordinates' grid, and it answers with a rectangle (which it corrects on a closer look) or a point.
+  A place to avoid is an exclusion area, and a place to pass through is an option through it.
+
+Each question is small - a paragraph and an image - and its answer is a JSON object that the tools
+check: a model that drives a planning session carries every plot it has read, and a local model
+stalls on that. The answers are saved in the work directory (`decisions.json`), and they're used
+again: to correct an answer - a place's rectangle, say - change it there, and run the command again
+(`ARGS=--fresh` asks the model again). A model's reading of a map is the weakest part of a plan - the
+plan's descriptions say what the model found, to be verified.
+
+Without `OLLAMA_MODEL`, the site's notes aren't read - the plan is the tools' alone. `ARGS` are the
+`auto` command's other arguments (`ARGS="--width 16 --surface asphalt"`, say).
 
 The session writes `driveway.json` (and the site's topographic map image, `driveway.png`), with
 intermediate files in `driveway.work/`. Use `OUTPUT` to write the model elsewhere - for example, to
