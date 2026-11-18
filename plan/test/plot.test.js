@@ -336,6 +336,53 @@ test('plot', async () => {
 });
 
 
+test('plot, the topographic map', async () => {
+    // The plan's topographic map image (beside the plan) is plotted in place of its terrain, with the coordinates' grid
+    const plan = {...fixturePlan(), 'image': 'road.png'};
+    const io = testIo({'files': {'plans/road.json': JSON.stringify(plan), 'plans/road.png': Uint8Array.from([137, 80, 78, 71])}});
+    const svgs = [];
+    io.renderPng = (svg) => {
+        svgs.push(svg);
+        return Uint8Array.from([1]);
+    };
+    assert.equal(await cliMain(['plot', 'plans/road.json', 'map.png', '--map'], io), 0);
+    assert.equal(io.output.join(''), 'Wrote map.png (1400 x 1058 pixels)\n');
+    const [svg] = svgs;
+    assert.equal(svg, planPlot(validatePlan(plan).plan, planTopo(plan), 1400, null, 'iVBORw==').svg);
+    assert.ok(svg.includes(
+        '<image x="64" y="34" width="1320" height="990" preserveAspectRatio="none" href="data:image/png;base64,iVBORw=="/>'
+    ));
+    assert.ok(svg.includes('>Fixture Plan - topographic map, coordinates in feet</text>'));
+    assert.ok(!svg.includes('opacity="0.55"') && !svg.includes('stroke="#8f6f45"'));
+    assert.ok(svg.includes('>0: Direct</text>'));
+
+    // The grid - a line at each of the coordinates' ticks
+    const elements = svg.slice(svg.indexOf('>') + 1, -'</svg>'.length).replace(/></g, '>\n<').split('\n');
+    const grid = elements.filter((element) => element.includes('stroke-dasharray="6 4"'));
+    assert.equal(grid.length, 9 + 7);
+    assert.deepEqual([grid[1], grid[10]], [
+        '<path d="M229 34L229 1024" stroke="#222222" stroke-width="0.7" stroke-opacity="0.45" stroke-dasharray="6 4"/>',
+        '<path d="M64 859L1384 859" stroke="#222222" stroke-width="0.7" stroke-opacity="0.45" stroke-dasharray="6 4"/>'
+    ]);
+    assert.ok(!planPlot(validatePlan(plan).plan, planTopo(plan)).svg.includes('stroke-dasharray="6 4"'));
+
+    // A box of the map - the image is all of the map, and the plot's margins cover the rest of it
+    assert.deepEqual(plotCommand(['plans/road.json', 'box.png', '--map', '--box', '100,50,300,150'], io), {
+        'code': 0, 'lines': ['Wrote box.png (1400 x 728 pixels)']
+    });
+    assert.ok(svgs[1].includes('<image x="-596" y="-956" width="2640" height="1980" preserveAspectRatio="none" href="data:image/png;'));
+
+    // A plan without a topographic map image, and one whose image is missing
+    const error = {'code': 1, 'lines': ['error: The plan "road.json" has no topographic map image']};
+    const noImage = testIo({'files': {'road.json': JSON.stringify(fixturePlan()), 'other.json': JSON.stringify(plan)}});
+    assert.deepEqual(plotCommand(['road.json', 'map.png', '--map'], noImage), error);
+    assert.deepEqual(plotCommand(['other.json', 'map.png', '--map'], noImage).lines, [
+        'error: The plan "other.json" has no topographic map image'
+    ]);
+    assert.deepEqual(noImage.written, []);
+});
+
+
 test('plot, a box that is not a part of the plan', () => {
     const io = testIo({'files': {'road.json': JSON.stringify(fixturePlan())}});
     for (const box of ['300,50,100,150', '100,150,300,50', '100,50,100,150', '400,0,500,100', '0,300,100,400']) {
@@ -368,7 +415,7 @@ test('plot, a plan that cannot be loaded or is invalid', async () => {
 
 test('plot, usage', async () => {
     const usage = `\
-usage: plan plot <plan.json> <plot.png> [--box X1,Y1,X2,Y2]
+usage: plan plot <plan.json> <plot.png> [--box X1,Y1,X2,Y2] [--map]
 
   Plot a road plan model - its terrain (shaded, with contours), features, and options, with the plan's
   coordinates along its sides
@@ -376,6 +423,8 @@ usage: plan plot <plan.json> <plot.png> [--box X1,Y1,X2,Y2]
 options:
   --box X1,Y1,X2,Y2    plot a part of the plan - the box from (X1, Y1) to (X2, Y2), in the plan's coordinates -
                        for a closer look, with the contour interval of its elevations
+  --map                plot the plan's topographic map image in place of its terrain, with the coordinates' grid
+                       - to find the places on the map (its buildings and labels) in the plan's coordinates
 `;
     const invalid = [
         [], ['road.json'], ['road.json', 'plot.png', 'extra'], ['--width', 'plot.png'], ['road.json', 'plot.png', '--box'],

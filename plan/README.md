@@ -6,8 +6,9 @@ with [javascript-build](https://github.com/craigahobbs/javascript-build#readme),
 [Roadie viewer](../viewer/README.md)'s road plan model. See the project's [README](../README.md).
 
 ```sh
+node bin/plan.js auto <site.json> <plan.json>    # plan a road by procedure (--model MODEL: ask an Ollama model)
 node bin/plan.js site <site.json> <plan.json>    # create a plan's site from a road site model - its lidar terrain
-node bin/plan.js plot <plan.json> <plot.png>     # plot a plan - its terrain, features, and options
+node bin/plan.js plot <plan.json> <plot.png>     # plot a plan - its terrain (--map: its map), features, and options
 node bin/plan.js locate <plan.json> <lat,long>   # a latitude and longitude's plan coordinates (--xy: the reverse)
 node bin/plan.js feature <plan.json> TYPE X,Y... # add a topographic feature (--remove NAME: remove a name's)
 node bin/plan.js draws <plan.json>               # the terrain's unmapped draws (--add NUMBER: add one as a stream)
@@ -22,9 +23,9 @@ node bin/plan.js doc [site | plan]               # the road site model's documen
 ```
 
 `make plan FILE=<plan>.site.json` and `make update FILE=<plan.json>` launch a planning session (Claude Code) that
-follows [PLAN.md](PLAN.md) with these tools, `make auto FILE=<plan>.site.json` engineers a site's standard options
-with the tools alone (`site`, `options`, `draft`, `describe`, and `plot`), and `make evaluate FILE=<plan.json>` prints
-a plan's analysis and cost (`evaluate`, the viewer's). Every command has a `-h` argument.
+follows [PLAN.md](PLAN.md) with these tools, `make auto FILE=<plan>.site.json` plans a road by procedure (`auto` -
+with `OLLAMA_MODEL`, it asks an Ollama model what the site's notes ask for), and `make evaluate FILE=<plan.json>`
+prints a plan's analysis and cost (`evaluate`, the viewer's). Every command has a `-h` argument.
 
 The tools do the plan's engineering and its file's edits, so that a planning session's result doesn't depend on the
 code its model writes - or on how capable its model is. The session does what the tools can't: it applies the site's
@@ -46,9 +47,28 @@ its trails are for reference. `site` on an existing plan creates its site again 
 plan's options are kept, and its features that aren't the site's - its rock outcrops, its other exclusion areas,
 and the features that `feature` and `draws` added (the model's `added` features) - in the new grid's coordinates.
 
+`auto` plans a road by procedure (`lib/auto.js`): the plan's steps are its code's, in order - `site`, the notes'
+directives, `options` (with the unmapped draws the options cross added as streams, until they cross none), the
+options through the notes' places, `keep`, the descriptions (`draft`'s, with what the plan did), and the plots. A
+model doesn't run the plan: it's asked questions (`lib/ollama.js`, Ollama's chat API - `--model` is an Ollama model,
+and `OLLAMA_HOST` is the host), each a paragraph and at most one image, each answered with a JSON object of the
+question's schema that `auto` checks. The notes question's answer is the notes' directives - the road's width and
+surface, a maximum grade and minimum radius (the site model's own criteria win), the existing roads to rule out,
+the places to avoid and to pass through, and the notes it doesn't cover (they're reported, and they're in the plan's
+limitations). A place question shows the model the site's map plot (`plot --map`), and its answer is a rectangle -
+which the model corrects on a closer look, a plot of the rectangle and the map around it - or a point. A rectangle
+that contains the start or end point is cut back from it by the minimum radius, and one that covers more than a
+quarter of the site isn't a place. The questions are
+asked without thinking, with a limited answer: a local model that thinks about an image may think for minutes, and
+a request that's abandoned keeps the model busy. The answers are saved in the work directory (`decisions.json`) with
+the plots the model was shown (`ask/`), and a saved answer is used again - so a run is repeatable, and an answer can
+be corrected by hand.
+
 `plot` draws a plan for the planning session to study: its terrain, shaded (lit from the northwest) with contours,
 its features, each option's line with its stations and structures, and the plan's coordinates along its sides.
 `--box X1,Y1,X2,Y2` plots a part of the plan, for a closer look - with the contour interval of its elevations.
+`--map` plots the plan's topographic map image in place of its terrain, with the coordinates' grid - the map has
+what the terrain lacks (buildings and labels).
 
 `draws` finds the site's draws - the valleys of its terrain that carry water in a storm, which a road crosses with a
 culvert (`lib/draws.js`). The terrain's hollows are filled (a road's fill across a valley is one - its culvert isn't

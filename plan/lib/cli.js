@@ -1,5 +1,6 @@
 // cli.js - the Roadie planning tools' command line (see bin/plan.js)
 
+import {autoCommand, autoUsage} from './auto.js';
 import {describeCommand, describeUsage, keepCommand, keepUsage} from './options.js';
 import {draftCommand, draftUsage} from './draft.js';
 import {drawsCommand, drawsUsage} from './draws.js';
@@ -16,7 +17,8 @@ import {siteTypes} from './site.js';
 
 // The command line's usage text lines
 const usage = [
-    'usage: plan site <site.json> <plan.json>',
+    'usage: plan auto <site.json> <plan.json> [--model MODEL]',
+    '       plan site <site.json> <plan.json>',
     '       plan plot <plan.json> <plot.png> [--box X1,Y1,X2,Y2]',
     '       plan locate <plan.json> [--xy] <latitude,longitude | x,y>...',
     '       plan feature <plan.json> TYPE [-n NAME] X,Y X,Y...',
@@ -30,6 +32,8 @@ const usage = [
     '       plan describe <plan.json> <descriptions.md>',
     '       plan doc [site | plan]',
     '',
+    '  auto      Plan a road by procedure - its site, options, and descriptions - asking a model what the site\'s',
+    '            notes ask for',
     '  site      Create a road plan model\'s site from a road site model - its topography (USGS lidar terrain),',
     '            georeference, start and end points, features, and topographic map image',
     '  plot      Plot a road plan model - its terrain, features, and options',
@@ -79,6 +83,7 @@ function docCommand(args) {
 // (see bin/plan.js) that returns the command's exit code and its output text lines, or null if the arguments are
 // invalid - and each command's usage text lines
 const commands = {
+    'auto': [autoCommand, autoUsage],
     'site': [siteCommand, siteUsage],
     'plot': [plotCommand, plotUsage],
     'locate': [locateCommand, locateUsage],
@@ -96,7 +101,7 @@ const commands = {
 
 
 // The commands that change a road plan model - they're logged in the plan's work directory
-const planCommands = ['site', 'feature', 'draws', 'options', 'route', 'profile', 'keep', 'describe'];
+const planCommands = ['auto', 'site', 'feature', 'draws', 'options', 'route', 'profile', 'keep', 'describe'];
 
 
 // The plan's work directory's log of the commands that changed the plan
@@ -122,9 +127,10 @@ export async function cliMain(argv, io) {
         io.writeFile(path, text);
     }};
     const result = help ? {'code': 0, 'lines': commandUsage} : await command(args, commandIo) ?? {'code': 1, 'lines': commandUsage};
-    if (result.code === 0 && planCommands.includes(name) && written.length > 0) {
-        // The plan is the last file a command writes - its work directory is the site command's
-        const logPath = `${written.at(-1).replace(/\.json$/i, '')}.work/${commandLog}`;
+    // The plan is the last JSON file a command writes, but for its work directory's - whose name is the site command's
+    const planPath = written.findLast((path) => /\.json$/i.test(path) && !path.includes('.work/')) ?? null;
+    if (result.code === 0 && planCommands.includes(name) && planPath !== null) {
+        const logPath = `${planPath.replace(/\.json$/i, '')}.work/${commandLog}`;
         let log = '';
         try {
             log = io.readFile(logPath);

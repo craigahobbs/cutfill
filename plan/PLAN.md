@@ -30,7 +30,7 @@ given there, with its full path, so it runs from any directory; don't change dir
 | Command | Purpose |
 | --- | --- |
 | `plan.js site SITE.json PLAN.json` | Create the plan's site: its topography grid (USGS lidar terrain), start and end points, streams, roads, trails, exclusion areas, and topographic map image |
-| `plan.js plot PLAN.json OUT.png [--box X1,Y1,X2,Y2]` | Plot the plan's terrain (shaded, with contours), features, and options, with the plan's coordinates along its sides - with `--box`, a part of the plan, for a closer look |
+| `plan.js plot PLAN.json OUT.png [--box X1,Y1,X2,Y2] [--map]` | Plot the plan's terrain (shaded, with contours), features, and options, with the plan's coordinates along its sides - with `--box`, a part of the plan, for a closer look, and with `--map`, the plan's topographic map (its buildings and labels) in place of its terrain, with the coordinates' grid |
 | `plan.js locate PLAN.json [--xy] POINT...` | Convert latitudes and longitudes (`LATITUDE,LONGITUDE`) to the plan's coordinates - or, with `--xy`, the plan's coordinates (`X,Y`) to latitudes and longitudes - with the ground elevation there, and the nearest road and stream |
 | `plan.js feature PLAN.json TYPE [-n NAME] X,Y X,Y...` | Add a topographic feature - a `stream`, `road`, or `trail` line, or a `rock` or `exclusion` area polygon - or, with `--remove NAME`, remove the features of a name |
 | `plan.js draws PLAN.json [--add NUMBER]...` | List the site's unmapped draws - the valleys of its terrain that drain 3 acres (1.2 hectares) or more and aren't along its streams - or, with `--add`, add draws as streams |
@@ -49,12 +49,12 @@ Run a command with `-h` for its arguments.
 
 - **The tools write the plan.** The plan file is large (its elevation grid is most of it) - don't read
   it, and don't change it with your own code.
-- **Look at every image you make** with the Read tool - the topographic map image and the plots. A
-  plot's sides have the plan's coordinates (x is east and y is north, from the site's southwest
-  corner), so you can read a point's x and y from it. A large site's plot is coarse - plot a part of
-  it with `--box X1,Y1,X2,Y2` to see what you're checking. The topographic map image is the same
-  ground as the site's plot, edge to edge - it has what the plot lacks (buildings, labels), and a
-  place's position across the image is its position across the plot.
+- **Look at every image you make** with the Read tool - once: don't read an image again. A plot's
+  sides have the plan's coordinates (x is east and y is north, from the site's southwest corner), so
+  you can read a point's x and y from it. A large site's plot is coarse - plot a part of it with
+  `--box X1,Y1,X2,Y2` to see what you're checking. `plot --map` plots the site's topographic map in
+  place of its terrain - it has what the terrain lacks (buildings, as small lavender blocks, and
+  labels), with the coordinates' grid to find them by.
 - **Report only what the tools reported or you saw in a plot.** The lengths, stations, grades, and
   cost scores are the tools' - copy them, don't compute or round them yourself.
 - The commands that change the plan are logged in `WORK/commands.txt`, in order - you don't need to
@@ -98,9 +98,10 @@ longitude in the notes to the plan's coordinates).
 
 1. Run `site SITE.json PLAN.json`, and read its output: the grid's size, the elevation range, the
    feature counts, each point's ground elevation and nearest road and stream, and any warnings.
-2. Run `plot PLAN.json WORK/site.png`, and Read the plot and the topographic map image (`<plan>.png`,
-   beside the plan). Contours that form V's pointing uphill are valleys and draws, V's pointing
-   downhill are ridges and spurs, and wider-spaced contours on a slope are a bench.
+2. Run `plot PLAN.json WORK/site.png` and `plot PLAN.json WORK/map.png --map`, and Read the two
+   plots - the site's terrain, and its topographic map. Contours that form V's pointing uphill are
+   valleys and draws, V's pointing downhill are ridges and spurs, and wider-spaced contours on a
+   slope are a bench.
 
 The elevations are measured - they aren't yours to change. Check what the tools can't know, and
 correct the plan's features with `feature` (in the plan's coordinates - to correct a feature, remove
@@ -113,8 +114,8 @@ at the building site - and on ground a road can reach (not in a stream bed)? *Do
 points are the user's. If one looks misplaced, say so in your report and in the plan's limitations.
 
 **Action 2.2 - What the notes say to avoid.** *Look:* each place the notes say the road must avoid
-(Action 1.3), on the topographic map image and the plot (the plot's shading shows buildings' graded
-pads). *Do:* add an `exclusion` polygon around all of it - `feature PLAN.json exclusion -n NAME X,Y
+(Action 1.3), on the site's map plot (a `plot --map --box` of it, for a closer look) - the terrain
+plot's shading shows buildings' graded pads, too. *Do:* add an `exclusion` polygon around all of it - `feature PLAN.json exclusion -n NAME X,Y
 X,Y X,Y...` (its corners, in the plan's coordinates). Check the area and extent that `feature`
 reports, and that it doesn't cover the start or end point. Add only the notes' places now - Action
 3.4 checks the roads against the map's buildings. Add a `rock` polygon only for rock that the notes
@@ -182,8 +183,8 @@ Repeat until `options` notes no draws but those you skipped.
 
 *Default:* add the draw - a culvert is the cautious choice.
 
-**Action 3.4 - The roads against the map.** *Look:* `plot PLAN.json WORK/options.png`, and the same
-ground on the topographic map image. *Decide:* does a road cross a building, or the yard around one?
+**Action 3.4 - The roads against the map.** *Look:* `plot PLAN.json WORK/options.png --map` - the
+options on the site's topographic map. *Decide:* does a road cross a building, or the yard around one?
 *Do:* add an `exclusion` polygon around that building's lot (Action 2.2 - it's an assumption: say so
 in the plan's description), and run `options` again.
 

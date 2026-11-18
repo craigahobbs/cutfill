@@ -45,8 +45,8 @@ help:
 	@echo "            [auto|evaluate|plan|run|update]"
 	@echo ""
 	@echo "  make plan FILE=<plan>.site.json [OUTPUT=<plan.json>]  Engineer road plan options for a road site (Claude Code)"
-	@echo "  make auto FILE=<plan>.site.json [OUTPUT=<plan.json>]  Engineer a road site's standard options - the tools alone"
-	@echo "    (auto accepts ARGS=<the options command's arguments> - the road's width and surface, say)"
+	@echo "  make auto FILE=<plan>.site.json [OUTPUT=<plan.json>]  Plan a road by procedure - the tools, and an Ollama model's answers"
+	@echo "    (auto accepts OLLAMA_MODEL=<model> - without it, the site's notes aren't read - and ARGS=<the auto command's arguments>)"
 	@echo "  make update FILE=<plan.json>               Update a road plan model with review feedback (Claude Code)"
 	@echo "    (plan and update accept MODEL=<model> [default: $(MODEL)] and EFFORT=<effort> [default: $(EFFORT)],"
 	@echo "     OLLAMA=1 to launch Claude Code with an Ollama model - MODEL then names the Ollama model,"
@@ -112,22 +112,18 @@ PLAN.md exactly. Write the road plan model to \"$(PLAN_OUTPUT)\" and put interme
 \"$(PLAN_WORK)/\". $(AGENT_PROMPT)"
 
 
-# Engineer a road site's standard options with the planning tools alone - no agent session. It's the plan the tools
-# can make from the site's data: its site (USGS lidar terrain, streams, and roads), its standard options (the road
-# that follows the existing roads, and an all-new road), and their drafted descriptions. Nothing a planning session
-# does is done - the site model's notes aren't read, and the site isn't checked against its plots (unmapped roads,
-# buildings, and draws aren't in the plan - the tools note the draws its roads cross). ARGS are the options command's
-# arguments (the road's width and surface, say).
+# Plan a road by procedure - no agent session. The planning tools do every step of the plan: its site (USGS lidar
+# terrain, streams, and roads), its standard options (the road that follows the existing roads, and an all-new road -
+# with the unmapped draws they cross), and their descriptions. With OLLAMA_MODEL (an Ollama model - a local model, or
+# one of Ollama's cloud models), the model is asked what the site's notes ask for, and where the places they name are
+# on the site's map - each a small question, whose answer the plan acts on. Without it, the notes aren't read. ARGS
+# are the auto command's other arguments (the road's width and surface, or --fresh).
 .PHONY: auto
 auto: build/npm.build
-	@test -n "$(FILE)" || (echo 'usage: make auto FILE=<plan>.site.json [OUTPUT=<plan.json>] [ARGS=<options arguments>]' && exit 1)
+	@test -n "$(FILE)" || (echo 'usage: make auto FILE=<plan>.site.json [OUTPUT=<plan.json>] [OLLAMA_MODEL=<model>] [ARGS=<arguments>]' && exit 1)
 	@test -f "$(FILE)" || (echo 'error: "$(FILE)" does not exist' && exit 1)
 	@test "$(PLAN_OUTPUT)" != "$(FILE)" || (echo 'error: "$(FILE)" is not a road site model file ("<plan>.site.json") - use OUTPUT to name the road plan model' && exit 1)
-	$(PLAN_TOOL) site "$(FILE)" "$(PLAN_OUTPUT)"
-	$(PLAN_TOOL) options "$(PLAN_OUTPUT)" $(ARGS)
-	$(PLAN_TOOL) draft "$(PLAN_OUTPUT)" "$(PLAN_WORK)/descriptions.md"
-	$(PLAN_TOOL) describe "$(PLAN_OUTPUT)" "$(PLAN_WORK)/descriptions.md"
-	$(PLAN_TOOL) plot "$(PLAN_OUTPUT)" "$(PLAN_WORK)/plan.png"
+	$(PLAN_TOOL) auto "$(FILE)" "$(PLAN_OUTPUT)"$(if $(OLLAMA_MODEL), --model "$(OLLAMA_MODEL)") $(ARGS)
 
 
 # Update an existing road plan model with review feedback (Claude Code or Grok) - the session asks for the feedback

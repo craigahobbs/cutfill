@@ -16,7 +16,8 @@ help:
 	@echo "usage: make [auto|clean|commit|doc|evaluate|gh-pages|lint|plan|run|site|superclean|test|update]"
 	@echo ""
 	@echo "  make plan FILE=<plan>.site.json [OUTPUT=<plan.json>]  Engineer road plan options for a road site (Claude Code)"
-	@echo "  make auto FILE=<plan>.site.json [OUTPUT=<plan.json>]  Engineer a road site's standard options - the tools alone"
+	@echo "  make auto FILE=<plan>.site.json [OUTPUT=<plan.json>]  Plan a road by procedure - the tools, and an Ollama model's answers"
+	@echo "    (auto accepts OLLAMA_MODEL=<model> - without it, the site's notes aren't read)"
 	@echo "  make update FILE=<plan.json>               Update a road plan model with review feedback (Claude Code)"
 	@echo "    (plan and update accept MODEL=<model> [default: opus] and EFFORT=<effort> [default: high],"
 	@echo "     OLLAMA=1 to launch Claude Code with an Ollama model - MODEL then names the Ollama model,"
@@ -45,7 +46,8 @@ run:
 
 # Engineer road plan options for a road site (a road site model - the road's start and end points and its planning
 # notes), and update an existing road plan model with review feedback (Claude Code or Grok) - see plan/Makefile and
-# plan/PLAN.md. "auto" engineers a road site's standard options with the planning tools alone.
+# plan/PLAN.md. "auto" plans a road by procedure: the planning tools do every step, and an Ollama model (OLLAMA_MODEL)
+# is asked only what the site's notes ask for.
 .PHONY: plan update auto
 plan update auto:
 	$(call SUBMAKE,plan,$@)

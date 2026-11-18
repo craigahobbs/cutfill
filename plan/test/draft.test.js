@@ -1,4 +1,4 @@
-import {draftLines, draftUsage} from '../lib/draft.js';
+import {draftLines, draftUsage, lineRuns} from '../lib/draft.js';
 import {planePlan, roadPlan} from './roadFixtures.js';
 import assert from 'node:assert/strict';
 import {cliMain} from '../lib/cli.js';
@@ -50,6 +50,7 @@ ${limitations}
 
 The least-cost option - its cost score is 48.6. It's 440 feet long and 12 feet wide, gravel, and its maximum grade is 20.9%.
 
+- **Line.** From the start, it runs northeast for about 200 feet, east for about 110 feet, and northeast for about 130 feet to the end.
 - **Structures.** 1 culvert (Creek culvert, station 2+11, 1.5 ft), 1 retaining wall (stations 2+60 to 3+00), 1 turnout.
 - **Earthwork.** 108 cy of cut and 338 cy of fill, with 237 cy of borrow (import). Its deepest cut is 2.0 feet (station 3+43). \
 Its deepest fill is 7.0 feet (station 2+13).
@@ -61,6 +62,7 @@ Its deepest fill is 7.0 feet (station 2+13).
 It costs 703% more than the least-cost option, "Direct" - its cost score is 390.2. It's 464 feet long and 14 feet wide, asphalt, \
 and its new road's maximum grade is 9.9%.
 
+- **Line.** From the start, it runs east for about 230 feet and northeast for about 230 feet to the end.
 - **Existing road.** It follows an existing road for 100 feet (stations 3+00 to 4+00).
 ${upgrade}
 - **Structures.** 1 bridge (stations 1+60 to 2+50).
@@ -75,8 +77,8 @@ Its deepest fill is 5.3 feet (station 1+59).
     assert.equal(await cliMain(['describe', 'road.json', 'work/descriptions.md'], described), 0);
     assert.equal(described.output.join(''), `\
 The plan's description: 5 lines
-Option "Direct"'s description: 6 lines
-Option "Bridge - East"'s description: 8 lines
+Option "Direct"'s description: 7 lines
+Option "Bridge - East"'s description: 9 lines
 Wrote road.json
 `);
 
@@ -161,17 +163,18 @@ test('draft, existing roads and added features', async () => {
     ]);
 
     // The existing road's names and its grades as it's built
-    assert.deepEqual(lines.slice(lines.indexOf('# Option: Existing Roads'), lines.indexOf('# Option: Existing Roads') + 6), [
+    assert.deepEqual(lines.slice(lines.indexOf('# Option: Existing Roads'), lines.indexOf('# Option: Existing Roads') + 7), [
         '# Option: Existing Roads',
         '',
         'It costs 11% more than the least-cost option, "New Road" - its cost score is 23.5. It\'s 569 feet long and 14 feet wide, ' +
             'gravel, and its new road\'s maximum grade is 4.9%.',
         '',
+        '- **Line.** From the start, it runs east for about 310 feet and north for about 260 feet to the end.',
         '- **Existing road.** It follows Mill Rd for 424 feet (stations 1+45 to 5+69) - as built, its grade averages 3.6%, and 5% ' +
             'over its steepest 50 feet.',
         upgrade
     ]);
-    assert.deepEqual(lines.slice(lines.indexOf('# Option: New Road') + 4, lines.indexOf('# Option: New Road') + 8), [
+    assert.deepEqual(lines.slice(lines.indexOf('# Option: New Road') + 5, lines.indexOf('# Option: New Road') + 9), [
         '- **Structures.** 1 turnout.',
         '- **Earthwork.** 27 cy of cut and 5 cy of fill, with 18 cy of waste (export). Its deepest cut is 0.2 feet (station 0+56). ' +
             'It has no fill.',
@@ -207,11 +210,45 @@ test('draft, a meters plan down a steep plane', () => {
         'The least-cost option - its cost score is 6.1. It\'s 100 meters long and 4.3 meters wide, gravel, and its new road\'s ' +
             'maximum grade is 0%.',
         '',
+        '- **Line.** From the start, it runs south for about 100 meters to the end.',
         '- **Existing road.** It follows an existing road for 100 meters (stations 0+000 to 0+100) - as built, its grade averages ' +
             '30%, which is over the 12% maximum grade.',
         upgrade,
         '- **Structures.** None.',
         '- **Earthwork.** 0 m³ of cut and 0 m³ of fill. It has no cut. It has no fill.'
+    ]);
+});
+
+
+test('lineRuns', () => {
+    // A road's line - the compass directions it runs in, and how far in each
+    const runs = (points) => {
+        const x = points.map((point) => point[0]);
+        const y = points.map((point) => point[1]);
+        const stations = [0];
+        for (let ix = 1; ix < points.length; ix++) {
+            stations.push(stations[ix - 1] + Math.hypot(x[ix] - x[ix - 1], y[ix] - y[ix - 1]));
+        }
+        return lineRuns(x, y, stations).map(({direction, length}) => [direction, Math.round(length)]);
+    };
+    assert.deepEqual(runs([[0, 0], [100, 0]]), [['east', 100]]);
+    assert.deepEqual(runs([[0, 0], [0, -240]]), [['south', 240]]);
+
+    // The line is sampled in 24 equal lengths, so a run's length is about its road's
+    assert.deepEqual(runs([[0, 0], [120, 0], [120, 120], [0, 240], [-120, 240]]), [
+        ['east', 132], ['north', 110], ['northwest', 177], ['west', 110]
+    ]);
+
+    // A short run is a part of its longer neighbor - the one before it, or the one after it
+    assert.deepEqual(runs([[0, 0], [400, 0], [400, 30], [600, 30]]), [['east', 630]]);
+    assert.deepEqual(runs([[0, 0], [0, 20], [300, 20], [300, 320]]), [['east', 336], ['north', 284]]);
+    assert.deepEqual(runs([[0, 0], [300, 0], [300, 300], [320, 300]]), [['east', 310], ['north', 310]]);
+    assert.deepEqual(runs([[0, 0], [300, 0], [330, 30], [330, 330], [630, 330]]), [['east', 353], ['north', 314], ['east', 275]]);
+    assert.deepEqual(runs([[0, 0], [400, 400], [400, 420], [600, 420]]), [['northeast', 589], ['east', 196]]);
+
+    // A road of many runs is five runs, at most - its shortest are parts of their neighbors
+    assert.deepEqual(runs([[0, 0], [100, 0], [100, 110], [220, 110], [220, 240], [360, 240], [360, 390], [520, 390]]), [
+        ['east', 114], ['north', 341], ['east', 152], ['north', 152], ['east', 152]
     ]);
 });
 

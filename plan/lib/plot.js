@@ -37,8 +37,10 @@ const cellPixels = 1.5;
 // Create a road plan model's plot - "topo" is the plan's topography grid object (the viewer's planTopo), "width" is
 // the plot's width, in pixels, and "box" is the part of the plan to plot ([x1, y1, x2, y2], in the plan's coordinates) -
 // or null, for all of it. A box's plot is a closer look: its contour interval is its own elevations', and it's no
-// taller than it's wide. Returns the plot's SVG markup, and its "width" and "height".
-export function planPlot(plan, topo, width = 1400, box = null) {
+// taller than it's wide. "map" is the plan's topographic map image (a PNG image's base64 text), to plot it in place of
+// the terrain - with the plan's coordinates' grid, to find the map's places by - or null. Returns the plot's SVG
+// markup, and its "width" and "height".
+export function planPlot(plan, topo, width = 1400, box = null, map = null) {
     const {units} = plan;
     const {spacing, nCols, nRows} = topo;
 
@@ -58,87 +60,98 @@ export function planPlot(plan, topo, width = 1400, box = null) {
     const isInside = ({x, y}) => x >= west && x <= east && y >= south && y <= top;
     const elements = [];
 
-    // The terrain's cells - a fine grid's cells are drawn "step" grid cells together. The last cells are to the
-    // grid's edge (or the box's).
-    const step = Math.max(1, Math.floor(cellPixels / (spacing * scale)));
-    const cols = gridSteps(Math.floor(west / spacing), Math.min(nCols - 1, Math.ceil(east / spacing)), step);
-    const rows = gridSteps(Math.floor(north / spacing), Math.min(nRows - 1, Math.ceil((topo.height - south) / spacing)), step);
-    const cellX = (ixCol) => marginLeft + (cols[ixCol] * spacing - west) * scale;
-    const cellY = (ixRow) => marginTop + (rows[ixRow] * spacing - north) * scale;
+    // The topographic map image is the plan's ground, edge to edge - a box's plot shows its part of it (the rest is
+    // covered by the plot's margins)
+    let interval = null;
+    if (map !== null) {
+        elements.push(
+            `<rect x="${marginLeft}" y="${marginTop}" width="${px(plotWidth)}" height="${px(plotHeight)}" fill="#f4f1ea"/>`,
+            `<image x="${px(planX(0))}" y="${px(planY(topo.height))}" width="${px(topo.width * scale)}" ` +
+                `height="${px(topo.height * scale)}" preserveAspectRatio="none" href="data:image/png;base64,${map}"/>`
+        );
+    } else {
+        // The terrain's cells - a fine grid's cells are drawn "step" grid cells together. The last cells are to the
+        // grid's edge (or the box's).
+        const step = Math.max(1, Math.floor(cellPixels / (spacing * scale)));
+        const cols = gridSteps(Math.floor(west / spacing), Math.min(nCols - 1, Math.ceil(east / spacing)), step);
+        const rows = gridSteps(Math.floor(north / spacing), Math.min(nRows - 1, Math.ceil((topo.height - south) / spacing)), step);
+        const cellX = (ixCol) => marginLeft + (cols[ixCol] * spacing - west) * scale;
+        const cellY = (ixRow) => marginTop + (rows[ixRow] * spacing - north) * scale;
 
-    // The shaded terrain - lit from the northwest
-    const shade = terrainShade(topo, cols, rows);
-    const image = Buffer.from(grayPng(cols.length, rows.length, shade)).toString('base64');
-    const imageWidth = cellX(cols.length - 1) - cellX(0);
-    const imageHeight = cellY(rows.length - 1) - cellY(0);
-    elements.push(
-        `<rect x="${marginLeft}" y="${marginTop}" width="${px(plotWidth)}" height="${px(plotHeight)}" fill="#f4f1ea"/>`,
-        `<image x="${px(cellX(0))}" y="${px(cellY(0))}" width="${px(imageWidth)}" height="${px(imageHeight)}" preserveAspectRatio="none" ` +
-            `opacity="0.55" href="data:image/png;base64,${image}"/>`
-    );
+        // The shaded terrain - lit from the northwest
+        const shade = terrainShade(topo, cols, rows);
+        const image = Buffer.from(grayPng(cols.length, rows.length, shade)).toString('base64');
+        const imageWidth = cellX(cols.length - 1) - cellX(0);
+        const imageHeight = cellY(rows.length - 1) - cellY(0);
+        elements.push(
+            `<rect x="${marginLeft}" y="${marginTop}" width="${px(plotWidth)}" height="${px(plotHeight)}" fill="#f4f1ea"/>`,
+            `<image x="${px(cellX(0))}" y="${px(cellY(0))}" width="${px(imageWidth)}" height="${px(imageHeight)}" ` +
+                `preserveAspectRatio="none" opacity="0.55" href="data:image/png;base64,${image}"/>`
+        );
 
-    // The contours - the index contours are labeled. A box's contour interval is its elevations'.
-    let interval = contourInterval(plan, topo);
-    if (box !== null) {
-        let minZ = Infinity;
-        let maxZ = -Infinity;
-        for (const row of rows) {
-            for (const col of cols) {
-                minZ = Math.min(minZ, topo.rows[row][col]);
-                maxZ = Math.max(maxZ, topo.rows[row][col]);
-            }
-        }
-        interval = rangeContourInterval(maxZ - minZ, units);
-    }
-    const segments = new Float64Array(8);
-    const minorPath = [];
-    const indexPath = [];
-    const labels = new Map();
-    for (let ixRow = 0; ixRow < rows.length - 1; ixRow++) {
-        const rowTop = topo.rows[rows[ixRow]];
-        const rowBottom = topo.rows[rows[ixRow + 1]];
-        const yTop = cellY(ixRow);
-        const cellHeight = (rows[ixRow + 1] - rows[ixRow]) * spacing * scale;
-        for (let ixCol = 0; ixCol < cols.length - 1; ixCol++) {
-            const zNW = rowTop[cols[ixCol]];
-            const zNE = rowTop[cols[ixCol + 1]];
-            const zSE = rowBottom[cols[ixCol + 1]];
-            const zSW = rowBottom[cols[ixCol]];
-            const zMax = Math.max(zNW, zNE, zSE, zSW);
-            const xLeft = cellX(ixCol);
-            const cellWidth = (cols[ixCol + 1] - cols[ixCol]) * spacing * scale;
-            for (let ixLevel = Math.ceil(Math.min(zNW, zNE, zSE, zSW) / interval); ; ixLevel++) {
-                const level = contourLevel(ixLevel, interval);
-                if (level > zMax) {
-                    break;
+        // The contours - the index contours are labeled. A box's contour interval is its elevations'.
+        interval = contourInterval(plan, topo);
+        if (box !== null) {
+            let minZ = Infinity;
+            let maxZ = -Infinity;
+            for (const row of rows) {
+                for (const col of cols) {
+                    minZ = Math.min(minZ, topo.rows[row][col]);
+                    maxZ = Math.max(maxZ, topo.rows[row][col]);
                 }
-                const isIndex = ixLevel % 5 === 0;
-                const segmentCount = cellContours(zNW, zNE, zSE, zSW, level, segments);
-                for (let ixSegment = 0; ixSegment < segmentCount; ixSegment++) {
-                    const ix = ixSegment * 4;
-                    const x1 = xLeft + segments[ix] * cellWidth;
-                    const y1 = yTop + segments[ix + 1] * cellHeight;
-                    (isIndex ? indexPath : minorPath).push(
-                        `M${px(x1)} ${px(y1)}L${px(xLeft + segments[ix + 2] * cellWidth)} ${px(yTop + segments[ix + 3] * cellHeight)}`
-                    );
+            }
+            interval = rangeContourInterval(maxZ - minZ, units);
+        }
+        const segments = new Float64Array(8);
+        const minorPath = [];
+        const indexPath = [];
+        const labels = new Map();
+        for (let ixRow = 0; ixRow < rows.length - 1; ixRow++) {
+            const rowTop = topo.rows[rows[ixRow]];
+            const rowBottom = topo.rows[rows[ixRow + 1]];
+            const yTop = cellY(ixRow);
+            const cellHeight = (rows[ixRow + 1] - rows[ixRow]) * spacing * scale;
+            for (let ixCol = 0; ixCol < cols.length - 1; ixCol++) {
+                const zNW = rowTop[cols[ixCol]];
+                const zNE = rowTop[cols[ixCol + 1]];
+                const zSE = rowBottom[cols[ixCol + 1]];
+                const zSW = rowBottom[cols[ixCol]];
+                const zMax = Math.max(zNW, zNE, zSE, zSW);
+                const xLeft = cellX(ixCol);
+                const cellWidth = (cols[ixCol + 1] - cols[ixCol]) * spacing * scale;
+                for (let ixLevel = Math.ceil(Math.min(zNW, zNE, zSE, zSW) / interval); ; ixLevel++) {
+                    const level = contourLevel(ixLevel, interval);
+                    if (level > zMax) {
+                        break;
+                    }
+                    const isIndex = ixLevel % 5 === 0;
+                    const segmentCount = cellContours(zNW, zNE, zSE, zSW, level, segments);
+                    for (let ixSegment = 0; ixSegment < segmentCount; ixSegment++) {
+                        const ix = ixSegment * 4;
+                        const x1 = xLeft + segments[ix] * cellWidth;
+                        const y1 = yTop + segments[ix + 1] * cellHeight;
+                        (isIndex ? indexPath : minorPath).push(
+                            `M${px(x1)} ${px(y1)}L${px(xLeft + segments[ix + 2] * cellWidth)} ${px(yTop + segments[ix + 3] * cellHeight)}`
+                        );
 
-                    // An index contour's label - one in each block of the plot, so they're spread over it
-                    if (isIndex) {
-                        const key = `${level}/${Math.floor(x1 / labelBlock)}/${Math.floor(y1 / labelBlock)}`;
-                        if (!labels.has(key)) {
-                            labels.set(key, [level, x1, y1]);
+                        // An index contour's label - one in each block of the plot, so they're spread over it
+                        if (isIndex) {
+                            const key = `${level}/${Math.floor(x1 / labelBlock)}/${Math.floor(y1 / labelBlock)}`;
+                            if (!labels.has(key)) {
+                                labels.set(key, [level, x1, y1]);
+                            }
                         }
                     }
                 }
             }
         }
-    }
-    elements.push(
-        `<path d="${minorPath.join('')}" fill="none" stroke="#8f6f45" stroke-width="0.6"/>`,
-        `<path d="${indexPath.join('')}" fill="none" stroke="#7a5a35" stroke-width="1.1"/>`
-    );
-    for (const [level, x, y] of labels.values()) {
-        elements.push(svgText(`${level}`, x, y, 9, 'middle', '#5a4020', false));
+        elements.push(
+            `<path d="${minorPath.join('')}" fill="none" stroke="#8f6f45" stroke-width="0.6"/>`,
+            `<path d="${indexPath.join('')}" fill="none" stroke="#7a5a35" stroke-width="1.1"/>`
+        );
+        for (const [level, x, y] of labels.values()) {
+            elements.push(svgText(`${level}`, x, y, 9, 'middle', '#5a4020', false));
+        }
     }
 
     // The features - a stream or a road is a line, a trail is a dotted line, and a rock outcrop or an exclusion area is
@@ -255,21 +268,27 @@ export function planPlot(plan, topo, width = 1400, box = null) {
         `<rect x="${marginLeft}" y="${marginTop}" width="${px(plotWidth)}" height="${px(plotHeight)}" fill="none" stroke="#333333"/>`
     );
     const tick = niceStep(Math.max(east - west, top - south), 10);
+    const gridLine = (coords) => (
+        map !== null ? [`<path d="M${px(coords[0])} ${px(coords[1])}L${px(coords[2])} ${px(coords[3])}" stroke="#222222" ` +
+            'stroke-width="0.7" stroke-opacity="0.45" stroke-dasharray="6 4"/>'] : []
+    );
     for (let x = Math.ceil(west / tick) * tick; x <= east + 1e-9; x += tick) {
         elements.push(
+            ...gridLine([planX(x), marginTop, planX(x), bottom]),
             svgPolyline([planX(x), bottom, planX(x), bottom + 5], '#333333', 1),
             svgText(`${Math.round(x)}`, planX(x), bottom + 15, 11, 'middle', '#333333', false)
         );
     }
     for (let y = Math.ceil(south / tick) * tick; y <= top + 1e-9; y += tick) {
         elements.push(
+            ...gridLine([marginLeft, planY(y), right, planY(y)]),
             svgPolyline([marginLeft - 5, planY(y), marginLeft, planY(y)], '#333333', 1),
             svgText(`${Math.round(y)}`, marginLeft - 8, planY(y), 11, 'end', '#333333', false)
         );
     }
 
     // The title and the options' legend
-    const title = `${plan.title} - contours every ${interval} ${units}, coordinates in ${units}`;
+    const title = `${plan.title} - ${map !== null ? 'topographic map' : `contours every ${interval} ${units}`}, coordinates in ${units}`;
     elements.push(svgText(title, marginLeft, 16, 14, 'start', '#222222', true));
     for (let ixLegend = 0; ixLegend < legend.length; ixLegend++) {
         const [name, color] = legend[ixLegend];
@@ -359,14 +378,16 @@ export function plotFonts(platform, env, fileExists) {
 
 // The "plot" command's usage text lines
 export const plotUsage = [
-    'usage: plan plot <plan.json> <plot.png> [--box X1,Y1,X2,Y2]',
+    'usage: plan plot <plan.json> <plot.png> [--box X1,Y1,X2,Y2] [--map]',
     '',
     '  Plot a road plan model - its terrain (shaded, with contours), features, and options, with the plan\'s',
     '  coordinates along its sides',
     '',
     'options:',
     '  --box X1,Y1,X2,Y2    plot a part of the plan - the box from (X1, Y1) to (X2, Y2), in the plan\'s coordinates -',
-    '                       for a closer look, with the contour interval of its elevations'
+    '                       for a closer look, with the contour interval of its elevations',
+    '  --map                plot the plan\'s topographic map image in place of its terrain, with the coordinates\' grid',
+    '                       - to find the places on the map (its buildings and labels) in the plan\'s coordinates'
 ];
 
 
@@ -379,11 +400,14 @@ const rBox = /^\d+(\.\d+)?(,\d+(\.\d+)?){3}$/;
 export function plotCommand(args, io) {
     const paths = [];
     let box = null;
+    let isMap = false;
     for (let ixArg = 0; ixArg < args.length; ixArg++) {
         const arg = args[ixArg];
         if (arg === '--box' && rBox.test(args[ixArg + 1] ?? '')) {
             box = args[ixArg + 1].split(',').map(Number);
             ixArg += 1;
+        } else if (arg === '--map') {
+            isMap = true;
         } else if (arg.startsWith('-')) {
             return null;
         } else {
@@ -412,8 +436,18 @@ export function plotCommand(args, io) {
         }
     }
 
+    // The plan's topographic map image is beside the plan
+    let map = null;
+    if (isMap) {
+        try {
+            map = Buffer.from(io.readBytes(`${planPath.slice(0, planPath.lastIndexOf('/') + 1)}${plan.image}`)).toString('base64');
+        } catch {
+            return {'code': 1, 'lines': [`error: The plan "${planPath}" has no topographic map image`]};
+        }
+    }
+
     // Plot the plan
-    const {svg, width, height} = planPlot(plan, topo, 1400, box);
+    const {svg, width, height} = planPlot(plan, topo, 1400, box, map);
     io.writeBytes(plotPath, io.renderPng(svg));
     return {'code': 0, 'lines': [`Wrote ${plotPath} (${width} x ${height} pixels)`]};
 }

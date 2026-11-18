@@ -16,7 +16,8 @@ async function run(argv) {
 
 // The command line's usage
 const usage = `\
-usage: plan site <site.json> <plan.json>
+usage: plan auto <site.json> <plan.json> [--model MODEL]
+       plan site <site.json> <plan.json>
        plan plot <plan.json> <plot.png> [--box X1,Y1,X2,Y2]
        plan locate <plan.json> [--xy] <latitude,longitude | x,y>...
        plan feature <plan.json> TYPE [-n NAME] X,Y X,Y...
@@ -30,6 +31,8 @@ usage: plan site <site.json> <plan.json>
        plan describe <plan.json> <descriptions.md>
        plan doc [site | plan]
 
+  auto      Plan a road by procedure - its site, options, and descriptions - asking a model what the site's
+            notes ask for
   site      Create a road plan model's site from a road site model - its topography (USGS lidar terrain),
             georeference, start and end points, features, and topographic map image
   plot      Plot a road plan model - its terrain, features, and options

@@ -58,8 +58,70 @@ export function draftCommand(args, io) {
 }
 
 
-// Create the draft's Markdown lines of a plan
-export function draftLines(plan) {
+// The compass directions' names, counterclockwise from east, and the most runs of a road's line
+const directionNames = ['east', 'northeast', 'north', 'northwest', 'west', 'southwest', 'south', 'southeast'];
+const lineRunCount = 5;
+const lineSamples = 24;
+
+
+// Describe a road's line - the compass directions it runs in, from its start to its end, and how far it runs in each.
+// "x", "y", and "stations" are the road's alignment. The line is sampled in equal lengths, and its short runs are
+// merged into their longer neighbors - so it's the road's general way, not its every curve. Returns the runs: each
+// run's "direction" name and its "length".
+export function lineRuns(x, y, stations) {
+    const length = stations.at(-1);
+    const pointAt = (stationValue) => {
+        let ix = 1;
+        while (ix < stations.length - 1 && stations[ix] < stationValue) {
+            ix += 1;
+        }
+        const fraction = (stationValue - stations[ix - 1]) / Math.max(stations[ix] - stations[ix - 1], 1e-9);
+        return [x[ix - 1] + (x[ix] - x[ix - 1]) * fraction, y[ix - 1] + (y[ix] - y[ix - 1]) * fraction];
+    };
+
+    // The samples' directions - consecutive samples of a direction are a run
+    const runs = [];
+    const addRun = (direction, runLength) => {
+        if (runs.length > 0 && runs.at(-1).direction === direction) {
+            runs.at(-1).length += runLength;
+        } else {
+            runs.push({direction, 'length': runLength});
+        }
+    };
+    for (let ixSample = 0; ixSample < lineSamples; ixSample++) {
+        const [x1, y1] = pointAt(length * ixSample / lineSamples);
+        const [x2, y2] = pointAt(length * (ixSample + 1) / lineSamples);
+        const direction = ((Math.round(Math.atan2(y2 - y1, x2 - x1) / (Math.PI / 4)) % 8) + 8) % 8;
+        addRun(directionNames[direction], length / lineSamples);
+    }
+
+    // Merge the shortest run into its longer neighbor, while there are too many runs or it's a short one
+    for (;;) {
+        let ixShort = 0;
+        for (let ix = 1; ix < runs.length; ix++) {
+            if (runs[ix].length < runs[ixShort].length) {
+                ixShort = ix;
+            }
+        }
+        if (runs.length === 1 || (runs.length <= lineRunCount && runs[ixShort].length >= 0.1 * length)) {
+            break;
+        }
+        const ixInto = ixShort === 0 || (ixShort < runs.length - 1 && runs[ixShort + 1].length > runs[ixShort - 1].length) ?
+            ixShort + 1 : ixShort - 1;
+        runs[ixInto].length += runs[ixShort].length;
+        const merged = runs.splice(0, runs.length).filter((run, ix) => ix !== ixShort);
+        for (const run of merged) {
+            addRun(run.direction, run.length);
+        }
+    }
+    return runs;
+}
+
+
+// Create the draft's Markdown lines of a plan. "additions" are what a planning process adds to the plan's facts: the
+// road's "purpose" (a paragraph, or null), its "featureNotes" (a line for each feature it added), and its
+// "limitations" (sentences).
+export function draftLines(plan, {purpose = null, featureNotes = [], limitations = []} = {}) {
     const {units} = plan;
     const topo = planTopo(plan);
     const criteria = planCriteria(plan);
@@ -77,6 +139,7 @@ export function draftLines(plan) {
     const lines = [
         '# Plan',
         '',
+        ...(purpose !== null ? [purpose, ''] : []),
         `**The site.** From ${pointText(plan.start, 'start')} to ${pointText(plan.end, 'end')}. The straight line between them ` +
             `${climb < 0 ? 'descends' : 'climbs'} ${lengthText(Math.abs(climb))} in ${lengthText(distance)} (${gradeText(straightGrade)})` +
             `${straightGrade > criteria.maxGrade ? ' - steeper than the maximum grade, so a road is longer than the straight line' : ''}.`,
@@ -97,13 +160,16 @@ export function draftLines(plan) {
                 lines.push(`- ${typeName}: ${[...names, ...(unnamed > 0 ? [`${unnamed} unnamed`] : [])].join(', ')}`);
             }
         }
+        if (featureNotes.length > 0) {
+            lines.push('', ...featureNotes.map((note) => `- ${note}`));
+        }
     }
     lines.push(
         '',
         '**Limitations.** The terrain is the USGS 3D Elevation Program\'s lidar ground elevations, and the streams, roads, and trails ' +
             'are the USGS National Map\'s. What they lack - buildings, property lines, utilities, and unmapped roads and drainages - ' +
             'isn\'t in the plan unless it was added. Turnarounds aren\'t modeled. The cost scores compare the options - they aren\'t ' +
-            'bid estimates.'
+            `bid estimates.${limitations.map((limitation) => ` ${limitation}`).join('')}`
     );
 
     // The options
@@ -133,6 +199,13 @@ export function draftLines(plan) {
         const alignmentY = option.alignment.map((point) => point.y);
         const alignmentZ = analysis.alignment.map((point) => point.z);
         const stations = polylineStations(alignmentX, alignmentY);
+        const runTexts = lineRuns(alignmentX, alignmentY, stations).map(({direction, length}) => (
+            `${direction} for about ${lengthText(Math.round(length / 10) * 10)}`
+        ));
+        lines.push(
+            `- **Line.** From the start, it runs ${runTexts.slice(0, -1).join(', ')}` +
+            `${['', '', ' and ', ', and '][Math.min(runTexts.length, 3)]}${runTexts.at(-1)} to the end.`
+        );
         const existingRoads = structures.filter(({type}) => type === 'existingRoad');
         for (const structure of existingRoads) {
             const {names, grade, steepest} = existingRoadGrades(

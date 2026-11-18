@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // plan.js - the Roadie planning tools' command line (see lib/cli.js)
 //
-// usage: node bin/plan.js site <site.json> <plan.json>
+// usage: node bin/plan.js auto <site.json> <plan.json> [--model MODEL]
+//        node bin/plan.js site <site.json> <plan.json>
 //        node bin/plan.js plot <plan.json> <plot.png> [--box X1,Y1,X2,Y2]
 //        node bin/plan.js locate <plan.json> [--xy] <latitude,longitude | x,y>...
 //        node bin/plan.js feature <plan.json> TYPE [-n NAME] X,Y X,Y...
@@ -17,6 +18,7 @@
 
 import {existsSync, mkdirSync, readFileSync, writeFileSync} from 'node:fs';
 import {fetchBytes, fetchJson} from '../lib/usgs.js';
+import {ollamaAsk, ollamaHost} from '../lib/ollama.js';
 import {Resvg} from '@resvg/resvg-js';
 import {cliMain} from '../lib/cli.js';
 import {dirname} from 'node:path';
@@ -56,6 +58,7 @@ process.exitCode = await cliMain(process.argv.slice(2), {
     'write': (text) => process.stdout.write(text),
     'getJson': (url) => fetchJson(fetch, sleep, url),
     'getBytes': (url) => fetchBytes(fetch, sleep, url),
+    'ask': (question) => ollamaAsk(fetch, ollamaHost(process.env), question),
     sleep,
     renderPng,
     openImage

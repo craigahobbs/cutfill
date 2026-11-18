@@ -26,7 +26,7 @@ make commit                       # the pre-commit gate: the subprojects' tests 
 make test [TEST=name]             # the viewer's unit tests (TEST runs one) and the planning tools' unit tests
 make lint                         # ESLint (the viewer and the planning tools)
 make plan FILE=<plan>.site.json   # plan a road (a Claude Code session)
-make auto FILE=<plan>.site.json   # engineer a road site's standard options - the planning tools alone
+make auto FILE=<plan>.site.json [OLLAMA_MODEL=<model>]   # plan a road by procedure - the tools, and a model's answers
 make evaluate FILE=<plan.json> [DETAIL=1]   # a plan's analysis and cost from the command line
 make doc                          # the road plan model documentation
 make run FILE=<plan.json>         # view a plan in the browser
@@ -56,6 +56,9 @@ Run `make` in `viewer/` or `plan/` for a subproject's own targets (e.g.
   different models get the same roads, with fewer tokens. When a session writes code for something every plan needs,
   make it a tool, and keep the tools' reports short (they're a session's context). Keep PLAN.md and the session's
   allowed commands (`plan/Makefile`) in step with the tools.
+- `auto` (`plan/lib/auto.js`) plans a road by procedure: its code runs the plan's steps, and a model (Ollama's -
+  `plan/lib/ollama.js`) is asked only small questions with checked JSON answers - it doesn't run the plan. A model's
+  question is asked without thinking, with a limited answer. Keep `auto`'s steps and PLAN.md's in step.
 - PLAN.md's steps are **actions** for the planning session's model - each says what to look at, what to decide (with
   a default), and the command to run - so that a smaller model can follow them. A step that needs no judgment is a
   tool's, not an action.
