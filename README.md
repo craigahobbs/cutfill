@@ -9,11 +9,11 @@ Elevation Program's 1 meter lidar terrain, engineers the road's options from the
 end point, and costs them, and an [Ollama](https://ollama.com) model reads what the notes ask for.
 Then view the options' report and 3D views, edit the plan and run it again, and save it to a file.
 
-[![The example road plan's 3D views](example/screenshot.png)](https://craigahobbs.github.io/roadie/viewer/#url=../example/example.json)
-
 **[View the example road plan](https://craigahobbs.github.io/roadie/viewer/#url=../example/example.json)** - an access road up a hill, with its road options' report,
 3D views, and 3D explorer - in the Roadie viewer, on this project's web site. There's nothing to
 install. See [The example](#the-example).
+
+[![The example road plan's 3D views](example/screenshot.png)](https://craigahobbs.github.io/roadie/viewer/#url=../example/example.json)
 
 The application needs only Python 3.11 or later (and `git`, to install it). A site must be in the
 United States, where the USGS has 1 meter lidar terrain.
