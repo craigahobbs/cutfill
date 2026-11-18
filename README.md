@@ -18,12 +18,16 @@ terrain, and views the resulting road grading plans in 3D.
   what the site's notes ask for.
 - **`make run FILE=<plan.json>`** opens the road plan model in the Roadie viewer, a JavaScript web
   application.
+- **`make app [DIR=<directory>]`** serves the Roadie application - the viewer, with a directory's
+  roads: its road site models and road plan models.
 
 ![The Roadie viewer](example/screenshot.png)
 
-Roadie has two parts: the **viewer** ([viewer/](viewer/)) and the **planning tools and instructions**
-(`plan/`) - both JavaScript. It requires `make` and Node.js 22 or later - and
-[Claude Code](https://claude.com/claude-code) to plan and update roads (see [Installing](#installing)).
+Roadie has three parts: the **viewer** ([viewer/](viewer/)) and the **planning tools and
+instructions** (`plan/`) - both JavaScript - and the **application** (`app/`), a Python package whose
+command line serves the viewer and a directory's roads. It requires `make` and Node.js 22 or later -
+Python 3.11 or later for the application - and [Claude Code](https://claude.com/claude-code) to plan
+and update roads (see [Installing](#installing)).
 A site must be in the United States, where the USGS has 1 meter lidar terrain.
 
 
@@ -475,20 +479,21 @@ links to it from its home page, too.
 ## Development
 
 ```
-make commit       # the pre-commit gate: the viewer's and the planning tools' tests and lint
-make test         # run the viewer's and the planning tools' unit tests (TEST=name runs one viewer test)
-make lint         # run ESLint on the viewer and the planning tools
+make commit       # the pre-commit gate: the viewer's, the planning tools', and the application's tests and lint
+make test         # run the viewer's, the planning tools', and the application's unit tests
+make lint         # run ESLint on the viewer and the planning tools, and pylint on the application
 make site         # stage the project's web site (build/gh-pages/)
 make clean        # remove the build directories
 ```
 
-The top-level makefile delegates to the project's two subprojects - run `make` in either for its own
+The top-level makefile delegates to the project's subprojects - run `make` in one for its own
 targets:
 
 | Directory | Contents |
 | --- | --- |
 | [viewer/](viewer/) | The Roadie viewer - the web application, the road plan model (its schema, validation, earthwork, and cost analysis), and the command line behind `make evaluate` and `make doc`. JavaScript, built with [javascript-build](https://github.com/craigahobbs/javascript-build#readme) - see its [README](#url=viewer/README.md). |
 | `plan/` | The planning tools (`bin/plan.js`) - the road site model, the site's USGS lidar terrain and features, plotting, and road engineering - and the road planning instructions for Claude Code ([PLAN.md](#url=plan/PLAN.md)). JavaScript, built with [javascript-build](https://github.com/craigahobbs/javascript-build#readme). |
+| `app/` | The Roadie application - a Python package (`roadie`), built with [python-build](https://github.com/craigahobbs/python-build#readme). Its command line, `roadie [DIRECTORY]`, serves the front end (the viewer's application, staged in the package) and a [chisel](https://github.com/craigahobbs/chisel#readme) back end that lists a directory's roads and reads and writes its files - to this computer only. |
 | `example/` | The example - its road site model, and its plan |
 
 `CLAUDE.md` is the repository guide for Claude Code.

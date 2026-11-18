@@ -90,6 +90,10 @@ const cellCostKey = 'roadieCellCost';
 const localPrefix = 'local:';
 
 
+// The URL prefix of the back end's files - its directory's road plans, and their map images
+const filesPrefix = 'files/';
+
+
 // Compute the report view width for the window width, in pixels
 function viewWidth(window) {
     return Math.max(400, Math.min(maxWidth, window.innerWidth - 3 * fontSize));
@@ -420,7 +424,21 @@ export class RoadieApp {
     }
 
 
-    // Render the home page - the recent local plans are added when IndexedDB answers. The page's example road plan, if
+    // Get the back end's roads - its directory's road sites and road plans (the Roadie application's "getRoads"). A
+    // page that isn't the back end's - the project's web site's, say - has none.
+    async roadList() {
+        try {
+            const response = await this.window.fetch('getRoads');
+            const {roads} = JSON.parse(await response.text());
+            return roads.filter(({name}) => typeof name === 'string');
+        } catch {
+            return [];
+        }
+    }
+
+
+    // Render the home page - the back end's roads are added when it answers, and the recent local plans are added
+    // when IndexedDB answers. The page's example road plan, if
     // it has one, is its element's "data-example" attribute - the plan's URL.
     renderHome(globals) {
         const example = this.main.dataset.example ?? null;
@@ -434,6 +452,7 @@ export class RoadieApp {
             '<p>Select or drop a road plan model JSON file - and its source map image, to show it in the report. ' +
                 'The files stay on your computer.</p>',
             '</div>',
+            '<div id="roadie-roads"></div>',
             '<div id="roadie-recent"></div>',
             ...(example !== null ? [`<p>${argsLink(globals, 'View the example road plan', {'file': example})}</p>`] : []),
             '<p>To view a road plan model URL, use the "file" argument: <code>#var.vFile=\'plan.json\'</code></p>',
@@ -442,6 +461,16 @@ export class RoadieApp {
         ];
         this.render('Roadie', html.join('\n'));
         this.document.getElementById('roadie-file').addEventListener('change', (event) => this.openFiles(event.target.files));
+        this.roadList().then((roads) => {
+            const element = this.document.getElementById('roadie-roads');
+            if (element !== null && roads.length > 0) {
+                const items = roads.map(({name, plan = null}) => (
+                    `<li><p>${plan !== null ? argsLink(globals, name, {'file': `${filesPrefix}${plan}`}) :
+                        `${escapeHtml(name)} - a road site that isn't planned yet`}</p></li>`
+                ));
+                element.innerHTML = `<h2 id="roads">Roads</h2><ul>${items.join('')}</ul>`;
+            }
+        });
         this.localFileList().then((recent) => {
             const recentPlans = recent.filter(({name}) => name.toLowerCase().endsWith('.json'));
             const element = this.document.getElementById('roadie-recent');
