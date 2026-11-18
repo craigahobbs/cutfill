@@ -17,15 +17,15 @@ The project is three subprojects, and the top-level makefile delegates to them:
   a road, follow PLAN.md exactly. The planning session runs in `plan/`. See [plan/README.md](plan/README.md).
 
 - **The application** (`app/`, Python, [python-build](https://github.com/craigahobbs/python-build#readme)) - the
-  `roadie` package: its command line (`roadie SITE PLAN`, `make app FILE=<site.json> OUTPUT=<plan.json>`) serves the
-  front end (the viewer's application, which `make -C app static` stages in the package) and a
-  [chisel](https://github.com/craigahobbs/chisel#readme) back end (`app/src/roadie/app.py`) for one road: its files'
-  names (`getRoad`), its road site model's file (`/site`), and its plan's files (`/files/...`). The back end is thin -
-  the engineering is the planning tools' JavaScript, which runs in the browser: the viewer's road page (the
-  application's home page) edits the road's site model (a form made from the model's types - `viewer/lib/form.js`)
-  and plans the road with
-  `plan/lib/browser/io.js` (`planRoad` - the `auto` command, with a browser's input and output functions).
-  The tools' modules stay importable in a browser: a Node module they import needs a stand-in in
+  `roadie` package: its command line (`roadie`, `make run`) serves the front end - the viewer's application and the
+  planning tools, which `make -C app static` stages in the package - with a
+  [chisel](https://github.com/craigahobbs/chisel#readme) back end (`app/src/roadie/app.py`) that's only the front
+  end's statics, for now. The front end does the work in the browser: its home page opens a plan (file dialog) or
+  makes a new one (a config form made from the model's types - `viewer/lib/form.js`), shows the loaded plan - its
+  config, and its road options - runs it with `plan/lib/browser/io.js` (`planRoad` - the `auto` command, with a
+  browser's input and output functions), and saves it to a file. A plan is its config (a road site model) and, once
+  it's run, its road options (a road plan model with the config as its `site` member) - a plan without road options
+  is its config's file. The tools' modules stay importable in a browser: a Node module they import needs a stand-in in
   `plan/lib/browser/` and the page's import map (`viewer/index.html`). See [app/README.md](app/README.md).
 
 `example/` is the example - a road site model (`site.json`) and the plan a planning session made from it
@@ -41,8 +41,7 @@ make plan FILE=<site.json> OUTPUT=<plan.json>   # plan a road (a Claude Code ses
 make auto FILE=<site.json> OUTPUT=<plan.json> [OLLAMA_MODEL=<model>]   # plan a road by procedure - the tools, and a model's answers
 make evaluate FILE=<plan.json> [DETAIL=1]   # a plan's analysis and cost from the command line
 make doc                          # the road plan model documentation
-make run FILE=<plan.json>         # view a plan in the browser
-make app FILE=<site.json> OUTPUT=<plan.json>   # serve the application - edit a road's site, plan it, and view it
+make run                          # run the application, in the browser - open, make, run, update, view, and save plans
 make site                         # stage the web site (build/gh-pages/): README, example, and viewer/
 ```
 
@@ -75,7 +74,9 @@ Run `make` in `viewer/` or `plan/` for a subproject's own targets (e.g.
 - PLAN.md's steps are **actions** for the planning session's model - each says what to look at, what to decide (with
   a default), and the command to run - so that a smaller model can follow them. A step that needs no judgment is a
   tool's, not an action.
-- The road site model is defined and validated with Schema Markdown, like the road plan model (`plan/lib/site.js`).
+- The road site model (a plan config) is defined and validated with Schema Markdown, with the road plan model
+  (`viewer/lib/model.js`) - a road plan keeps the road site model it was made from (its `site` member), so it can be
+  updated. A plan made by the application keeps its map image, too (a data URL), so it's one file.
 - Keep the README's viewer section and key table in sync with the viewer's controls.
 - A road site model and a road plan model are each a JSON file of any name - there's no file naming convention
   (no `.site.json`), so the commands that plan a road name both: `FILE` is the road site model, and `OUTPUT` is the

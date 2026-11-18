@@ -1,7 +1,7 @@
+import {autoSteps, autoUsage} from '../lib/auto.js';
 import {layoutLatLong, siteLayout} from '../lib/terrain.js';
 import {siteEast, siteNorth, testImage, testIo, testItem, testLine, testPages, testSite} from './terrainHelpers.js';
 import assert from 'node:assert/strict';
-import {autoUsage} from '../lib/auto.js';
 import {cliMain} from '../lib/cli.js';
 import test from 'node:test';
 import {validatePlan} from '../../viewer/lib/model.js';
@@ -53,7 +53,7 @@ async function runAuto(
         autoIo.progress = (lines) => {
             autoIo.progressLines.push(...lines);
         };
-        autoIo.status = (text) => Promise.resolve(autoIo.statuses.push(text));
+        autoIo.status = (text, step) => Promise.resolve(autoIo.statuses.push(`${step}: ${text}`));
     }
     autoIo.ask = ({model, question, images, schema}) => {
         const place = question.match(/must (?:avoid|pass through): "([^"]*)"/)?.[1] ?? null;
@@ -172,17 +172,20 @@ test('auto, the notes', async () => {
 
     // The plan's progress - its report's lines, as they're made, and what it's doing
     assert.equal(`${io.progressLines.join('\n')}\n`, io.output.join(''));
+    assert.deepEqual(autoSteps.map(({key, isModel}) => [key, isModel]), [
+        ['site', false], ['notes', true], ['options', false], ['describe', false]
+    ]);
     assert.deepEqual(io.statuses, [
-        'Creating the site - its terrain, streams, roads, and map are the USGS\'s',
-        'Asking the model "test-model" what the site\'s notes ask for',
+        'site: Creating the site - its terrain, streams, roads, and map are the USGS\'s',
+        'notes: Asking the model "test-model" what the site\'s notes ask for',
         ...['Barn', 'Pond', 'Shed', 'Well', 'Yard', 'Field', 'Ford', 'Cliff', 'Stall'].map(
-            (name) => `Asking the model "test-model" where "${name}" is on the map`
+            (name) => `notes: Asking the model "test-model" where "${name}" is on the map`
         ),
-        'Engineering the standard options',
-        'Engineering the standard options',
-        'Engineering the option "Via Ford"',
-        'Engineering the option "Via Stall"',
-        'Writing the descriptions and the plots'
+        'options: Engineering the standard options',
+        'options: Engineering the standard options',
+        'options: Engineering the option "Via Ford"',
+        'options: Engineering the option "Via Stall"',
+        'describe: Writing the descriptions and the plots'
     ]);
     assert.equal(io.output.join(''), `\
 ${siteLines.replace('0 roads', '1 road').replace('"Start"', '"Gate"').replace('"End"', '"House"').

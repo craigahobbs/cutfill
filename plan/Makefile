@@ -47,7 +47,7 @@ help:
 	@echo "  make plan FILE=<site.json> OUTPUT=<plan.json>  Engineer road plan options for a road site (Claude Code)"
 	@echo "  make auto FILE=<site.json> OUTPUT=<plan.json>  Plan a road by procedure - the tools, and an Ollama model's answers"
 	@echo "    (auto accepts OLLAMA_MODEL=<model> - without it, the site's notes aren't read - and ARGS=<the auto command's arguments>)"
-	@echo "  make update FILE=<plan.json> [SITE=<site.json>]  Update a road plan model with review feedback (Claude Code)"
+	@echo "  make update FILE=<plan.json>               Update a road plan model with review feedback (Claude Code)"
 	@echo "    (plan and update accept MODEL=<model> [default: $(MODEL)] and EFFORT=<effort> [default: $(EFFORT)],"
 	@echo "     OLLAMA=1 to launch Claude Code with an Ollama model - MODEL then names the Ollama model,"
 	@echo "     and GROK=1 to launch the Grok CLI instead - MODEL then names the Grok model)"
@@ -127,15 +127,13 @@ auto: build/npm.build
 	$(PLAN_TOOL) auto "$(FILE)" "$(PLAN_OUTPUT)"$(if $(OLLAMA_MODEL), --model "$(OLLAMA_MODEL)") $(ARGS)
 
 
-# Update an existing road plan model with review feedback (Claude Code or Grok) - the session asks for the feedback.
-# SITE is the plan's road site model, for the session to read.
+# Update an existing road plan model with review feedback (Claude Code or Grok) - the session asks for the feedback
 UPDATE_WORK = $(basename $(FILE)).work
 
 .PHONY: update
 update: build/npm.build
-	@test -n "$(FILE)" || (echo 'usage: make update FILE=<plan.json> [SITE=<site.json>] [MODEL=<model>] [EFFORT=<effort>] [OLLAMA=1|GROK=1]' && exit 1)
+	@test -n "$(FILE)" || (echo 'usage: make update FILE=<plan.json> [MODEL=<model>] [EFFORT=<effort>] [OLLAMA=1|GROK=1]' && exit 1)
 	@test -f "$(FILE)" || (echo 'error: "$(FILE)" does not exist' && exit 1)
-	@test -z "$(SITE)" -o -f "$(SITE)" || (echo 'error: "$(SITE)" does not exist' && exit 1)
 	mkdir -p "$(UPDATE_WORK)"
 	$(AGENT) \
 		--allowedTools "$(call AGENT_TOOLS,$(UPDATE_WORK))" \
@@ -144,8 +142,7 @@ update: build/npm.build
 		$(call AGENT_NAME,Roadie update: $(notdir $(FILE))) \
 		"Update the road plan model \"$(FILE)\" with review feedback by following the \"Updating a plan\" \
 instructions in PLAN.md exactly. Intermediate work files (including any from the original planning \
-session) are in \"$(UPDATE_WORK)/\".$(if $(SITE), The plan's road site model is \"$(SITE)\".) $(AGENT_PROMPT) Ask me for \
-the review feedback first."
+session) are in \"$(UPDATE_WORK)/\". $(AGENT_PROMPT) Ask me for the review feedback first."
 
 
 # Print a road plan model's analysis and cost (DETAIL=1 adds the station table)

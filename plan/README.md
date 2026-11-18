@@ -22,9 +22,9 @@ node bin/plan.js describe <plan.json> <text.md>  # set the plan's and its option
 node bin/plan.js doc [site | plan]               # the road site model's documentation - or the road plan model's
 ```
 
-`make plan FILE=<site.json> OUTPUT=<plan.json>` and `make update FILE=<plan.json> [SITE=<site.json>]` launch a
-planning session (Claude Code) that follows [PLAN.md](PLAN.md) with these tools,
-`make auto FILE=<site.json> OUTPUT=<plan.json>` plans a road by procedure (`auto` -
+`make plan FILE=<site.json> OUTPUT=<plan.json>` and `make update FILE=<plan.json>` launch a planning session
+(Claude Code) that follows [PLAN.md](PLAN.md) with these tools, `make auto FILE=<site.json> OUTPUT=<plan.json>`
+plans a road by procedure (`auto` -
 with `OLLAMA_MODEL`, it asks an Ollama model what the site's notes ask for), and `make evaluate FILE=<plan.json>`
 prints a plan's analysis and cost (`evaluate`, the viewer's). Every command has a `-h` argument.
 
@@ -35,8 +35,8 @@ PLAN.md's steps are defined actions (what to look at, what to decide, and the co
 they find each corridor's least-cost road, report its cost score, draft the descriptions' facts, write the plan, and
 log the commands that changed it (`<plan>.work/commands.txt`).
 
-A road site model (a JSON file, of any name) is a road's start and end points, as latitudes and longitudes, and its
-planning instructions. `site` finds the USGS 3D Elevation Program's 1 meter elevation models of the site (lidar
+A road site model (a plan config - a JSON file, of any name) is a road's start and end points, as latitudes and
+longitudes, and its planning instructions - the plan keeps it (its `site` member). `site` finds the USGS 3D Elevation Program's 1 meter elevation models of the site (lidar
 ground elevations), reads the site's part of them (it's cached in the plan's work directory,
 `<plan>.work/terrain/`), and grids them in the plan's coordinates - a transverse Mercator projection centered on
 the site. The newest survey's elevations are used, and an older survey's where the newer have none. The site's
@@ -66,9 +66,10 @@ the plots the model was shown (`ask/`), and a saved answer is used again - so a 
 be corrected by hand.
 
 `lib/browser/` is the tools in a web browser, for the Roadie application's page (`../app/`): `io.js` is the tools'
-input and output functions there - files in memory that are loaded from and written to the application's back end,
-the USGS's services and Ollama by `fetch`, an elevation model by the GeoTIFF reader's script, and a plot's PNG image
-by a canvas - and `planRoad`, which plans a road with `auto`. `util.js`, `buffer.js`, and `zlib.js` are the Node
+input and output functions there - files in memory, the USGS's services and Ollama by `fetch`, an elevation model by
+the GeoTIFF reader's script, and a plot's PNG image by a canvas - and `planRoad`, which runs a plan config with
+`auto` and returns the road plan, its map image a data URL (a run of the same site keeps the plan's other options
+and features, and an abort signal stops it). `util.js`, `buffer.js`, and `zlib.js` are the Node
 modules the tools import (`parseArgs`, a buffer's base64 text, and `crc32` and `deflateSync`) - the page's import map
 names them. `auto` reports its progress to the input and output functions' `progress` and `status` functions, if
 they have them.

@@ -17,7 +17,8 @@ test('roadieArguments', () => {
             ['y', 'float', null, false],
             ['z', 'float', null, false],
             ['explore', 'bool', false, true],
-            ['doc', 'bool', false, true]
+            ['doc', 'bool', false, true],
+            ['edit', 'string', null, true]
         ]
     );
 });

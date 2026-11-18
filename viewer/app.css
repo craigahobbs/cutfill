@@ -190,49 +190,244 @@ body.roadie-drop {
 }
 
 
-/* The road page's controls, and its road site form */
-button.roadie-button {
+/* The application's controls - its buttons, and the loaded plan's panel */
+button.roadie-button, a.roadie-button {
     font: inherit;
     font-weight: bold;
     color: inherit;
+    text-decoration: none;
 }
 button.roadie-button:disabled {
     opacity: 0.5;
     cursor: default;
 }
-.roadie-form fieldset, .roadie-form details {
-    margin: 1em 0;
-    padding: 0.2em 1em;
+.roadie-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6em;
+}
+.roadie-loaded {
+    margin: 1.5em 0;
+    padding: 0.2em 1.2em 0.8em;
     border: 1px solid var(--roadie-color-border);
+    border-radius: 6px;
+}
+.roadie-loaded h2 {
+    margin-bottom: 0.2em;
+}
+.roadie-loaded h3 {
+    margin: 1.4em 0 0.5em;
+    padding-top: 0.8em;
+    border-top: 1px solid var(--roadie-color-border);
+}
+.roadie-unsaved {
+    margin-left: 0.5em;
+    padding: 0.1em 0.5em;
     border-radius: 4px;
+    font-size: 0.85em;
+    font-weight: bold;
+    color: light-dark(rgb(140, 80, 0), rgb(240, 180, 90));
+    border: 1px solid currentColor;
 }
-.roadie-form summary {
-    cursor: pointer;
-    padding: 0.4em 0;
+.roadie-notice {
+    font-weight: bold;
+    color: light-dark(rgb(140, 80, 0), rgb(240, 180, 90));
 }
-.roadie-form input, .roadie-form select, .roadie-form textarea, #roadie-road-name, #roadie-plan-model {
+
+
+/* The recent files - each can be removed */
+.roadie-recent li p {
+    display: flex;
+    align-items: center;
+    gap: 0.4em;
+}
+button.roadie-remove {
     font: inherit;
-    max-width: 100%;
-    box-sizing: border-box;
-    padding: 0.2em 0.4em;
+    line-height: 1;
+    color: var(--roadie-color-border);
+    background: none;
+    border: none;
+    border-radius: 4px;
+    padding: 0.15em 0.35em;
+    cursor: pointer;
 }
-.roadie-form input:not([inputmode]) {
-    width: 40em;
+button.roadie-remove:hover {
+    color: light-dark(rgb(176, 42, 30), rgb(240, 110, 95));
+    background-color: var(--roadie-color-background-pre);
 }
-.roadie-form textarea {
+.roadie-recent-loaded {
+    font-size: 0.85em;
+    opacity: 0.7;
+}
+
+
+/* A plan's run - the running status (with a spinner, and the run's time), its steps, and its result */
+#roadie-run-progress {
+    margin: 1em 0;
+    padding: 0.6em 1em;
+    border-radius: 6px;
+    background-color: var(--roadie-color-background-pre);
+}
+.roadie-running {
+    display: flex;
+    align-items: center;
+    gap: 0.7em;
+    margin: 0.3em 0 0.6em;
+}
+#roadie-run-time {
+    margin-left: auto;
+    font-variant-numeric: tabular-nums;
+    opacity: 0.8;
+}
+.roadie-spinner {
+    flex: none;
+    width: 1em;
+    height: 1em;
+    border: 0.18em solid var(--roadie-color-border);
+    border-top-color: var(--roadie-color-link);
+    border-radius: 50%;
+    animation: roadie-spin 0.8s linear infinite;
+}
+@keyframes roadie-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+.roadie-run-icon {
+    flex: none;
+    font-weight: bold;
+}
+.roadie-run-done::before {
+    content: "✓";
+    color: light-dark(rgb(30, 130, 60), rgb(90, 200, 120));
+}
+.roadie-run-failed::before {
+    content: "✕";
+    color: light-dark(rgb(176, 42, 30), rgb(240, 110, 95));
+}
+#roadie-run-report summary {
+    cursor: pointer;
+}
+.roadie-steps {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+.roadie-steps li {
+    display: flex;
+    gap: 0.5em;
+    margin: 0.3em 0;
+}
+.roadie-step-mark {
+    flex: none;
+    width: 1em;
+    text-align: center;
+}
+.roadie-step-pending {
+    opacity: 0.5;
+}
+.roadie-step-current {
+    font-weight: bold;
+}
+.roadie-step-current .roadie-step-mark::before {
+    content: "▸";
+    color: var(--roadie-color-link);
+}
+.roadie-step-done .roadie-step-mark::before {
+    content: "✓";
+    color: light-dark(rgb(30, 130, 60), rgb(90, 200, 120));
+}
+.roadie-step-detail {
     display: block;
-    width: 100%;
-    margin-top: 0.4em;
+    font-size: 0.85em;
+    font-weight: normal;
+    opacity: 0.8;
 }
-#roadie-plan-log:empty {
+.roadie-step-detail:empty {
     display: none;
 }
-.roadie-form-name {
+.roadie-loaded-kind {
+    margin-top: 0;
+    opacity: 0.8;
+}
+.roadie-error {
+    color: light-dark(rgb(176, 42, 30), rgb(240, 110, 95));
+}
+button.roadie-link {
+    font: inherit;
+    color: var(--roadie-color-link);
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    text-decoration: underline;
+}
+#roadie-run-model {
+    font: inherit;
+    padding: 0.2em 0.4em;
+    max-width: 100%;
+}
+#roadie-run-message:empty, #roadie-save-status:empty, #roadie-open-status:empty, #roadie-edit-status:empty {
+    display: none;
+}
+
+
+/* The plan config form - groups of fields: a field's label, its control, and its documentation */
+.roadie-form {
+    max-width: 60em;
+}
+.roadie-form-fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(11em, 1fr));
+    gap: 1em 1.5em;
+    margin: 0.8em 0;
+}
+.roadie-form-wide {
+    grid-column: 1 / -1;
+}
+.roadie-form-field label {
+    display: block;
     font-weight: bold;
+    margin-bottom: 0.3em;
+}
+.roadie-form-field input, .roadie-form-field select, .roadie-form-field textarea {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    font: inherit;
+    padding: 0.3em 0.5em;
+}
+.roadie-form-field p {
+    margin: 0;
 }
 .roadie-form-doc {
     font-size: 0.85em;
-    opacity: 0.75;
+    font-weight: normal;
+    opacity: 0.7;
+    margin-top: 0.3em;
+}
+.roadie-form-groups {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(22em, 1fr));
+    gap: 0 1.5em;
+}
+.roadie-form-group {
+    margin: 1em 0;
+    padding: 0.5em 1.2em;
+    border: 1px solid var(--roadie-color-border);
+    border-radius: 6px;
+}
+.roadie-form-group legend, .roadie-form-group summary {
+    font-weight: bold;
+    padding: 0 0.3em;
+}
+.roadie-form-group summary {
+    cursor: pointer;
+    padding: 0.3em 0;
+}
+.roadie-form-group legend + .roadie-form-doc {
+    margin-top: 0;
 }
 
 

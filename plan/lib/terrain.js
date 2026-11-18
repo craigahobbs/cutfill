@@ -65,12 +65,24 @@ export function siteLayout(site, limit = gridLimit) {
         longitude,
         west,
         south,
+        'margin': margin / scale,
         spacing,
         'nCols': gridCount(width, spacing),
         'nRows': gridCount(height, spacing),
         'start': planPoint(startEast, startNorth, start, 'Start'),
         'end': planPoint(endEast, endNorth, end, 'End')
     };
+}
+
+
+// Get a site's defaults - its margin and its grid's spacing, in the site's units - if they aren't the site's. The
+// default spacing is the site's margin's.
+export function siteDefaults(site) {
+    const defaultSite = {...site};
+    delete defaultSite.spacing;
+    const {spacing} = siteLayout(defaultSite);
+    delete defaultSite.margin;
+    return {'margin': round(siteLayout(defaultSite).margin, 0), spacing};
 }
 
 

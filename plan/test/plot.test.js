@@ -380,6 +380,16 @@ test('plot, the topographic map', async () => {
         'error: The plan "other.json" has no topographic map image'
     ]);
     assert.deepEqual(noImage.written, []);
+
+    // A plan whose image is a data URL - the image itself
+    const dataPlan = {...fixturePlan(), 'image': 'data:image/png;base64,iVBORw=='};
+    const dataIo = testIo({'files': {'road.json': JSON.stringify(dataPlan)}});
+    dataIo.renderPng = (dataSvg) => {
+        svgs.push(dataSvg);
+        return Uint8Array.from([1]);
+    };
+    assert.deepEqual(plotCommand(['road.json', 'map.png', '--map'], dataIo), {'code': 0, 'lines': ['Wrote map.png (1400 x 1058 pixels)']});
+    assert.equal(svgs.at(-1), planPlot(validatePlan(dataPlan).plan, planTopo(dataPlan), 1400, null, 'iVBORw==').svg);
 });
 
 

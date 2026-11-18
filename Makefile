@@ -2,29 +2,28 @@
 #
 #   viewer/  The Roadie viewer - a JavaScript web application (javascript-build)
 #   plan/    The planning tools and instructions - JavaScript (javascript-build)
-#   app/     The Roadie application - a Python package that serves the viewer and a road's files (python-build)
+#   app/     The Roadie application - a Python package that serves the viewer and the planning tools (python-build)
 
 .DEFAULT_GOAL := help
 
 
-# Delegate a target to a subproject - FILE, OUTPUT, and SITE are relative to this directory. Other variables given on
-# the command line (TEST, DETAIL, MODEL, EFFORT, PORT, ...) are passed along by make.
-SUBMAKE = @$(MAKE) --no-print-directory -C $(1) $(2)$(if $(FILE), FILE="$(abspath $(FILE))")$(if $(OUTPUT), OUTPUT="$(abspath $(OUTPUT))")$(if $(SITE), SITE="$(abspath $(SITE))")
+# Delegate a target to a subproject - FILE and OUTPUT are relative to this directory. Other variables given on the
+# command line (TEST, DETAIL, MODEL, EFFORT, ...) are passed along by make.
+SUBMAKE = @$(MAKE) --no-print-directory -C $(1) $(2)$(if $(FILE), FILE="$(abspath $(FILE))")$(if $(OUTPUT), OUTPUT="$(abspath $(OUTPUT))")
 
 
 .PHONY: help
 help:
-	@echo "usage: make [app|auto|clean|commit|doc|evaluate|gh-pages|lint|plan|run|site|superclean|test|update]"
+	@echo "usage: make [auto|clean|commit|doc|evaluate|gh-pages|lint|plan|run|site|superclean|test|update]"
 	@echo ""
+	@echo "  make run                                   Run the Roadie application, in the browser - open, make, run, and save plans"
 	@echo "  make plan FILE=<site.json> OUTPUT=<plan.json>  Engineer road plan options for a road site (Claude Code)"
 	@echo "  make auto FILE=<site.json> OUTPUT=<plan.json>  Plan a road by procedure - the tools, and an Ollama model's answers"
 	@echo "    (auto accepts OLLAMA_MODEL=<model> - without it, the site's notes aren't read)"
-	@echo "  make update FILE=<plan.json> [SITE=<site.json>]  Update a road plan model with review feedback (Claude Code)"
+	@echo "  make update FILE=<plan.json>               Update a road plan model with review feedback (Claude Code)"
 	@echo "    (plan and update accept MODEL=<model> [default: opus] and EFFORT=<effort> [default: high],"
 	@echo "     OLLAMA=1 to launch Claude Code with an Ollama model - MODEL then names the Ollama model,"
 	@echo "     and GROK=1 to launch the Grok CLI instead - MODEL then names the Grok model)"
-	@echo "  make app FILE=<site.json> OUTPUT=<plan.json>  Serve the Roadie application - edit a road site, and plan its road, in the browser"
-	@echo "  make run [FILE=<plan.json>]                View a road plan model in the browser"
 	@echo "  make evaluate FILE=<plan.json> [DETAIL=1]  Print a road plan model's analysis and cost"
 	@echo "  make doc                                   Print the road plan model documentation"
 	@echo "  make commit                                Run the viewer's, the planning tools', and the application's tests and lint"
@@ -41,18 +40,10 @@ commit test lint:
 	$(call SUBMAKE,app,$@)
 
 
-# Serve the Roadie application - a road, in the browser: FILE is its road site model (a JSON file - a new road's is
-# made when it's saved), and OUTPUT is its road plan model (another JSON file - the road's plan is written to it)
-.PHONY: app
-app:
-	@test -n "$(FILE)" -a -n "$(OUTPUT)" || (echo 'usage: make app FILE=<site.json> OUTPUT=<plan.json>' && exit 1)
-	@$(MAKE) --no-print-directory -C app run ARGS='"$(abspath $(FILE))" "$(abspath $(OUTPUT))"'
-
-
-# View a road plan model in the browser (the viewer)
+# Run the Roadie application, in the browser
 .PHONY: run
 run:
-	$(call SUBMAKE,viewer,$@)
+	@$(MAKE) --no-print-directory -C app run
 
 
 # Engineer road plan options for a road site (a road site model - the road's start and end points and its planning

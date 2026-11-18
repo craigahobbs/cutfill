@@ -178,7 +178,8 @@ export async function siteCommand(args, io) {
         end,
         ...('criteria' in site ? {'criteria': site.criteria} : {}),
         ...('costRates' in site ? {'costRates': site.costRates} : {}),
-        'options': shifted.options ?? []
+        'options': shifted.options ?? [],
+        site
     });
     io.writeFile(planPath, planText(plan));
 

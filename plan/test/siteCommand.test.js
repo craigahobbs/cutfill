@@ -115,7 +115,21 @@ Wrote plans/road.json
     "y": 242.07,
     "label": "End"
   },
-  "options": []
+  "options": [],
+  "site": {
+    "title": "Test Site",
+    "units": "meters",
+    "start": {
+      "latitude": 40,
+      "longitude": -105.28
+    },
+    "end": {
+      "latitude": 40.002,
+      "longitude": -105.2765
+    },
+    "margin": 20,
+    "spacing": 50
+  }
 }
 `);
 
@@ -175,7 +189,7 @@ Wrote road.JSON
     assert.deepEqual(io.written.slice(-3), ['road.png', 'road.JSON', 'road.work/commands.txt']);
     const plan = JSON.parse(io.files['road.JSON']);
     assert.deepEqual(Object.keys(plan), [
-        'title', 'image', 'units', 'georeference', 'topography', 'start', 'end', 'criteria', 'costRates', 'options'
+        'title', 'image', 'units', 'georeference', 'topography', 'start', 'end', 'criteria', 'costRates', 'options', 'site'
     ]);
     assert.deepEqual([plan.units, plan.georeference], ['feet', layoutGeoreference(layout)]);
     assert.deepEqual([plan.start, plan.end], [{'x': 60, 'y': 60, 'label': 'Gate'}, {'x': 1040.56, 'y': 788.57, 'label': 'House'}]);
@@ -318,7 +332,8 @@ test('site, an existing plan', async () => {
     });
     const [creekLatitude, creekLongitude] = layoutLatLong(widerLayout, 150, 100);
     const [creekLatitude2, creekLongitude2] = layoutLatLong(widerLayout, 150, 200);
-    const io = await runSite(coarseSite({'margin': 40, 'title': 'Wider Site', 'exclusions': [{'name': 'Barn', 'points': barn}]}), {
+    const widerSite = coarseSite({'margin': 40, 'title': 'Wider Site', 'exclusions': [{'name': 'Barn', 'points': barn}]});
+    const io = await runSite(widerSite, {
         files,
         'pages': testPages({'items': [item], 'streams': [
             testLine({'gnis_name': 'New Creek', 'ftype': 460}, [[creekLongitude, creekLatitude], [creekLongitude2, creekLatitude2]])
@@ -334,9 +349,13 @@ test('site, an existing plan', async () => {
     ]);
     const wider = JSON.parse(io.files['plans/road.json']);
     assert.deepEqual(Object.keys(wider), [
-        'title', 'description', 'image', 'units', 'georeference', 'topography', 'start', 'end', 'criteria', 'options'
+        'title', 'description', 'image', 'units', 'georeference', 'topography', 'start', 'end', 'criteria', 'options', 'site'
     ]);
     assert.deepEqual([wider.title, wider.description, wider.criteria], ['Wider Site', ['A road.'], {'maxGrade': 8}]);
+
+    // The plan's site model is the site's - the earlier site model is replaced
+    assert.deepEqual(plan.site, coarseSite());
+    assert.deepEqual(wider.site, widerSite);
     assert.deepEqual(wider.georeference, {'latitude': 40.001, 'longitude': -105.27825, 'x': 189.439, 'y': 151.033});
     assert.deepEqual([wider.start, wider.end], [{'x': 40, 'y': 40, 'label': 'Start'}, {'x': 338.87, 'y': 262.07, 'label': 'End'}]);
     assert.deepEqual(Object.keys(wider.topography), ['spacing', 'elevations', 'contourInterval', 'sources', 'features']);

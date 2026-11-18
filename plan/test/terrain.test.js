@@ -1,6 +1,6 @@
 import {
-    fillHoles, gridLimit, gridSurvey, layoutBox, layoutGeoreference, layoutLatLong, layoutPoint, readTile, siteLayout, siteTerrain,
-    tileWindow
+    fillHoles, gridLimit, gridSurvey, layoutBox, layoutGeoreference, layoutLatLong, layoutPoint, readTile, siteDefaults, siteLayout,
+    siteTerrain, tileWindow
 } from '../lib/terrain.js';
 import {gridUtm, plane, siteEast, siteNorth, testImage, testIo, testSite} from './terrainHelpers.js';
 import {project, transverseMercator} from '../../viewer/lib/geo.js';
@@ -13,7 +13,7 @@ import test from 'node:test';
 function layoutMembers(layout) {
     const {projection, ...members} = layout;
     assert.deepEqual(projection, transverseMercator(layout.latitude, layout.longitude));
-    return {...members, 'west': round(members.west, 3), 'south': round(members.south, 3)};
+    return {...members, 'west': round(members.west, 3), 'south': round(members.south, 3), 'margin': round(members.margin, 3)};
 }
 
 
@@ -49,6 +49,7 @@ test('siteLayout', () => {
         'longitude': -105.27825,
         'west': -299.439,
         'south': -261.033,
+        'margin': 150,
         'spacing': 1,
         'nCols': 600,
         'nRows': 524,
@@ -77,6 +78,7 @@ test('siteLayout, feet', () => {
         'longitude': -105.27825,
         'west': -301.839,
         'south': -263.433,
+        'margin': 500,
         'spacing': 5,
         'nCols': 398,
         'nRows': 347,
@@ -103,6 +105,7 @@ test('siteLayout, the site\'s margin and spacing', () => {
         'longitude': -105.27825,
         'west': -169.439,
         'south': -131.033,
+        'margin': 20,
         'spacing': 4,
         'nCols': 86,
         'nRows': 67,
@@ -573,4 +576,18 @@ test('siteTerrain, a site without elevations', async () => {
     );
     const few = await siteTerrain(layout, [model({'holes': (x, y) => x < 836 && y < 900})], readModel);
     assert.equal(few.filled, 20);
+});
+
+
+test('siteDefaults', () => {
+    // A site's default margin and spacing - at least 150 meters, or 500 feet, and the finest grid within the limit
+    assert.deepEqual(siteDefaults(testSite()), {'margin': 150, 'spacing': 1});
+    assert.deepEqual(siteDefaults(testSite({'units': 'feet'})), {'margin': 500, 'spacing': 5});
+
+    // A longer road's margin is 30% of its length (at most 600 meters), and its grid is coarser
+    assert.deepEqual(siteDefaults(testSite({'end': {'latitude': 40.008, 'longitude': -105.27}})), {'margin': 370, 'spacing': 2});
+    assert.deepEqual(siteDefaults(testSite({'end': {'latitude': 40.05, 'longitude': -105.2}})), {'margin': 600, 'spacing': 10});
+
+    // The site's own margin and spacing aren't the defaults - the default spacing is the site's margin's
+    assert.deepEqual(siteDefaults(testSite({'margin': 1000, 'spacing': 7})), {'margin': 150, 'spacing': 3});
 });

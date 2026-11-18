@@ -1,5 +1,5 @@
 # The Roadie application - a Python package (python-build): its command line serves the Roadie front end (the viewer)
-# and the back end that reads and writes a road's files - its road site model and its road plan model
+# and the planning tools - the front end opens, runs, and saves plans in the browser
 
 # Download python-build
 PYTHON_BUILD_DIR ?= ../../python-build
@@ -37,7 +37,7 @@ help:
 	@echo "            [run|static]"
 	@echo ""
 	@echo "  make static           Stage the front end (the viewer's application and the planning tools) in the package"
-	@echo "  make run ARGS=...     Serve a road (ARGS are the roadie command's - the road site and road plan files)"
+	@echo "  make run [ARGS=...]   Run the application (ARGS are the roadie command's options)"
 
 
 clean:
@@ -57,7 +57,7 @@ static:
 	cp $(PLAN)/node_modules/geotiff/dist-browser/geotiff.js $(STATIC)/
 
 
-# Serve a road - its road site model's file and its road plan model's
+# Run the application
 .PHONY: run
 run: $(DEFAULT_VENV_BUILD) static
 	$(DEFAULT_VENV_BIN)/roadie$(if $(ARGS), $(ARGS))

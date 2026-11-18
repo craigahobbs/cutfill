@@ -7,15 +7,24 @@ import {describeCommand, keepCommand} from './options.js';
 import {drawCrossings, drawsCommand} from './draws.js';
 import {orderPlan, planText, readPlan} from './planFile.js';
 import {planCriteria, planTopo} from '../../viewer/lib/model.js';
+import {planMapBase64, planPlot} from './plot.js';
 import {Buffer} from 'node:buffer';
 import {draftLines} from './draft.js';
 import {existingMask} from './structures.js';
 import {featureCommand} from './featureCommand.js';
 import {parseArgs} from 'node:util';
-import {planPlot} from './plot.js';
 import {polylineStations} from './route.js';
 import {routeCommands} from './routeCli.js';
 import {siteCommand} from './siteCommand.js';
+
+
+// The steps of a plan - their keys (the status function's), and what they do. The notes are read only with a model.
+export const autoSteps = [
+    {'key': 'site', 'text': 'Build the site - its lidar terrain, streams, roads, and map, from the USGS', 'isModel': false},
+    {'key': 'notes', 'text': 'Read the notes - the model is asked what they ask for', 'isModel': true},
+    {'key': 'options', 'text': 'Engineer the road options', 'isModel': false},
+    {'key': 'describe', 'text': 'Describe the plan, and draw its plots', 'isModel': false}
+];
 
 
 // The "auto" command's usage text lines
@@ -129,17 +138,18 @@ export async function autoCommand(args, io) {
     const fail = (errorLines) => ({'code': 1, 'lines': [...lines, ...errorLines]});
 
     // The plan's report, and its status - what it's doing. They're shown as the plan is made, if the input and output
-    // functions have a "progress" function (of the report's new lines) and a "status" function (of the status' text).
+    // functions have a "progress" function (of the report's new lines) and a "status" function (of the status' text,
+    // and its step's key - autoSteps).
     const report = async (...reportLines) => {
         lines.push(...reportLines);
         await io.progress?.(reportLines);
     };
-    const status = async (text) => {
-        await io.status?.(text);
+    const status = async (step, text) => {
+        await io.status?.(text, step);
     };
 
     // Create the plan's site
-    await status('Creating the site - its terrain, streams, roads, and map are the USGS\'s');
+    await status('site', 'Creating the site - its terrain, streams, roads, and map are the USGS\'s');
     const site = await siteCommand([sitePath, planPath], io);
     if (site.code !== 0) {
         return site;
@@ -189,7 +199,7 @@ export async function autoCommand(args, io) {
                 limitations.push('The site\'s notes weren\'t read - the plan is the tools\' alone.');
             }
         } else if (notes.length > 0) {
-            await status(`Asking the model "${model}" what the site's notes ask for`);
+            await status('notes', `Asking the model "${model}" what the site's notes ask for`);
             const answer = await ask('notes', notesQuestion(plan, notes, roadNames), [], notesSchema);
             directives = notesDirectives(answer, units);
 
@@ -227,7 +237,7 @@ export async function autoCommand(args, io) {
 
             // The places the notes say to avoid - each is an exclusion area
             for (const place of directives.avoid) {
-                await status(`Asking the model "${model}" where "${place.name}" is on the map`);
+                await status('notes', `Asking the model "${model}" where "${place.name}" is on the map`);
                 const area = await locateArea(io, ask, work, planPath, plan, topo, place);
                 if ('problem' in area) {
                     directives.unhandled.push(`avoid "${place.name}" (${place.where}) - ${area.problem}`);
@@ -246,7 +256,7 @@ export async function autoCommand(args, io) {
 
             // The places the notes say to pass through - each is an option's via point
             for (const place of directives.passThrough) {
-                await status(`Asking the model "${model}" where "${place.name}" is on the map`);
+                await status('notes', `Asking the model "${model}" where "${place.name}" is on the map`);
                 const point = await locatePoint(io, ask, work, planPath, plan, topo, place);
                 if (point === null) {
                     directives.unhandled.push(`pass through "${place.name}" (${place.where}) - the model didn't find it on the map`);
@@ -267,7 +277,7 @@ export async function autoCommand(args, io) {
     let options;
     const draws = [];
     for (;;) {
-        await status('Engineering the standard options');
+        await status('options', 'Engineering the standard options');
         options = routeCommands.options([planPath, ...designArgs], io);
         if (options.code !== 0) {
             return fail(options.lines);
@@ -293,7 +303,7 @@ export async function autoCommand(args, io) {
     const names = plan.options.filter(({name}) => standardNames.includes(name)).map(({name}) => name);
     for (const place of directives.passThrough.filter(({point = null}) => point !== null)) {
         const name = `Via ${place.name}`;
-        await status(`Engineering the option "${name}"`);
+        await status('options', `Engineering the option "${name}"`);
         const routed = routeCommands.route([planPath, '-n', name, '-v', place.point.join(','), ...designArgs], io);
         if (routed.code === 0) {
             names.push(name);
@@ -309,7 +319,7 @@ export async function autoCommand(args, io) {
     }
 
     // Keep the plan's options - those it engineered, the best first
-    await status('Writing the descriptions and the plots');
+    await status('describe', 'Writing the descriptions and the plots');
     let kept = keepCommand([planPath, ...names], io);
     if (names.length > optionLimit) {
         kept = keepCommand([planPath, ...loadPlan().options.slice(0, optionLimit).map(({name}) => name)], io);
@@ -339,7 +349,7 @@ export async function autoCommand(args, io) {
     plan = loadPlan();
     topo = planTopo(plan);
     io.writeBytes(`${work}/plan.png`, await io.renderPng(planPlot(plan, topo).svg));
-    const map = planMap(io, planPath, plan);
+    const map = planMapBase64(io, planPath, plan);
     if (map !== null) {
         io.writeBytes(`${work}/map.png`, await io.renderPng(planPlot(plan, topo, 1400, null, map).svg));
     }
@@ -436,21 +446,14 @@ function notesDirectives(answer, units) {
 }
 
 
-// Read a plan's topographic map image - its base64 text, or null if it has none
-function planMap(io, planPath, plan) {
-    try {
-        return Buffer.from(io.readBytes(`${planPath.slice(0, planPath.lastIndexOf('/') + 1)}${plan.image}`)).toString('base64');
-    } catch {
-        return null;
-    }
-}
+
 
 
 // Plot a plan for a question - its topographic map (or its terrain, if it has no map), all of it or a box of it. The
 // plot is written to the plan's work directory, to see what the model was asked. Returns its base64 text and the
 // question's description of it. (The plot's image is awaited - a browser's is made later.)
 async function questionPlot(io, work, planPath, plan, topo, name, box) {
-    const map = planMap(io, planPath, plan);
+    const map = planMapBase64(io, planPath, plan);
     const png = await io.renderPng(planPlot(plan, topo, 1400, box, map).svg);
     io.writeBytes(`${work}/ask/${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}${box === null ? '' : '-box'}.png`, png);
     const {units} = plan;

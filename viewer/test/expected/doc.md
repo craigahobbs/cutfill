@@ -3,19 +3,20 @@
 A road grading plan model. A plan contains the site topography, the road start and end points, and
 one or more road plan options. All lengths and elevations are in the plan's units.
 
-| Name         | Type                                     | Attributes                 | Description                                                          |
-|--------------|------------------------------------------|----------------------------|----------------------------------------------------------------------|
-| title        | string                                   | len(value) > 0             | The plan title                                                       |
-| description  | string []                                | optional                   | The plan description Markdown text lines                             |
-| image        | string                                   | optional<br>len(value) > 0 | The source topographic map image URL, relative to the plan JSON file |
-| units        | [Units](#enum-units)                     |                            | The unit of all lengths and elevations                               |
-| georeference | [Georeference](#struct-georeference)     | optional                   | The plan's place on the Earth                                        |
-| topography   | [Topography](#struct-topography)         |                            | The site topography                                                  |
-| start        | [Point](#struct-point)                   |                            | The road start point                                                 |
-| end          | [Point](#struct-point)                   |                            | The road end point                                                   |
-| criteria     | [DesignCriteria](#struct-designcriteria) | optional                   | The road design criteria                                             |
-| costRates    | [CostRates](#struct-costrates)           | optional                   | The cost rate overrides                                              |
-| options      | [RoadOption](#struct-roadoption) []      | len(array) > 0             | The road plan options                                                |
+| Name         | Type                                     | Attributes                 | Description                                                                                            |
+|--------------|------------------------------------------|----------------------------|--------------------------------------------------------------------------------------------------------|
+| title        | string                                   | len(value) > 0             | The plan title                                                                                         |
+| description  | string []                                | optional                   | The plan description Markdown text lines                                                               |
+| image        | string                                   | optional<br>len(value) > 0 | The source topographic map image URL, relative to the plan JSON file - or a data URL, the image itself |
+| units        | [Units](#enum-units)                     |                            | The unit of all lengths and elevations                                                                 |
+| georeference | [Georeference](#struct-georeference)     | optional                   | The plan's place on the Earth                                                                          |
+| topography   | [Topography](#struct-topography)         |                            | The site topography                                                                                    |
+| start        | [Point](#struct-point)                   |                            | The road start point                                                                                   |
+| end          | [Point](#struct-point)                   |                            | The road end point                                                                                     |
+| criteria     | [DesignCriteria](#struct-designcriteria) | optional                   | The road design criteria                                                                               |
+| costRates    | [CostRates](#struct-costrates)           | optional                   | The cost rate overrides                                                                                |
+| options      | [RoadOption](#struct-roadoption) []      | len(array) > 0             | The road plan options                                                                                  |
+| site         | [RoadSite](#struct-roadsite)             | optional                   | The road site model the plan was made from - its plan config                                           |
 
 ---
 
@@ -125,6 +126,15 @@ transverse Mercator map projection, with a scale factor of 1, centered on a lati
 | x         | float |                               | The projection center's east coordinate               |
 | y         | float |                               | The projection center's north coordinate              |
 
+### struct LatLong
+
+A latitude and longitude
+
+| Name      | Type  | Attributes                    | Description                                |
+|-----------|-------|-------------------------------|--------------------------------------------|
+| latitude  | float | value >= -90<br>value <= 90   | The latitude, in decimal degrees (WGS 84)  |
+| longitude | float | value >= -180<br>value <= 180 | The longitude, in decimal degrees (WGS 84) |
+
 ### struct Point
 
 A point in plan coordinates
@@ -158,6 +168,24 @@ A road cross section
 | fillSlope | float                    | optional<br>value > 0 | The fill slope ratio, horizontal run per unit of vertical drop (default is 1.5) |
 | surface   | [Surface](#enum-surface) | optional              | The road surface (default is "gravel")                                          |
 
+### struct RoadSite
+
+A road site - the start and end points of a road to plan, and its planning instructions. The site's
+topography is USGS 3D Elevation Program lidar terrain, so the site is in the United States.
+
+| Name       | Type                                     | Attributes            | Description                                                                                                                                                                                     |
+|------------|------------------------------------------|-----------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| title      | string                                   | len(value) > 0        | The site title - it's the road plan's title                                                                                                                                                     |
+| units      | [Units](#enum-units)                     |                       | The unit of the road plan's lengths and elevations                                                                                                                                              |
+| start      | [SitePoint](#struct-sitepoint)           |                       | The road start point                                                                                                                                                                            |
+| end        | [SitePoint](#struct-sitepoint)           |                       | The road end point                                                                                                                                                                              |
+| notes      | string []                                | optional              | The planning instructions - the road's purpose, constraints, preferences, and anything else the road's engineer should know                                                                     |
+| exclusions | [SiteArea](#struct-sitearea) []          | optional              | The areas the road must avoid (buildings, wetlands, a neighbor's land, etc.)                                                                                                                    |
+| criteria   | [DesignCriteria](#struct-designcriteria) | optional              | The road design criteria                                                                                                                                                                        |
+| costRates  | [CostRates](#struct-costrates)           | optional              | The cost rate overrides                                                                                                                                                                         |
+| margin     | float                                    | optional<br>value > 0 | The distance the site's topography extends beyond the start and end points, in the plan's units (default is 30% of the distance between the points, from 500 to 2,000 feet / 150 to 600 meters) |
+| spacing    | float                                    | optional<br>value > 0 | The topography grid spacing, in the plan's units (default is the finest spacing that keeps the grid within its size limit)                                                                      |
+
 ### enum Side
 
 A side of the road
@@ -167,6 +195,26 @@ A side of the road
 | left  |
 | right |
 | both  |
+
+### struct SiteArea
+
+An area of the site
+
+| Name   | Type                          | Attributes                 | Description               |
+|--------|-------------------------------|----------------------------|---------------------------|
+| name   | string                        | optional<br>len(value) > 0 | The area name             |
+| points | [LatLong](#struct-latlong) [] | len(array) > 2             | The area's polygon points |
+
+### struct SitePoint
+
+A road start or end point
+
+| Name        | Type   | Attributes                    | Description                                                                                                          |
+|-------------|--------|-------------------------------|----------------------------------------------------------------------------------------------------------------------|
+| latitude    | float  | value >= -90<br>value <= 90   | The point's latitude, in decimal degrees (WGS 84) - north is positive                                                |
+| longitude   | float  | value >= -180<br>value <= 180 | The point's longitude, in decimal degrees (WGS 84) - east is positive, so the United States' longitudes are negative |
+| label       | string | optional<br>len(value) > 0    | The point label (default is "Start" or "End")                                                                        |
+| description | string | optional<br>len(value) > 0    | The point's description - what is there, and how the road joins it                                                   |
 
 ### struct Structure
 

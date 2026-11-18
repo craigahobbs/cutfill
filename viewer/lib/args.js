@@ -18,7 +18,8 @@ export const roadieArguments = [
     {'name': 'y', 'type': 'float', 'description': 'The 3D explorer view center north coordinate (default is the site center)'},
     {'name': 'z', 'type': 'float', 'description': 'The 3D explorer view center elevation (default is the ground elevation)'},
     {'name': 'explore', 'type': 'bool', 'default': false, 'explicit': true, 'description': 'Show the full-window 3D explorer'},
-    {'name': 'doc', 'type': 'bool', 'default': false, 'explicit': true, 'description': 'Show the model documentation'}
+    {'name': 'doc', 'type': 'bool', 'default': false, 'explicit': true, 'description': 'Show the model documentation'},
+    {'name': 'edit', 'type': 'string', 'explicit': true, 'description': 'Edit a plan config - "new", or "loaded" (the loaded plan\'s)'}
 ];
 
 

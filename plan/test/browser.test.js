@@ -1,4 +1,4 @@
-import {browserIo, ollamaHostDefault, planRoad} from '../lib/browser/io.js';
+import {autoSteps, browserIo, ollamaHostDefault, planRoad, siteDefaults} from '../lib/browser/io.js';
 import {crc32, deflateSync} from '../lib/browser/zlib.js';
 import {inflateSync, crc32 as nodeCrc32} from 'node:zlib';
 import {siteEast, siteNorth, testItem, testPages, testSite} from './terrainHelpers.js';
@@ -99,10 +99,6 @@ test('crc32 and deflateSync', () => {
 });
 
 
-// The test's road - its road site model's file name, and its road plan model's
-const road = {'site': 'hill-site.json', 'plan': 'hill.json'};
-
-
 // The model's answers to the test's questions
 const notesAnswer = {
     'purpose': 'A road to the house.', 'width': null, 'surface': null, 'maxGrade': null, 'minRadius': null, 'ruleOutRoads': [],
@@ -111,10 +107,9 @@ const notesAnswer = {
 const barnAnswer = {'found': true, 'west': 300, 'south': 60, 'east': 380, 'north': 120, 'why': 'A block.'};
 
 
-// Create a fake browser window - its fetch has the back end's "files" (a URL's text or bytes), the USGS's services
-// (the test site's), and Ollama's model. The window records its fetches' URLs ("fetches"), the files that were
-// written ("puts"), and its timeouts' delays.
-function fakeWindow({files = {}, writeStatus = 200, mapType = 'image/png', imageLoads = true, scriptLoads = true} = {}) {
+// Create a fake browser window - its fetch has the USGS's services (the test site's) and Ollama's model. The window
+// records its fetches' URLs ("fetches") and its timeouts' delays.
+function fakeWindow({mapType = 'image/png', imageLoads = true, scriptLoads = true} = {}) {
     const item = testItem('CO_New_2020', 'x47y443', '2022-02-10');
     const pages = testPages({'items': [item]});
     const response = (value) => ({
@@ -147,7 +142,6 @@ function fakeWindow({files = {}, writeStatus = 200, mapType = 'image/png', image
 
     const window = {
         'fetches': [],
-        'puts': {},
         'timeouts': [],
         'blobs': [],
         'revoked': [],
@@ -221,13 +215,7 @@ function fakeWindow({files = {}, writeStatus = 200, mapType = 'image/png', image
         },
         'fetch': (url, {method = 'GET', body = null} = {}) => {
             window.fetches.push(method === 'GET' ? url : `${method} ${url}`);
-            if (url.startsWith('files/') || url === 'site') {
-                if (method === 'PUT') {
-                    window.puts[url] = body;
-                    return Promise.resolve({'ok': writeStatus === 200, 'status': writeStatus});
-                }
-                return Promise.resolve(url in files ? response(files[url]) : {'ok': false, 'status': 404});
-            } else if (url.endsWith('/api/chat')) {
+            if (url.endsWith('/api/chat')) {
                 const {messages: [{content}]} = JSON.parse(body);
                 const answer = content.includes('Translate the notes') ? notesAnswer : barnAnswer;
                 return Promise.resolve(response({'message': {'content': JSON.stringify(answer)}}));
@@ -241,59 +229,24 @@ function fakeWindow({files = {}, writeStatus = 200, mapType = 'image/png', image
 }
 
 
-test('browserIo, files', async () => {
-    const window = fakeWindow({
-        'files': {'files/hill%20road.json': '{"title": "Hill"}', 'files/hill.png': Uint8Array.from([1, 2, 3])}
-    });
-    const io = browserIo(window);
+test('browserIo, files', () => {
+    // The files are in memory - a file's text, or its bytes
+    const files = new Map([['plan.json', '{"title": "Hill"}']]);
+    const io = browserIo(fakeWindow(), undefined, files);
+    assert.equal(io.files, files);
+    assert.equal(io.readFile('plan.json'), '{"title": "Hill"}');
+    assert.deepEqual([...io.readBytes('plan.json')].slice(0, 3), [123, 34, 116]);
+    io.writeFile('plan.work/descriptions.md', '# Plan');
+    io.writeBytes('plan.png', Uint8Array.from([1, 2, 3]));
+    assert.equal(io.readFile('plan.work/descriptions.md'), '# Plan');
+    assert.deepEqual([...io.readBytes('plan.png')], [1, 2, 3]);
+    assert.deepEqual([...files.keys()], ['plan.json', 'plan.work/descriptions.md', 'plan.png']);
+    assert.throws(() => io.readFile('other.json'), {'message': 'No such file "other.json"'});
+    assert.throws(() => io.readFile('plan.png'), {'message': 'No such file "plan.png"'});
+    assert.throws(() => io.readBytes('other.json'), {'message': 'No such file "other.json"'});
 
-    // A file is loaded from the back end - its text, or its bytes
-    assert.equal(await io.load('hill road.json'), true);
-    assert.equal(await io.load('hill.png', false), true);
-    assert.equal(await io.load('hill.json'), false);
-    assert.equal(io.readFile('hill road.json'), '{"title": "Hill"}');
-    assert.deepEqual([...io.readBytes('hill.png')], [1, 2, 3]);
-    assert.deepEqual([...io.readBytes('hill road.json')].slice(0, 3), [123, 34, 116]);
-    assert.throws(() => io.readFile('hill.json'), {'message': 'No such file "hill.json"'});
-    assert.throws(() => io.readFile('hill.png'), {'message': 'No such file "hill.png"'});
-    assert.throws(() => io.readBytes('hill.json'), {'message': 'No such file "hill.json"'});
-    assert.deepEqual(window.fetches, ['files/hill%20road.json', 'files/hill.png', 'files/hill.json']);
-
-    // A file that's written is in memory, and it's written to the back end - but for the terrain cache's
-    io.writeFile('hill.json', '{"title": "Hill Road"}');
-    io.writeBytes('hill.work/ask/the barn.png', Uint8Array.from([4, 5]));
-    io.writeFile('hill.work/terrain/tile.json', '{}');
-    io.writeBytes('hill.work/terrain/tile.f32', Uint8Array.from([6]));
-    assert.equal(io.readFile('hill.json'), '{"title": "Hill Road"}');
-    assert.equal(io.readFile('hill.work/terrain/tile.json'), '{}');
-    assert.deepEqual([...io.readBytes('hill.work/terrain/tile.f32')], [6]);
-    await io.flush();
-    assert.deepEqual(Object.keys(window.puts), ['files/hill.json', 'files/hill.work/ask/the%20barn.png']);
-    assert.equal(window.puts['files/hill.json'], '{"title": "Hill Road"}');
-    assert.deepEqual([...io.files.keys()], [
-        'hill road.json', 'hill.png', 'hill.json', 'hill.work/ask/the barn.png', 'hill.work/terrain/tile.json',
-        'hill.work/terrain/tile.f32'
-    ]);
-
-    // A file that the back end doesn't write is an error, when the files are waited for
-    const failed = browserIo(fakeWindow({'writeStatus': 400}));
-    failed.writeFile('script.js', 'text');
-    await assert.rejects(failed.flush(), {'message': 'Could not write "script.js" (status 400)'});
-    await failed.flush();
-});
-
-
-test('browserIo, the road site', async () => {
-    // The road site model's file is the back end's "site" - in memory, it's in the "site/" directory
-    const window = fakeWindow({'files': {'site': '{"title": "Hill"}'}});
-    const io = browserIo(window);
-    assert.equal(await io.load('site/hill.json'), true);
-    assert.equal(io.readFile('site/hill.json'), '{"title": "Hill"}');
-    io.writeFile('site/hill.json', '{"title": "Hill Road"}');
-    io.writeFile('hill.json', '{"title": "Hill Road", "options": []}');
-    await io.flush();
-    assert.deepEqual(window.fetches, ['site', 'PUT site', 'PUT files/hill.json']);
-    assert.deepEqual(window.puts, {'site': '{"title": "Hill Road"}', 'files/hill.json': '{"title": "Hill Road", "options": []}'});
+    // An input and output's files are its own, by default
+    assert.deepEqual([...browserIo(fakeWindow()).files.keys()], []);
 });
 
 
@@ -359,64 +312,146 @@ test('browserIo, plots and elevation models', async () => {
 
 
 test('planRoad', async () => {
-    // A road's plan is made in the browser - its site model is the back end's, and its files are written to the back end
+    // A road's plan is made in the browser, from its plan config - its files are in memory
     const site = testSite({'margin': 150, 'spacing': 10, 'notes': ['Stay off the barn.']});
-    const window = fakeWindow({'files': {'site': JSON.stringify(site)}});
+    const window = fakeWindow();
+    const files = new Map([['other.json', '{}'], ['plan.work/plan.png', Uint8Array.from([1])]]);
     const progressLines = [];
     const statuses = [];
-    const result = await planRoad(window, road, {
+    const result = await planRoad(window, {site}, {
         'model': 'test-model',
         'progress': (lines) => progressLines.push(...lines),
-        'status': (text) => Promise.resolve(statuses.push(text))
+        'status': (text) => Promise.resolve(statuses.push(text)),
+        files
     });
     assert.equal(result.code, 0);
     assert.deepEqual(result.lines.filter((line) => /^Notes|^Option \d|^Wrote/.test(line)), [
         'Notes: avoid "Barn" - an exclusion area from x 300 to 380, y 60 to 120',
         'Option 0: "New Road" - cost score 72.6, design warnings: 0',
-        'Wrote hill.json - its descriptions are "hill.work/descriptions.md", and its plots are in "hill.work/"'
+        'Wrote plan.json - its descriptions are "plan.work/descriptions.md", and its plots are in "plan.work/"'
     ]);
     assert.deepEqual(progressLines, result.lines);
     assert.deepEqual([statuses[0], statuses.at(-1)], [
         'Creating the site - its terrain, streams, roads, and map are the USGS\'s', 'Writing the descriptions and the plots'
     ]);
 
-    // The back end's files - the plan, its map image, and its work directory's (but for the terrain cache's)
-    assert.deepEqual(Object.keys(window.puts).sort(), [
-        'files/hill.json', 'files/hill.png', 'files/hill.work/ask/barn-box.png', 'files/hill.work/ask/barn.png',
-        'files/hill.work/decisions.json', 'files/hill.work/descriptions.md', 'files/hill.work/map.png', 'files/hill.work/plan.png'
-    ]);
-    const plan = JSON.parse(window.puts['files/hill.json']);
+    // The plan - its map image is a data URL, and its plan config is its site
+    const {plan} = result;
+    assert.deepEqual(siteDefaults(site), {'margin': 150, 'spacing': 1});
+    assert.equal(autoSteps[0].key, 'site');
     assert.deepEqual(plan.options.map(({name}) => name), ['New Road']);
     assert.equal(plan.description[0], 'A road to the house.');
-    assert.deepEqual(Object.keys(JSON.parse(window.puts['files/hill.work/decisions.json']).answers), [
-        'notes', 'avoid:Barn', 'avoid:Barn:closer'
-    ]);
-    assert.deepEqual(window.fetches.slice(0, 3), ['site', 'files/hill.json', 'files/hill.work/decisions.json']);
+    assert.equal(plan.image, 'data:image/png;base64,iVBORw==');
+    assert.deepEqual(plan.site, site);
+    assert.equal(files.has('other.json'), false);
+    assert.deepEqual(Object.keys(JSON.parse(files.get('plan.work/decisions.json')).answers), ['notes', 'avoid:Barn', 'avoid:Barn:closer']);
+    assert.ok([...files.keys()].some((path) => path.startsWith('plan.work/terrain/')));
     assert.equal(window.fetches.filter((url) => url.endsWith('/api/chat')).length, 3);
+    const elevationFetches = window.fetches.filter((url) => url.endsWith('.tif')).length;
+    assert.ok(elevationFetches > 0);
 
-    // Again, without a model - the road's plan and the model's saved answers are the back end's
-    const files = Object.fromEntries(Object.entries(window.puts).map(([url, content]) => [url, content]));
-    const again = fakeWindow({'files': {...files, 'site': JSON.stringify(site)}});
-    const plain = await planRoad(again, road);
-    assert.equal(plain.code, 0);
-    assert.ok(plain.lines.includes('Notes: not read - there\'s no model (--model)'));
-    assert.equal(again.fetches.filter((url) => url.endsWith('/api/chat')).length, 0);
+    // The plan made again - its terrain and the model's answers are the files', and its option is kept
+    const again = await planRoad(window, {site, plan}, {'model': 'test-model', files});
+    assert.equal(again.code, 0);
+    assert.equal(window.fetches.filter((url) => url.endsWith('/api/chat')).length, 3);
+    assert.equal(window.fetches.filter((url) => url.endsWith('.tif')).length, elevationFetches);
+    assert.ok(again.lines.includes('Kept the plan\'s other features: 1 stream, 1 exclusion area'));
+
+    // A plan of another site isn't made again - it's a new plan
+    const movedEnd = {...site, 'end': {...site.end, 'latitude': site.end.latitude + 0.0001}};
+    const movedStart = {...site, 'start': {...site.start, 'longitude': site.start.longitude + 0.0001}};
+    for (const other of [movedEnd, movedStart, {...site, 'units': 'feet'}]) {
+        const otherResult = await planRoad(window, {'site': other, plan}, {files});
+        assert.equal(otherResult.code, 0);
+        assert.equal(otherResult.lines.some((line) => line.startsWith('Kept the plan')), false);
+    }
+    const noSite = await planRoad(window, {site, 'plan': {...plan, 'site': undefined}});
+    assert.equal(noSite.lines.some((line) => line.startsWith('Kept the plan')), false);
 });
 
 
 test('planRoad, failures', async () => {
-    // A road without a site model
-    assert.deepEqual(await planRoad(fakeWindow(), road), {'code': 1, 'lines': ['error: Could not load the road site "hill-site.json"']});
+    // A plan config that isn't one
+    const invalid = await planRoad(fakeWindow(), {'site': {}});
+    assert.deepEqual([invalid.code, invalid.lines[0], invalid.plan], [1, 'error: The road site "site.json" is invalid:', null]);
 
-    // A file that the back end doesn't write
+    // A plan that fails - its map image can't be drawn
     const site = testSite({'margin': 150, 'spacing': 10});
-    const window = fakeWindow({'files': {'site': JSON.stringify(site)}, 'writeStatus': 500});
-    const result = await planRoad(window, road);
-    assert.equal(result.code, 1);
-    assert.match(result.lines[0], /^error: Could not write "hill\.(png|json)" \(status 500\)$/);
+    const failed = await planRoad(fakeWindow({'imageLoads': false}), {site});
+    assert.deepEqual(failed, {'code': 1, 'lines': ['error: Could not draw a plot'], 'plan': null});
 
-    // A site model that isn't one
-    const invalid = await planRoad(fakeWindow({'files': {'site': '{}'}}), road);
-    assert.equal(invalid.code, 1);
-    assert.equal(invalid.lines[0], 'error: The road site "site/hill-site.json" is invalid:');
+    // A plan without a map image keeps its image
+    const noMap = await planRoad(fakeWindow({'mapType': 'text/html'}), {site});
+    assert.equal(noMap.code, 0);
+    assert.equal('image' in noMap.plan, false);
+});
+
+
+test('browserIo, stopped', async () => {
+    // An aborted signal stops the functions that fetch, wait, or read - the fetches in flight are aborted, too
+    const window = fakeWindow();
+    const controller = new AbortController();
+    const io = browserIo(window, undefined, undefined, controller.signal);
+    const image = await io.openImage('https://example.com/model.tif');
+    assert.equal(image.georeference.width, 2000);
+    assert.equal((await image.read([0, 0, 1, 1])).length, 1);
+    const fetches = [];
+    const {fetch} = window;
+    window.fetch = (url, options) => {
+        fetches.push(options?.signal === controller.signal);
+        return fetch(url, options);
+    };
+    await io.getJson('https://tnmaccess.nationalmap.gov/api/v1/products?max=1');
+    assert.deepEqual(fetches, [true]);
+    controller.abort();
+    const stopped = {'name': 'AbortError'};
+    await assert.rejects(io.getJson('https://tnmaccess.nationalmap.gov/api/v1/products?max=1'), stopped);
+    await assert.rejects(io.sleep(250), stopped);
+    await assert.rejects(io.openImage('https://example.com/model.tif'), stopped);
+    await assert.rejects(image.read([0, 0, 1, 1]), stopped);
+    await assert.rejects(io.ask({'model': 'test-model', 'question': 'Where?', 'schema': {}}), stopped);
+    assert.deepEqual(fetches, [true]);
+
+    // A wait that's stopped while it waits
+    const waiting = new AbortController();
+    const waitWindow = fakeWindow();
+    waitWindow.setTimeout = (callback) => {
+        waiting.abort();
+        callback();
+    };
+    await assert.rejects(browserIo(waitWindow, undefined, undefined, waiting.signal).sleep(250), stopped);
+});
+
+
+test('planRoad, stopped', async () => {
+    // The plan is stopped while it engineers its options, or while it fetches the site - its result is stopped
+    const site = testSite({'margin': 150, 'spacing': 10});
+    for (const stopStep of ['options', 'site']) {
+        const files = new Map([['plan.work/terrain/tile.json', '{}'], ['plan.work/decisions.json', '{"answers": {}}'], ['old.json', '{}']]);
+        const controller = new AbortController();
+        const window = fakeWindow();
+        const {fetch} = window;
+        window.fetch = (url, options) => {
+            if (stopStep === 'site' && url.startsWith('https://hydro')) {
+                controller.abort();
+            }
+            return fetch(url, options);
+        };
+        const statuses = [];
+        const result = await planRoad(window, {site}, {
+            'signal': controller.signal,
+            files,
+            'status': (text, step) => {
+                statuses.push(step);
+                if (step === stopStep && stopStep === 'options') {
+                    controller.abort();
+                }
+            }
+        });
+        assert.deepEqual(result, {'code': 1, 'lines': ['The plan was stopped'], 'plan': null, 'stopped': true});
+        assert.deepEqual(statuses, stopStep === 'options' ? ['site', 'options'] : ['site']);
+
+        // The plan's work is thrown away - the files are the files that were kept before it
+        assert.deepEqual([...files], [['plan.work/terrain/tile.json', '{}'], ['plan.work/decisions.json', '{"answers": {}}']]);
+    }
 });

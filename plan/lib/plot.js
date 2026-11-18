@@ -395,6 +395,22 @@ export const plotUsage = [
 const rBox = /^\d+(\.\d+)?(,\d+(\.\d+)?){3}$/;
 
 
+// Read a plan's topographic map image - its base64 text, or null if it has none. The image is a file beside the plan,
+// or a data URL - the image itself (the Roadie application's plans).
+export function planMapBase64(io, planPath, plan) {
+    const image = plan.image ?? '';
+    const dataPrefix = image.match(/^data:image\/[a-z]+;base64,/i)?.[0] ?? null;
+    if (dataPrefix !== null) {
+        return image.slice(dataPrefix.length);
+    }
+    try {
+        return Buffer.from(io.readBytes(`${planPath.slice(0, planPath.lastIndexOf('/') + 1)}${image}`)).toString('base64');
+    } catch {
+        return null;
+    }
+}
+
+
 // The "plot" command - "io" is the tools' input and output functions. Returns the command's exit code and its
 // output text lines, or null if its arguments are invalid.
 export function plotCommand(args, io) {
@@ -436,12 +452,11 @@ export function plotCommand(args, io) {
         }
     }
 
-    // The plan's topographic map image is beside the plan
+    // The plan's topographic map image
     let map = null;
     if (isMap) {
-        try {
-            map = Buffer.from(io.readBytes(`${planPath.slice(0, planPath.lastIndexOf('/') + 1)}${plan.image}`)).toString('base64');
-        } catch {
+        map = planMapBase64(io, planPath, plan);
+        if (map === null) {
             return {'code': 1, 'lines': [`error: The plan "${planPath}" has no topographic map image`]};
         }
     }

@@ -526,4 +526,8 @@ test('planImageURL', () => {
 
     // The URL is encoded - parentheses, too
     assert.equal(planImageURL('my plans/site (1)/plan.json', 'topo map (2).png'), 'my%20plans/site%20%281%29/topo%20map%20%282%29.png');
+
+    // A data URL is the image itself
+    assert.equal(planImageURL('plans/plan.json', 'data:image/png;base64,iVBORw=='), 'data:image/png;base64,iVBORw==');
+    assert.equal(planImageURL('local:plan.json', 'DATA:image/png;base64,iVBORw=='), 'DATA:image/png;base64,iVBORw==');
 });

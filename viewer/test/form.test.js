@@ -24,6 +24,7 @@ const types = parseSchemaMarkdown([
     '    optional bool paid',
     '    optional string{} tags',
     '    optional Miles distance',
+    '    Place destination',
     '',
     'enum Mode',
     '    car',
@@ -49,7 +50,8 @@ test('formHtml', () => {
     // A form's controls are its struct's members', with its value's values
     const value = {
         'tripName': 'North & "south"', 'days': 3, 'cost': 12.5, 'mode': 'train', 'start': {'city': 'Pasco', 'latitude': 46.2},
-        'alternate': {}, 'notes': ['Pack <light>.', 'Leave early.'], 'stops': [{'city': 'Yakima'}], 'paid': true, 'distance': 80
+        'alternate': {}, 'notes': ['Pack <light>.', 'Leave early.'], 'stops': [{'city': 'Yakima'}], 'paid': true, 'distance': 80,
+        'destination': {'city': 'Ritzville'}
     };
     const form = formElement(value);
     const controls = [...form.querySelectorAll('[data-member]')];
@@ -59,38 +61,54 @@ test('formHtml', () => {
         ['start.city', 'INPUT', 'Pasco'], ['start.latitude', 'INPUT', '46.2'], ['start.longitude', 'INPUT', ''],
         ['end.city', 'INPUT', ''], ['end.latitude', 'INPUT', ''], ['end.longitude', 'INPUT', ''],
         ['alternate.city', 'INPUT', ''], ['alternate.latitude', 'INPUT', ''], ['alternate.longitude', 'INPUT', ''],
-        ['notes', 'TEXTAREA', 'Pack <light>.\nLeave early.']
+        ['notes', 'TEXTAREA', 'Pack <light>.\nLeave early.'],
+        ['destination.city', 'INPUT', 'Ritzville'], ['destination.latitude', 'INPUT', ''], ['destination.longitude', 'INPUT', '']
     ]);
 
-    // A member's label is its name's words - a required member's has a "*" - with its documentation
+    // The form's layout - grids of fields, and groups of a struct's fields
+    assert.deepEqual([...form.children].map((element) => (
+        `${element.tagName} ${element.className} ${[...element.children].map((child) => child.className || child.tagName).join(',')}`
+    )), [
+        'DIV roadie-form-fields roadie-form-field roadie-form-wide,roadie-form-field,roadie-form-field,roadie-form-field,roadie-form-field',
+        'DIV roadie-form-groups roadie-form-group',
+        'DETAILS roadie-form-group SUMMARY,roadie-form-fields',
+        'DETAILS roadie-form-group SUMMARY,roadie-form-fields',
+        'DIV roadie-form-fields roadie-form-field roadie-form-wide,roadie-form-field roadie-form-wide,roadie-form-field roadie-form-wide,' +
+            'roadie-form-field roadie-form-wide',
+        'DIV roadie-form-groups roadie-form-group'
+    ]);
+
+    // A field is its member's label - its name's words, and a "*" if it's required - its control, and its documentation
     assert.equal(
-        form.firstElementChild.outerHTML,
-        '<p><label><span class="roadie-form-name">Trip name *</span> <input type="text" data-member="tripName" size="50" ' +
-            'value="North &amp; &quot;south&quot;"></label> <span class="roadie-form-doc">The trip\'s name - its &lt;title&gt;</span></p>'
+        form.querySelector('.roadie-form-field').outerHTML,
+        '<div class="roadie-form-field roadie-form-wide"><label for="roadie-form-tripName">Trip name *</label>' +
+            '<input type="text" id="roadie-form-tripName" data-member="tripName" value="North &amp; &quot;south&quot;">' +
+            '<div class="roadie-form-doc">The trip\'s name - its &lt;title&gt;</div></div>'
     );
-    assert.deepEqual([...form.querySelectorAll('.roadie-form-name')].slice(0, 6).map((label) => label.textContent), [
-        'Trip name *', 'Days', 'Cost *', 'Mode *', 'Return mode', 'Start *'
+    assert.deepEqual([...form.querySelectorAll('label')].slice(0, 6).map((label) => label.textContent), [
+        'Trip name *', 'Days', 'Cost *', 'Mode *', 'Return mode', 'City'
     ]);
     assert.equal(form.querySelector('[data-member="days"]').getAttribute('inputmode'), 'decimal');
-    assert.equal(form.querySelector('[data-member="days"]').getAttribute('size'), '12');
+    assert.equal(form.querySelector('[data-member="start.city"]').id, 'roadie-form-start-city');
+    assert.equal(form.querySelector('label[for="roadie-form-notes"]').nextElementSibling.nextElementSibling.textContent, ' - a line each');
 
     // An enumeration's values - an optional one's may be none
     assert.deepEqual(['mode', 'returnMode'].map((member) => (
         [...form.querySelector(`[data-member="${member}"]`).options].map((option) => option.textContent)
     )), [['car', 'train'], ['', 'car', 'train']]);
 
-    // A struct is a group of its members' controls - an optional struct's is closed, unless it has a value
-    assert.equal(form.querySelector('fieldset > legend').textContent, 'Start * ');
-    assert.equal(form.querySelectorAll('fieldset [data-member]').length, 3);
+    // A required struct is a group of its members' fields - an optional struct's is closed, unless it has a value
+    assert.deepEqual([...form.querySelectorAll('fieldset > legend')].map((legend) => legend.textContent), ['Start *', 'Destination *']);
+    assert.equal(form.querySelectorAll('fieldset')[0].querySelectorAll('[data-member]').length, 3);
     assert.deepEqual([...form.querySelectorAll('details')].map((details) => [details.querySelector('summary').textContent, details.open]), [
         ['End ', false], ['Alternate ', true]
     ]);
 
     // The members that aren't edited are noted, if they have values
-    assert.deepEqual([...form.querySelectorAll('em')].map((note) => note.parentElement.textContent), [
-        'Stops  It isn\'t edited here - it\'s kept as it is.',
-        'Paid  It isn\'t edited here - it\'s kept as it is.',
-        'Distance  It isn\'t edited here - it\'s kept as it is.'
+    assert.deepEqual([...form.querySelectorAll('em')].map((note) => note.closest('.roadie-form-field').textContent), [
+        'StopsIt isn\'t edited here - it\'s kept as it is.',
+        'PaidIt isn\'t edited here - it\'s kept as it is.',
+        'DistanceIt isn\'t edited here - it\'s kept as it is.'
     ]);
 
     // A form without a value, and one whose value's members aren't its model's
@@ -105,7 +123,8 @@ test('formValue', () => {
     // A form's value is its controls' - the members that aren't edited are the value's that the form was made with
     const value = {
         'tripName': 'North', 'days': 3, 'cost': 12.5, 'mode': 'train', 'start': {'city': 'Pasco', 'latitude': 46.2},
-        'alternate': {}, 'notes': ['Pack light.', 'Leave early.'], 'stops': [{'city': 'Yakima'}], 'paid': true, 'tags': {'kind': 'work'}
+        'alternate': {}, 'notes': ['Pack light.', 'Leave early.'], 'stops': [{'city': 'Yakima'}], 'paid': true, 'tags': {'kind': 'work'},
+        'destination': {'city': 'Ritzville'}
     };
     const form = formElement(value);
     const {alternate, ...expected} = value;
@@ -121,15 +140,17 @@ test('formValue', () => {
     }
     assert.deepEqual(formValue(types, 'Trip', form, value), {
         'tripName': 'South', 'cost': 100, 'mode': 'car', 'returnMode': 'train', 'start': {'latitude': 46.2, 'longitude': -119.1},
-        'end': {'latitude': 'north'}, 'notes': ['Pack heavy.'], 'stops': [{'city': 'Yakima'}], 'paid': true, 'tags': {'kind': 'work'}
+        'end': {'latitude': 'north'}, 'notes': ['Pack heavy.'], 'stops': [{'city': 'Yakima'}], 'paid': true, 'tags': {'kind': 'work'},
+        'destination': {'city': 'Ritzville'}
     });
 
     // A form without a value - a required struct is its value, though it has no members
     form.querySelector('[data-member="notes"]').value = '';
     form.querySelector('[data-member="start.latitude"]').value = '';
     form.querySelector('[data-member="start.longitude"]').value = '';
+    form.querySelector('[data-member="destination.city"]').value = '';
     assert.deepEqual(formValue(types, 'Trip', form), {
-        'tripName': 'South', 'cost': 100, 'mode': 'car', 'returnMode': 'train', 'start': {}, 'end': {'latitude': 'north'}
+        'tripName': 'South', 'cost': 100, 'mode': 'car', 'returnMode': 'train', 'start': {}, 'end': {'latitude': 'north'}, 'destination': {}
     });
 });
 
