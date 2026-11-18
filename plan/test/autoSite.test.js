@@ -14,7 +14,8 @@ test('auto, the notes\' coordinates and bridges', async () => {
         `Keep off the easement - its corners are ${text(corners)}.`,
         `Pass the gate at ${text([gate])}.`,
         'Replace a stream crossing\'s fill deeper than 2 meters with a bridge.',
-        'The lot is at 40.0003, -105.2785 and 40.0004, -105.2786. The far field is at 41.5, -106.5; 41.6, -106.5; 41.6, -106.6.'
+        'The lot is at 40.0003, -105.2785 and 40.0004, -105.2786. The far field is at 41.5, -106.5; 41.6, -106.5; 41.6, -106.6.',
+        'From the start to the top, at 40.002, -105.2765.'
     ]});
     const lot = [{'latitude': 40.0003, 'longitude': -105.2785}, {'latitude': 40.0004, 'longitude': -105.2786}];
     const far = [{'latitude': 41.5, 'longitude': -106.5}, {'latitude': 41.6, 'longitude': -106.5}, {'latitude': 41.6, 'longitude': -106.6}];
@@ -29,7 +30,9 @@ test('auto, the notes\' coordinates and bridges', async () => {
         'passThrough': [
             {'name': 'Gate', 'where': 'the gate', 'points': [gate]},
             {'name': 'Posts', 'where': '', 'points': lot},
-            {'name': 'Far', 'where': '', 'points': far.slice(0, 1)}
+            {'name': 'Far', 'where': '', 'points': far.slice(0, 1)},
+            {'name': 'start', 'where': '', 'points': []},
+            {'name': 'Top', 'where': '', 'points': [{'latitude': 40.002, 'longitude': -105.2765}]}
         ]
     })};
     const io = await runAuto(site, {'args': ['--model', 'test-model'], answers});
@@ -39,6 +42,8 @@ test('auto, the notes\' coordinates and bridges', async () => {
         'Notes: a bridge replaces a stream crossing\'s fill deeper than 2 meters',
         'Notes: avoid "Easement" - an exclusion area of the notes\' 4 corners',
         'Notes: pass through "Gate" - the notes\' point',
+        'Notes: pass through "start" - it\'s the road\'s start point',
+        'Notes: pass through "Top" - it\'s the road\'s end point',
         'Notes: "Via Gate" passes through "Gate"',
         'Notes: NOT acted on - avoid "Shed" - the coordinates the model read for it aren\'t the notes\'',
         'Notes: NOT acted on - avoid "Lot" (west) - the notes give 2 of its corners (an area has three or more)',

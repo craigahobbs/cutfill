@@ -327,16 +327,18 @@ to the model documentation.
 ## The example
 
 The [example](example/example.json) is an access road up a hill at the south edge of Kennewick,
-Washington - not quite half a mile of road, to climb 200 feet. It was planned from its road site model,
-[site.json](example/site.json): the road's start and end points, as latitudes and longitudes, and its
-planning notes.
+Washington - not quite half a mile of road, to climb 200 feet. It was made by the application, from
+its config, [site.json](example/site.json): the road's start and end points, as latitudes and
+longitudes, its planning notes, and its marks - the house lots at the foot of the hill, which the road
+must avoid, and an unmapped dirt track to the hilltop, which a road may follow.
 
-The site's terrain is the USGS's 1 meter lidar elevations, and its features are the USGS's roads -
-plus two draws, the house lots at the foot of the hill, and an unmapped dirt track to the hilltop,
-which were added from the terrain and the topographic map. The plan has two options: the least-cost
-road, which follows the track to the hilltop, and an all-new road. The plan's image,
-[example.png](example/example.png), is the USGS topographic map of the site, for the report's source
-map.
+The site's terrain is the USGS's 1 meter lidar elevations, and its features are the USGS's roads and
+stream, the config's marks, and a draw of the hill that an option crosses, which the run added. The run
+read the notes with a local model (the road is gravel, and its grade is 12% at most), and engineered
+three options: the least-cost road, which follows the track to the hilltop, an all-new road, and a
+road in another corridor, around the hill's west side. The plan keeps its image - the USGS topographic
+map of the site, for the report's source map - so the example is one file. Open the config in the
+application and run it to make the plan again.
 
 Run the application, and open the example's file to view it - `example/example.json` in the
 repository, or [download it](https://craigahobbs.github.io/roadie/example/example.json). On the project's web site,

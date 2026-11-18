@@ -385,7 +385,8 @@ export async function autoPlan(io, planPath, site, planValue, options = {}) {
         report(`Notes: NOT acted on - ${text}`);
     }
     if (directives.unhandled.length > 0) {
-        limitations.push(`These of the site's notes weren't acted on: ${directives.unhandled.join('; ')}.`);
+        const texts = directives.unhandled.map((text) => text.replace(/[.\s]+$/, ''));
+        limitations.push(`These of the site's notes weren't acted on: ${texts.join('; ')}.`);
     }
     describePlan(plan, topo, {
         'purpose': directives.purpose,
@@ -442,10 +443,21 @@ async function findPlaces(io, ask, status, {work, planPath, plan, topo, config, 
         const [x, y] = layoutPoint(layout, latitude, longitude);
         return x >= 0 && y >= 0 && x <= topo.width && y <= topo.height;
     };
-    const isCurrent = (places) => ({found = null}) => found === null || (!isFresh && places.some(({name}) => name === found.place));
-    const isMark = (place) => ({name = null, found = null}) => (found?.place ?? name) === place.name;
+    const isCurrent = (places) => ({found = null}) => (
+        found === null || (!isFresh && places.some(({name}) => isSameName(name, found.place)))
+    );
+    const isMark = (place) => ({name = null, found = null}) => isSameName(found?.place ?? name, place.name);
+
+    // A place to pass through that's the road's start or end point isn't one - the road is from one to the other. It's
+    // the point of its name (its label), or it's within the minimum radius of the point.
+    const endPoints = [['start', plan.start], ['end', plan.end]];
+    const {minRadius} = planCriteria(plan);
+    const endPointNamed = (place) => endPoints.find(([, {label = null}]) => isSameName(label, place.name))?.[0] ?? null;
+    const endPointAt = (x, y) => endPoints.find(([, point]) => Math.hypot(point.x - x, point.y - y) < minRadius)?.[0] ?? null;
     const exclusions = (config.exclusions ?? []).filter(isCurrent(directives.avoid));
-    const passThrough = (config.passThrough ?? []).filter(isCurrent(directives.passThrough));
+    const passThrough = (config.passThrough ?? []).filter(
+        isCurrent(directives.passThrough.filter((place) => endPointNamed(place) === null))
+    );
     const unhandled = (kind, place, problem) => {
         directives.unhandled.push(`${kind} "${place.name}"${place.where !== '' ? ` (${place.where})` : ''} - ${problem}`);
     };
@@ -479,13 +491,21 @@ async function findPlaces(io, ask, status, {work, planPath, plan, topo, config, 
 
     // The places to pass through - each is a point that an option passes through
     for (const place of directives.passThrough) {
-        if (passThrough.some(isMark(place))) {
+        const atPoint = (endPoint) => {
+            lines.push(`Notes: pass through "${place.name}" - it's the road's ${endPoint} point`);
+        };
+        if (endPointNamed(place) !== null) {
+            atPoint(endPointNamed(place));
+        } else if (passThrough.some(isMark(place))) {
             lines.push(`Notes: pass through "${place.name}" - the plan config's place to pass through`);
         } else if (place.points !== null) {
+            const [{latitude, longitude}] = place.points;
             if (place.points.length !== 1) {
                 unhandled('pass through', place, `the notes give ${place.points.length} points for it (a place is one point)`);
             } else if (!isInside(place.points[0])) {
                 unhandled('pass through', place, 'it isn\'t within the site');
+            } else if (endPointAt(...layoutPoint(layout, latitude, longitude)) !== null) {
+                atPoint(endPointAt(...layoutPoint(layout, latitude, longitude)));
             } else {
                 passThrough.push({'name': place.name, ...place.points[0], 'found': {'place': place.name}});
                 lines.push(`Notes: pass through "${place.name}" - the notes' point`);
@@ -495,6 +515,8 @@ async function findPlaces(io, ask, status, {work, planPath, plan, topo, config, 
             const point = await locatePoint(io, ask, work, planPath, plan, topo, place);
             if (point === null) {
                 unhandled('pass through', place, 'the model didn\'t find it on the map');
+            } else if (endPointAt(...point.point) !== null) {
+                atPoint(endPointAt(...point.point));
             } else {
                 const [x, y] = point.point;
                 passThrough.push({'name': place.name, ...latLong(x, y), 'found': {'place': place.name, model, 'why': point.why}});
@@ -513,13 +535,20 @@ async function findPlaces(io, ask, status, {work, planPath, plan, topo, config, 
 }
 
 
+// Are a place's names the same - in any case? A model writes "the barn" of the notes' "The Barn". A null name is no
+// name's.
+function isSameName(first, second) {
+    return first !== null && second !== null && first.toLowerCase() === second.toLowerCase();
+}
+
+
 // Get the descriptions' notes of the plan config's marks that a plan found for the notes' places
 function markNotes(config, directives) {
     const notes = [];
     const kinds = [['avoid', 'exclusions', directives.avoid], ['pass through', 'passThrough', directives.passThrough]];
     for (const [kind, member, places] of kinds) {
         for (const mark of config[member] ?? []) {
-            const place = places.find(({name}) => name === mark.found?.place) ?? null;
+            const place = places.find(({name}) => isSameName(name, mark.found?.place ?? null)) ?? null;
             if (place !== null) {
                 const {model = null, why = ''} = mark.found;
                 notes.push(
@@ -556,8 +585,9 @@ function notesQuestion(plan, notes, roadNames) {
         '- "avoid": the places the notes say the road must avoid, keep off, or stay out of - each one\'s short "name", "where" it ' +
             'is, in the notes\' words, and its "points" - the corners\' latitudes and longitudes that the notes give for it, as ' +
             'they give them (none, if they give none)',
-        '- "passThrough": the places the notes say the road must pass through or go by - each one\'s "name", "where", and ' +
-            '"points" (the latitude and longitude that the notes give for it, if any)',
+        '- "passThrough": the places the notes say the road must pass through or go by, between its start and end points (not ' +
+            'the points themselves) - each one\'s "name", "where", and "points" (the latitude and longitude that the notes give ' +
+            'for it, if any)',
         '- "unhandled": each other instruction of the notes that these members don\'t cover, in the notes\' words (not the road\'s ' +
             'description or purpose)'
     ].join('\n');

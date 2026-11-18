@@ -28,8 +28,9 @@ The project is three subprojects, and the top-level makefile delegates to them:
   is its config's file. The tools' modules stay importable in a browser: a Node module they import needs a stand-in in
   `plan/lib/browser/` and the page's import map (`viewer/index.html`). See [app/README.md](app/README.md).
 
-`example/` is the example - a road site model (`site.json`) and the plan made from it (`example.json`, and its USGS
-topographic map image). `index.html` renders this project's README on its web site.
+`example/` is the example - a plan config (`site.json`, with its marks) and the plan the application made from it
+(`example.json` - one file, with its USGS topographic map image), and the README's screenshot of its report's 3D
+views. `index.html` renders this project's README on its web site.
 
 ## Commands
 

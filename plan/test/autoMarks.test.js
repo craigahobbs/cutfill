@@ -39,11 +39,17 @@ test('auto, the saved answers and the plan config\'s marks', async () => {
     assert.deepEqual(freshAuthor.site, corrected);
     assert.ok(freshAuthor.output.join('').includes('\nNotes: avoid "Barn" - the plan config\'s exclusion area\n'));
 
-    // If the notes change, the notes are asked again - a mark of a place the notes name is kept, and a mark that was found
-    // for a place the notes don't name any more is removed
-    const changed = await runAuto({...foundSite, 'notes': ['Stay off the barn!']}, {args, answers, io});
+    // If the notes change, the notes are asked again - a mark of a place the notes name is kept (its name is the same
+    // in any case - a model doesn't write it the same way every time), and a mark that was found for a place the notes
+    // don't name any more is removed
+    const lowerNotes = notesAnswer({'surface': 'gravel', 'avoid': [{'name': 'barn', 'where': 'north', 'points': []}]});
+    const changed = await runAuto({...foundSite, 'notes': ['Stay off the barn!']}, {args, 'answers': {'notes': lowerNotes}, io});
     assert.deepEqual([changed.code, changed.asks.map(({key}) => key)], [0, ['notes']]);
     assert.deepEqual(changed.site.exclusions, foundSite.exclusions);
+    assert.ok(changed.output.join('').includes('\nNotes: avoid "barn" - the plan config\'s exclusion area\n'));
+    assert.deepEqual(changed.descriptions.filter((line) => line.startsWith('- Barn: ')), [
+        '- Barn: the notes\' place to avoid (north). The model "test-model" found it on the site\'s map - "A block." Verify it.'
+    ]);
     const removed = await runAuto({...foundSite, 'notes': ['A road.']}, {args, 'answers': {'notes': notesAnswer()}, io});
     assert.deepEqual([removed.code, removed.asks.map(({key}) => key)], [0, ['notes']]);
     assert.equal(removed.site.exclusions, undefined);
@@ -118,9 +124,9 @@ test('auto, the options\' limit', async () => {
     const answers = {
         'notes': notesAnswer({
             'purpose': '', 'width': 5, 'surface': 'gravel', 'maxGrade': 10,
-            'passThrough': ['Oak', 'Elm', 'Ash', 'Fir'].map((name) => ({name, 'where': 'a tree', 'points': []}))
+            'passThrough': ['Oak', 'Elm', 'Ash', 'Fir', 'Gate'].map((name) => ({name, 'where': 'a tree', 'points': []}))
         }),
-        'Oak': point(200, 300), 'Elm': point(300, 150), 'Ash': point(400, 250), 'Fir': point(250, 400)
+        'Oak': point(200, 300), 'Elm': point(300, 150), 'Ash': point(400, 250), 'Fir': point(250, 400), 'Gate': point(152, 160)
     };
     const roads = [siteRoad(site, 'Mill Rd', [[150, 150], [448.87, 372.07]])];
     const io = await runAuto(site, {'args': ['--model', 'test-model', '-w', '4', '-s', 'native'], answers, roads, 'mapImage': null});
@@ -136,6 +142,10 @@ test('auto, the options\' limit', async () => {
         'Option 2: "Via Ash" - cost score 39.0, design warnings: 0',
         'Option 3: "Via Elm" - cost score 40.6, design warnings: 0'
     ]);
+
+    // A place the model finds at the road's start point isn't a place to pass through - the road is from it
+    assert.ok(lines.includes('Notes: pass through "Gate" - it\'s the road\'s start point'));
+    assert.deepEqual(io.site.passThrough.map(({name}) => name), ['Oak', 'Elm', 'Ash', 'Fir']);
 
     // The site's own criteria are the plan's, and the arguments' road is the options'
     assert.deepEqual(io.plan.criteria, {'maxGrade': 9});

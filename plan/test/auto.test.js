@@ -229,7 +229,7 @@ ${wroteLine}`);
             'Verify it.'
     ]);
     assert.ok(descriptions.find((line) => line.startsWith('**Limitations.**')).endsWith(
-        ' These of the site\'s notes weren\'t acted on: Paint it blue.; rule out the road "Nope Rd" (the site has no road of that ' +
+        ' These of the site\'s notes weren\'t acted on: Paint it blue; rule out the road "Nope Rd" (the site has no road of that ' +
         'name); avoid "Pond" - the model didn\'t find it on the map; avoid "Shed" (by the gate) - the model\'s rectangle for it ' +
         'has no size; avoid "Field" (south) - the model\'s rectangle for it covers more than a quarter of the site; pass through ' +
         '"Cliff" (up high) - the model didn\'t find it on the map; pass through "Stall" - no route found (blocked by exclusion ' +

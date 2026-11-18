@@ -18,5 +18,159 @@
         "Keep the road's grade at or under 12%, and keep it off the house lots at the foot of the hill, west of the road end.",
         "The plan illustrates Roadie on USGS lidar terrain - it isn't a proposed project."
     ],
+    "exclusions": [
+        {
+            "name": "House lots",
+            "points": [
+                {
+                    "latitude": 46.1673268,
+                    "longitude": -119.169294
+                },
+                {
+                    "latitude": 46.1673268,
+                    "longitude": -119.1681574
+                },
+                {
+                    "latitude": 46.1678067,
+                    "longitude": -119.1681574
+                },
+                {
+                    "latitude": 46.1678066,
+                    "longitude": -119.169294
+                }
+            ]
+        }
+    ],
+    "roads": [
+        {
+            "name": "Hilltop track",
+            "points": [
+                {
+                    "latitude": 46.1658432,
+                    "longitude": -119.1629597
+                },
+                {
+                    "latitude": 46.165846,
+                    "longitude": -119.1630623
+                },
+                {
+                    "latitude": 46.1658569,
+                    "longitude": -119.1631689
+                },
+                {
+                    "latitude": 46.1658597,
+                    "longitude": -119.1632715
+                },
+                {
+                    "latitude": 46.1658734,
+                    "longitude": -119.1633741
+                },
+                {
+                    "latitude": 46.1658597,
+                    "longitude": -119.1634806
+                },
+                {
+                    "latitude": 46.1658432,
+                    "longitude": -119.1635793
+                },
+                {
+                    "latitude": 46.1658213,
+                    "longitude": -119.163678
+                },
+                {
+                    "latitude": 46.1657994,
+                    "longitude": -119.1637766
+                },
+                {
+                    "latitude": 46.1657747,
+                    "longitude": -119.1638714
+                },
+                {
+                    "latitude": 46.1657528,
+                    "longitude": -119.1639661
+                },
+                {
+                    "latitude": 46.1657363,
+                    "longitude": -119.1640647
+                },
+                {
+                    "latitude": 46.1657226,
+                    "longitude": -119.1641634
+                },
+                {
+                    "latitude": 46.1657034,
+                    "longitude": -119.164266
+                },
+                {
+                    "latitude": 46.1656815,
+                    "longitude": -119.1643607
+                },
+                {
+                    "latitude": 46.1656595,
+                    "longitude": -119.1644594
+                },
+                {
+                    "latitude": 46.1656403,
+                    "longitude": -119.1645581
+                },
+                {
+                    "latitude": 46.1655992,
+                    "longitude": -119.1646488
+                },
+                {
+                    "latitude": 46.1655691,
+                    "longitude": -119.1647475
+                },
+                {
+                    "latitude": 46.1655307,
+                    "longitude": -119.1648422
+                },
+                {
+                    "latitude": 46.1655005,
+                    "longitude": -119.1649409
+                },
+                {
+                    "latitude": 46.1654676,
+                    "longitude": -119.1650159
+                },
+                {
+                    "latitude": 46.1654374,
+                    "longitude": -119.1650948
+                },
+                {
+                    "latitude": 46.1654073,
+                    "longitude": -119.1651737
+                },
+                {
+                    "latitude": 46.1653661,
+                    "longitude": -119.1652448
+                },
+                {
+                    "latitude": 46.165336,
+                    "longitude": -119.1653237
+                },
+                {
+                    "latitude": 46.1652976,
+                    "longitude": -119.165379
+                },
+                {
+                    "latitude": 46.1652565,
+                    "longitude": -119.165446
+                },
+                {
+                    "latitude": 46.1652236,
+                    "longitude": -119.165521
+                },
+                {
+                    "latitude": 46.1651742,
+                    "longitude": -119.1655763
+                },
+                {
+                    "latitude": 46.1651194,
+                    "longitude": -119.1656394
+                }
+            ]
+        }
+    ],
     "margin": 1000
 }

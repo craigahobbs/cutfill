@@ -53,7 +53,7 @@ site:
 	mkdir -p build/gh-pages/example/
 	cp index.html build/gh-pages/
 	$(SITE_LINKS) README.md > build/gh-pages/README.md
-	cp example/site.json example/example.json example/example.png example/screenshot.png build/gh-pages/example/
+	cp example/site.json example/example.json example/screenshot.png build/gh-pages/example/
 	cp -R viewer/build/app build/gh-pages/viewer
 	sed 's|<div id="roadie">|<div id="roadie" data-example="../example/example.json">|' viewer/build/app/index.html \
 		> build/gh-pages/viewer/index.html
