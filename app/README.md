@@ -55,12 +55,12 @@ save dialog, or a download), and close it (the user is asked first, if it has ch
 road options is one file: it keeps its config and its map image (a data URL). The recent files are listed - a file is
 opened, or removed (but for the loaded plan's road options' file).
 
-The engineering isn't the back end's: a plan is run in the browser, by the planning tools' `auto` command
-(`../plan/lib/browser/io.js`) - with one of Ollama's models, or none - and the run's report is shown when it's done.
+The engineering isn't the back end's: a plan is run in the browser, by the planning tools' procedure (`autoPlan` -
+`../plan/lib/browser/io.js`) - with one of Ollama's models, or none - and the run's report is shown when it's done.
 The run's plan config is the loaded plan's: the places it found for the notes are its marks, and a too-small site's
 margin is enlarged.
-The tools' files are in the browser's memory. The terrain cache and the model's saved answers are kept from one run
-to the next, so a plan that's run again doesn't fetch its terrain or ask the model again. The USGS's services and
+The plan is made in the browser's memory, and the tools' work files are there, too: the terrain cache and the model's
+saved answers are kept from one run to the next, so a plan that's run again doesn't fetch its terrain or ask the model
+again. The USGS's services and
 Ollama answer other sites' pages, so the browser fetches them itself. The page's import map has the tools' Node
-modules - `node:util`, `node:buffer`, and `node:zlib` are `plan/lib/browser/`'s `util.js`, `buffer.js`, and `zlib.js`
-- and maps the tools' imports of the viewer's modules (`viewer/lib/`) to the application's (`lib/`).
+modules - `node:buffer` and `node:zlib` are `plan/lib/browser/`'s `buffer.js` and `zlib.js` - and maps the tools' imports of the viewer's modules (`viewer/lib/`) to the application's (`lib/`).

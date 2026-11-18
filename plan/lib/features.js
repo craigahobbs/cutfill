@@ -3,6 +3,7 @@
 
 import {layoutPoint, layoutSize} from './terrain.js';
 import {round} from '../../viewer/lib/format.js';
+import {siteMarkNames} from '../../viewer/lib/model.js';
 
 
 // The distance, in meters, that a line's points are simplified within, and that lines' ends are joined within
@@ -163,22 +164,10 @@ export function simplifyLine(points, tolerance) {
 }
 
 
-// Get a site's exclusion areas' features' names - an area without a name is named for its place in the site's areas
-export function exclusionNames(site) {
-    return (site.exclusions ?? []).map((area, ixArea) => area.name ?? `Exclusion ${ixArea + 1}`);
-}
-
-
-// Get a site's roads' features' names - a road without a name is named for its place in the site's roads
-export function siteRoadNames(site) {
-    return (site.roads ?? []).map((road, ixRoad) => road.name ?? `Road ${ixRoad + 1}`);
-}
-
-
 // Create a site's road features - the existing roads that the USGS doesn't map. The roads are clipped to the layout's
 // grid, and a road outside it isn't a feature.
 export function siteRoadFeatures(layout, site) {
-    const names = siteRoadNames(site);
+    const names = siteMarkNames(site, 'roads');
     const lines = (site.roads ?? []).map(({points}, ixRoad) => (
         {'name': names[ixRoad], 'points': points.map(({latitude, longitude}) => [longitude, latitude])}
     ));
@@ -191,7 +180,7 @@ export function siteRoadFeatures(layout, site) {
 export function exclusionFeatures(layout, site) {
     const [width, height] = layoutSize(layout);
     const features = [];
-    const names = exclusionNames(site);
+    const names = siteMarkNames(site, 'exclusions');
     for (const [ixArea, area] of (site.exclusions ?? []).entries()) {
         const polygon = clipPolygon(area.points.map(({latitude, longitude}) => layoutPoint(layout, latitude, longitude)), width, height);
         if (polygonArea(polygon) > 0) {

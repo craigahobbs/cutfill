@@ -1,7 +1,7 @@
-// routeCli.js - the "route" and "options" commands: engineer a road option, or engineer a plan's standard options (a
-// port of the Python planning tools', but for the existing roads the route follows, and the other corridor)
+// engineer.js - engineer a plan's road options: a road option (its route's alignment, its profile, and its structures),
+// the plan's standard options, and another corridor (a port of the Python planning tools', but for the existing roads
+// the route follows, and the other corridor)
 
-import {analyzeOption, planTopo} from '../../viewer/lib/model.js';
 import {
     corridorBarrier, followRoads, polylineStations, resamplePolyline, routeLattice, routeSearch, smoothCurves, viaTurnBacks
 } from './route.js';
@@ -10,196 +10,35 @@ import {drawAreaText, drawCrossings} from './draws.js';
 import {fixedTrim, number as formatNumber} from '../../viewer/lib/format.js';
 import {lineIndex, nearestLine} from './roads.js';
 import {pyFixed, pyRound} from './numeric.js';
-import {readPlan, writePlan} from './planFile.js';
+import {analyzeOption} from '../../viewer/lib/model.js';
 import {createDesign} from './design.js';
 import {designProfile} from './profile.js';
-import {parseArgs} from 'node:util';
 
 
-// The design options' usage text lines - the route and options commands'
-const designUsage = [
-    '  -w, --width WIDTH              the road width (default is 14 feet / 4.3 meters)',
-    '  -s, --surface SURFACE          the road surface - native, gravel, asphalt, or concrete (default is gravel)',
-    '  --cut-slope SLOPE              the cut slope ratio H:V (default is 1)',
-    '  --fill-slope SLOPE             the fill slope ratio H:V (default is 1.5)',
-    '  -g, --grade GRADE              the design grade, in percent (default is 1 less than the maximum grade)',
-    '  --switchback-grade GRADE       the maximum grade on tight curves, in percent (default is 8)',
-    '  --turnouts SPACING             the turnout spacing, 0 for none (default is 400 feet / 120 meters for roads',
-    '                                 under 16 feet wide)',
-    '  --bridge-fill DEPTH            replace stream crossing fills deeper than this with a bridge, up to 150 feet /',
-    '                                 45 meters long (default is no bridges)'
-];
-
-
-// The route command's usage text lines
-export const routeUsage = [
-    'usage: plan route <plan.json> -n NAME [-v X,Y]... [options]',
-    '',
-    '  Engineer a road option - a least-cost horizontal alignment search (through the via points), a vertical profile',
-    '  design, and structures - and add it to the road plan model (or replace it). The route follows the plan\'s',
-    '  existing roads where that costs less than a new road. The road is the one with the lowest cost score of the',
-    '  searches with each grade penalty weight.',
-    '',
-    '  A road is within its grade limit: where its profile can\'t be - it can\'t reach the end point\'s ground, or an',
-    '  existing road\'s - it\'s an error, and the option isn\'t written.',
-    '',
-    'options:',
-    '  -n, --name NAME                the option name (an existing option is replaced)',
-    '  -d, --description TEXT         an option description line (may be repeated)',
-    ...designUsage,
-    '  --existing-road STATION,END    a station range where the road follows an existing road - its grade follows',
-    '                                 the ground, with no earthwork or structures (may be repeated - by default,',
-    '                                 the route finds them)',
-    '  -v, --via X,Y                  a via point (may be repeated)',
-    '  --all-new                      an all-new road - the route doesn\'t follow the plan\'s existing roads',
-    '  --rule-out NAME                an existing road that the route doesn\'t follow - a private or closed road,',
-    '                                 say (may be repeated)',
-    '  --grade-weight WEIGHT          the route search\'s penalty weight for ground steeper than the design grade',
-    '                                 (default is the weight of 1, 0.5, and 0.25 whose road has the lowest cost',
-    '                                 score)',
-    '  --slope-weight WEIGHT          the side slope earthwork weight (default is 1)'
-];
-
-
-// The options command's usage text lines
-export const optionsUsage = [
-    'usage: plan options <plan.json> [options]',
-    '',
-    '  Engineer a road plan model\'s standard options, and put its options in cost score order (the best first):',
-    '',
-    '  Existing Roads  The road that follows the plan\'s existing roads where that costs less than a new road ("plan',
-    '                  route") - if it follows any',
-    '  New Road        An all-new road ("plan route --all-new") - the existing roads may not be usable',
-    '  X Corridor      Another corridor (North, South, East, or West of the least-cost road) - the least-cost road',
-    '                  around the middles of the roads above, through the middle of that search\'s road ("plan route',
-    '                  --via"), if it\'s a real choice: within the grade limit, apart from them, and at most three times',
-    '                  the least-cost road\'s cost score',
-    '',
-    '  The plan\'s options of those names are replaced, and its other options are kept as they are. Run it again after',
-    '  the plan\'s features or criteria change.',
-    '',
-    'options:',
-    ...designUsage,
-    '  --rule-out NAME                an existing road that the roads don\'t follow - a private or closed road, say',
-    '                                 (may be repeated)'
-];
-
-
-// The route and options commands - each is a function of the command's arguments and the command line's input and
-// output functions that returns the command's exit code and its output text lines, or null if the arguments are
-// invalid
-export const routeCommands = {
-    'route': routeCommand,
-    'options': optionsCommand
-};
-
-
-// The commands' design options and road rule options, and the route command's option options and route options
-const designOptions = {
-    'width': {'type': 'string', 'short': 'w'},
-    'surface': {'type': 'string', 'short': 's', 'default': 'gravel'},
-    'cut-slope': {'type': 'string', 'default': '1'},
-    'fill-slope': {'type': 'string', 'default': '1.5'},
-    'grade': {'type': 'string', 'short': 'g'},
-    'switchback-grade': {'type': 'string', 'default': '8'},
-    'turnouts': {'type': 'string'},
-    'bridge-fill': {'type': 'string'}
-};
-const optionOptions = {
-    'name': {'type': 'string', 'short': 'n'},
-    'description': {'type': 'string', 'short': 'd', 'multiple': true},
-    'existing-road': {'type': 'string', 'multiple': true}
-};
-const ruleOptions = {
-    'rule-out': {'type': 'string', 'multiple': true}
-};
-const routeOptions = {
-    'via': {'type': 'string', 'short': 'v', 'multiple': true},
-    'all-new': {'type': 'boolean', 'default': false},
-    'grade-weight': {'type': 'string'},
-    'slope-weight': {'type': 'string', 'default': '1'}
-};
+// Create a road's engineering arguments - the defaults, with other arguments: its option's "name" and "description"
+// (lines, or null to keep the option's), the road's "width" and "surface", its "cutSlope" and "fillSlope" ratios, its
+// design "grade" and "switchbackGrade" (in percent), its "turnouts" spacing, the fill depth of a stream crossing that a
+// bridge replaces ("bridgeFill"), its "existingRoads" ([station, end station] ranges - null to find them), its "via"
+// points ([x, y] arrays), whether it's all new ("allNew" - it doesn't follow the plan's existing roads), the names of
+// the existing roads it doesn't follow ("ruleOut"), and its route search's "gradeWeight" (null for the best of several)
+// and "slopeWeight". A null argument is its default.
+export function roadArguments(args = {}) {
+    return {
+        'description': null, 'width': null, 'surface': 'gravel', 'cutSlope': 1, 'fillSlope': 1.5, 'grade': null, 'switchbackGrade': 8,
+        'turnouts': null, 'bridgeFill': null, 'existingRoads': null, 'via': [], 'allNew': false, 'ruleOut': [], 'gradeWeight': null,
+        'slopeWeight': 1, ...args
+    };
+}
 
 
 // The road surfaces
-const surfaces = ['native', 'gravel', 'asphalt', 'concrete'];
-
-
-// Parse a command's arguments - returns the arguments object, or null if they're invalid
-function parseCommandArgs(command, args) {
-    let parsed;
-    try {
-        const options = {...designOptions, ...ruleOptions, ...(command === 'route' ? {...optionOptions, ...routeOptions} : {})};
-        parsed = parseArgs({args, options, 'allowPositionals': true});
-    } catch {
-        return null;
-    }
-    const {values, positionals} = parsed;
-    const parseNumber = (text) => (text.trim() === '' ? NaN : Number(text));
-    const number = (name) => (name in values ? parseNumber(values[name]) : null);
-    const numbers = (name) => (values[name] ?? []).map((text) => text.split(',').map(parseNumber));
-    const commandArgs = {
-        'plan': positionals[0],
-        'name': values.name,
-        'description': values.description ?? null,
-        'width': number('width'),
-        'surface': values.surface,
-        'cutSlope': number('cut-slope'),
-        'fillSlope': number('fill-slope'),
-        'grade': number('grade'),
-        'switchbackGrade': number('switchback-grade'),
-        'turnouts': number('turnouts'),
-        'bridgeFill': number('bridge-fill'),
-        'existingRoads': 'existing-road' in values ? numbers('existing-road') : null,
-        'via': numbers('via'),
-        'allNew': values['all-new'] ?? false,
-        'ruleOut': values['rule-out'] ?? [],
-        'gradeWeight': number('grade-weight'),
-        'slopeWeight': number('slope-weight')
-    };
-
-    // The plan, the option name (but for the options command), and valid numbers are required
-    if (positionals.length !== 1 || (command !== 'options' && commandArgs.name === undefined) ||
-        !surfaces.includes(commandArgs.surface) ||
-        Object.values(commandArgs).some(Number.isNaN) ||
-        [...commandArgs.existingRoads ?? [], ...commandArgs.via].some((pair) => pair.length !== 2 || pair.some(Number.isNaN))) {
-        return null;
-    }
-    return commandArgs;
-}
+export const roadSurfaces = ['native', 'gravel', 'asphalt', 'concrete'];
 
 
 // The route search's soft grade bands and grade margins - if the profile can't reach the end elevation within the grade
 // limits, the route is searched again with stricter grade penalties
 const routeSearches = [[0.03, 0], [0.01, 0.005], [0, 0.015], [0, 0.03]];
 
-
-// The "route" command
-function routeCommand(args, io) {
-    const commandArgs = parseCommandArgs('route', args);
-    if (commandArgs === null) {
-        return null;
-    }
-
-    // Read the road plan model
-    const {plan, error} = readPlan(io, commandArgs.plan);
-    if (error !== undefined) {
-        return {'code': 1, 'lines': error};
-    }
-
-    // Engineer the option
-    const topo = planTopo(plan);
-    const ruleOutError = ruledOutError(topo, commandArgs.ruleOut);
-    if (ruleOutError !== null) {
-        return {'code': 1, 'lines': [ruleOutError]};
-    }
-    const engineered = engineerOption(plan, topo, commandArgs);
-    if (engineered.error !== null) {
-        return {'code': 1, 'lines': [...engineered.lines, `error: ${engineered.error}`]};
-    }
-    writePlan(io, commandArgs.plan, plan);
-    return {'code': 0, 'lines': [...engineered.lines, wroteLine(commandArgs.plan)]};
-}
 
 
 // Get the plan's existing roads that a road may follow - all but those that are ruled out (by name, in any case)
@@ -210,17 +49,12 @@ function followedRoads(topo, ruleOut) {
 
 
 // Check the roads that are ruled out - each is one of the plan's existing roads. Returns the error line, or null.
-function ruledOutError(topo, ruleOut) {
+export function ruledOutError(topo, ruleOut) {
     const names = new Set(topo.features.filter(({type}) => type === 'road').map(({name = ''}) => name.toLowerCase()));
     const unknown = ruleOut.find((name) => name === '' || !names.has(name.toLowerCase())) ?? null;
     return unknown !== null ? `error: The plan has no existing road named "${unknown}" to rule out` : null;
 }
 
-
-// The report's last line - the plan that was written
-function wroteLine(planPath) {
-    return `Wrote ${planPath}`;
-}
 
 
 // The standard options' names
@@ -228,41 +62,33 @@ const roadsName = 'Existing Roads';
 const newName = 'New Road';
 
 
-// The "options" command - engineer the plan's standard options, and put its options in cost score order
-function optionsCommand(args, io) {
-    const commandArgs = parseCommandArgs('options', args);
-    if (commandArgs === null) {
-        return null;
-    }
-
-    // Read the road plan model
-    const {plan, error} = readPlan(io, commandArgs.plan);
-    if (error !== undefined) {
-        return {'code': 1, 'lines': error};
-    }
-    const topo = planTopo(plan);
-    const ruleOutError = ruledOutError(topo, commandArgs.ruleOut);
-    if (ruleOutError !== null) {
-        return {'code': 1, 'lines': [ruleOutError]};
-    }
-    const routeArgs = {...commandArgs, 'description': null, 'existingRoads': null, 'via': [], 'gradeWeight': null, 'slopeWeight': 1};
+// Engineer a plan's standard options - the road that follows the plan's existing roads where that costs less than a
+// new road ("Existing Roads" - if it follows any), and an all-new road ("New Road" - the existing roads may not be
+// usable). "args" are the roads' arguments (roadArguments). The plan's options of those names are replaced. Returns
+// the report's "lines", the "error" (null, or why there's no road - "isGrade" is true if none is within the grade
+// limit, and the plan's options are as they were), the standard options' "names", whether they follow existing roads
+// ("followsRoads"), and whether one is at the site's edge ("atEdge" - the site may be too small for it).
+export function standardOptions(plan, topo, args) {
+    const routeArgs = standardArguments(args);
+    const {options} = plan;
     const removeOption = (optionName) => {
         plan.options = plan.options.filter(({name}) => name !== optionName);
     };
-
     const lines = [];
 
     // The road that follows the plan's existing roads where that costs less than a new road - if it follows any
     let followsRoads = false;
     let atEdge = false;
-    if (followedRoads(topo, commandArgs.ruleOut).length > 0) {
+    if (followedRoads(topo, args.ruleOut).length > 0) {
         const roadsOption = engineerOption(plan, topo, {...routeArgs, 'name': roadsName, 'allNew': false});
         if (roadsOption.error !== null) {
-            return {'code': 1, 'lines': [...roadsOption.lines, `error: ${roadsOption.error}`]};
+            // There may be an all-new road yet
+            lines.push(...roadsOption.lines, `No "${roadsName}" option: ${roadsOption.error}`);
+        } else {
+            followsRoads = plan.options.find(({name}) => name === roadsName).structures.some(({type}) => type === 'existingRoad');
+            atEdge = followsRoads && roadsOption.atEdge;
+            lines.push(...(followsRoads ? roadsOption.lines : [`No "${roadsName}" option: the least-cost road follows no existing roads`]));
         }
-        followsRoads = plan.options.find(({name}) => name === roadsName).structures.some(({type}) => type === 'existingRoad');
-        atEdge = followsRoads && roadsOption.atEdge;
-        lines.push(...(followsRoads ? roadsOption.lines : [`No "${roadsName}" option: the least-cost road follows no existing roads`]));
     }
     if (!followsRoads) {
         removeOption(roadsName);
@@ -273,37 +99,37 @@ function optionsCommand(args, io) {
     lines.push(...newOption.lines);
     if (newOption.error !== null) {
         if (!followsRoads) {
-            return {'code': 1, 'lines': [...lines, `error: ${newOption.error}`]};
+            plan.options = options;
+            return {lines, 'error': newOption.error, 'isGrade': newOption.isGrade, 'names': [], followsRoads, atEdge};
         }
         removeOption(newName);
         lines.push(`No "${newName}" option: ${newOption.error}`);
     } else {
         atEdge ||= newOption.atEdge;
     }
-
-    // Another corridor - if there's one that's a real choice against the standard options
-    for (const name of corridorNames) {
-        removeOption(name);
-    }
-    const standard = plan.options.filter(({name}) => name === roadsName || name === newName);
-    const corridor = engineerCorridor(plan, topo, routeArgs, followsRoads, standard);
-    lines.push(...corridor.lines);
-
-    // The plan's options, in cost score order
-    const scored = plan.options.map((option, ixOption) => ({option, 'analysis': analyzeOption(plan, ixOption, topo)})).
-        sort((first, second) => first.analysis.score - second.analysis.score);
-    plan.options = scored.map(({option}) => option);
-    lines.push(...scored.map(({option, analysis}, ixOption) => (
-        `Option ${ixOption}: "${option.name}" - cost score ${formatNumber(analysis.score, 1)}, design warnings: ${analysis.warnings.length}`
-    )));
-    writePlan(io, commandArgs.plan, plan);
-
-    // The result has the standard options' names, whether the existing roads' or new road's option is at the site's
-    // edge ("atEdge" - the site may be too small for it), and the description's note of another corridor that isn't an
-    // option (or null)
-    const names = plan.options.map(({name}) => name).filter((name) => [roadsName, newName, ...corridorNames].includes(name));
-    return {'code': 0, 'lines': [...lines, wroteLine(commandArgs.plan)], names, atEdge, 'corridorNote': corridor.note};
+    const names = plan.options.map(({name}) => name).filter((name) => name === roadsName || name === newName);
+    return {lines, 'error': null, 'isGrade': false, names, followsRoads, atEdge};
 }
+
+
+// Get the standard options' arguments - a road's arguments, without those that are an option's own
+function standardArguments(args) {
+    return {...args, 'description': null, 'existingRoads': null, 'via': [], 'gradeWeight': null, 'slopeWeight': 1};
+}
+
+
+// Keep a plan's options of names (all of them, if "names" is null), in cost score order - the lowest (the best) first -
+// and remove its others. Returns the report's lines - each option's cost score and design warnings.
+export function keepOptions(plan, topo, names = null) {
+    const kept = plan.options.map((option, ixOption) => ({option, 'analysis': analyzeOption(plan, ixOption, topo)})).
+        filter(({option}) => names === null || names.includes(option.name)).
+        sort((first, second) => first.analysis.score - second.analysis.score);
+    plan.options = kept.map(({option}) => option);
+    return kept.map(({option, analysis}, ixOption) => (
+        `Option ${ixOption}: "${option.name}" - cost score ${formatNumber(analysis.score, 1)}, design warnings: ${analysis.warnings.length}`
+    ));
+}
+
 
 
 // The other corridor's names - for its side of the least-cost road (east, north, west, and south)
@@ -326,25 +152,27 @@ const corridorCost = 3;
 const corridorGradeWeight = 0.5;
 
 
-// Engineer another corridor - the least-cost road outside a band around the standard options' middles (the start and
-// end points are outside it), whose middle point is the corridor's via point. The corridor's option is the road
-// through the via point (as "route --via --grade-weight 0.5" engineers it - without the band, and with one grade penalty
-// weight), if it's a real choice: it's within the grade
-// limit, it doesn't turn back at the via point, its middle is an average of the band's half-width from the standard
-// options, at least, and its cost score is at most the multiple of the least-cost standard option's. "routeArgs" are
-// the standard options' route arguments, "followsRoads" is true if the standard options follow existing roads, and
-// "standard" are the standard options. Returns the report's "lines", and the description's "note" (null if there's an
-// option).
-function engineerCorridor(plan, topo, routeArgs, followsRoads, standard) {
+// Engineer another corridor, if there's one that's a real choice against the plan's standard options (standardOptions)
+// - the least-cost road outside a band around the standard options' middles (the start and end points are outside it),
+// whose middle point is the corridor's via point. The corridor's option is the road through the via point (without the
+// band, and with one grade penalty weight), if it's a real choice: it's within the grade limit, it doesn't turn back at
+// the via point, its middle is an average of the band's half-width from the standard options, at least, and its cost
+// score is at most the multiple of the least-cost standard option's. "args" are the standard options' arguments, and
+// "followsRoads" is true if they follow existing roads. The plan's other corridor options are removed. Returns the
+// report's "lines", the option's "name" (null if there's none), and the description's "note" of why there's none (null
+// if there's an option).
+export function corridorOption(plan, topo, args, followsRoads) {
+    const routeArgs = standardArguments(args);
+    plan.options = plan.options.filter(({name}) => !corridorNames.includes(name));
+    const standard = plan.options.filter(({name}) => name === roadsName || name === newName);
     const design = createDesign(plan, routeArgs);
     const {start, end, units} = plan;
     const halfWidth = Math.max(corridorWidth * Math.hypot(end.x - start.x, end.y - start.y), corridorRadii * design.minRadius);
-    const none = (reason, sentence) => ({'lines': [`No other corridor: ${reason}`], 'note': sentence});
+    const none = (reason, sentence) => ({'lines': [`No other corridor: ${reason}`], 'name': null, 'note': sentence});
 
     // The least-cost road around the band
-    const roads = followsRoads ? lineIndex(followedRoads(topo, routeArgs.ruleOut), 'road', Math.max(topo.spacing, design.minRadius) * 2) :
-        null;
-    const routeNodes = routeLattice(topo, design, routeArgs.slopeWeight, roads);
+    const roads = lineIndex(followedRoads(topo, routeArgs.ruleOut), 'road', Math.max(topo.spacing, design.minRadius) * 2);
+    const routeNodes = optionLattice(topo, design, routeArgs, followsRoads ? roads : null);
     const middles = standard.map(({alignment}) => alignmentMiddle(alignment, halfWidth / 4));
     const barrier = corridorBarrier(routeNodes, middles, halfWidth, [[start.x, start.y], [end.x, end.y]]);
     const [[softBand, gradeMargin]] = routeSearches;
@@ -376,7 +204,7 @@ function engineerCorridor(plan, topo, routeArgs, followsRoads, standard) {
 
     // The road through the via point - it's an option if it's a real choice
     const engineered = engineerOption(
-        plan, topo, {...routeArgs, name, 'allNew': !followsRoads, 'via': [via], 'gradeWeight': corridorGradeWeight}, routeNodes
+        plan, topo, {...routeArgs, name, 'allNew': !followsRoads, 'via': [via], 'gradeWeight': corridorGradeWeight}
     );
     const option = plan.options.find((planOption) => planOption.name === name);
     let distance = null;
@@ -398,6 +226,7 @@ function engineerCorridor(plan, topo, routeArgs, followsRoads, standard) {
             ...engineered.lines,
             `Other corridor: ${viaText} - its middle is an average of ${pyFixed(distance, 0)} ${units} from the standard options`
         ],
+        name,
         'note': null
     };
 }
@@ -448,16 +277,36 @@ function alignmentMiddle(alignment, interval) {
 const gradeWeights = [1, 0.5, 0.25];
 
 
-// Engineer an option of a plan - its alignment, profile, and structures - "commandArgs" is the route command's arguments.
-// The route is searched with each grade penalty weight (or the argument's), and the option is the best of their roads
-// (bestRoad).
-// The option is added to the plan's options, or it replaces the option of its name. "routeNodes" is the route's lattice
-// (routeLattice), or null to create it. Returns the report's "lines" and the "error" - null, or why there's no option
-// (the plan is as it was) - and if there's an option, whether it's at the site's edge ("atEdge" - the site may be too
-// small for it), and whether it turns back at a via point ("turnsBack").
-function engineerOption(plan, topo, commandArgs, routeNodes = null) {
+// Get a route's lattice (routeLattice) - "roads" is the index of the existing roads it follows, or null for an all-new
+// road's. A topography's lattices are kept: a plan's options are searched on two of them - the lattice with its
+// existing roads, and the lattice without.
+function optionLattice(topo, design, commandArgs, roads) {
+    let lattices = topoLattices.get(topo);
+    if (lattices === undefined) {
+        lattices = new Map();
+        topoLattices.set(topo, lattices);
+    }
+    const ruleOut = roads !== null ? commandArgs.ruleOut.map((name) => name.toLowerCase()) : null;
+    const key = JSON.stringify([design, commandArgs.slopeWeight, ruleOut]);
+    if (!lattices.has(key)) {
+        lattices.set(key, routeLattice(topo, design, commandArgs.slopeWeight, roads));
+    }
+    return lattices.get(key);
+}
+const topoLattices = new WeakMap();
+
+
+// Engineer an option of a plan - its alignment, profile, and structures - "commandArgs" is the road's arguments
+// (roadArguments). The route is searched with each grade penalty weight (or the argument's), and the option is the best
+// of their roads (bestRoad). The option is added to the plan's options, or it replaces the option of its name. Returns
+// the report's "lines" and the "error" - null, or why there's no option (the plan is as it was - "isGrade" is true if
+// there's no road within the grade limit) - and if there's an option, whether it's at the site's edge ("atEdge" - the
+// site may be too small for it), and whether it turns back at a via point ("turnsBack").
+export function engineerOption(plan, topo, commandArgs) {
     const design = createDesign(plan, commandArgs);
-    const {options} = plan;
+    const planOptions = plan.options;
+    const options = [...planOptions];
+    plan.options = options;
     const ixExisting = options.findIndex((option) => option.name === commandArgs.name);
     const ixOption = ixExisting === -1 ? options.length : ixExisting;
     const existingOption = ixExisting === -1 ? null : options[ixExisting];
@@ -465,7 +314,7 @@ function engineerOption(plan, topo, commandArgs, routeNodes = null) {
 
     // Design each road's alignment, profile, and structures - the searches are of one lattice
     const followsRoads = !commandArgs.allNew && commandArgs.existingRoads === null;
-    const latticeNodes = routeNodes ?? routeLattice(topo, design, commandArgs.slopeWeight, followsRoads ? roads : null);
+    const latticeNodes = optionLattice(topo, design, commandArgs, followsRoads ? roads : null);
     const pathDesigns = new Map();
     const designedRoads = [];
     let failed = null;
@@ -483,7 +332,7 @@ function engineerOption(plan, topo, commandArgs, routeNodes = null) {
                 'steeper grade)';
         }
         if (error !== null) {
-            failed ??= {lines, error};
+            failed ??= {lines, error, 'isGrade': designed !== null};
         } else {
             // Structures (the existing roads within the road's length, measured along the option's alignment points as
             // the viewer does - an existing road to the road's end is to its last station, so nothing is placed between
@@ -517,6 +366,7 @@ function engineerOption(plan, topo, commandArgs, routeNodes = null) {
 
     // No road? The plan is as it was.
     if (designedRoads.length === 0) {
+        plan.options = planOptions;
         return failed;
     }
     const {option, designed, existingRoads, lines} = designedRoads[bestRoad(designedRoads)];

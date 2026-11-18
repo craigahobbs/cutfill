@@ -41,13 +41,17 @@ const siteConfig = {
 };
 
 
-// Start the application with a plan opened from a file, and open its map
-async function startMap(context, plan = {...placedPlan, 'site': siteConfig}) {
+// Start the application with a plan opened from a file (and its map image's file, if "imageName" isn't null), and open
+// its map
+async function startMap(context, plan = {...placedPlan, 'site': siteConfig}, imageName = null) {
     const browser = fakeBrowser(context, {'storage': {'roadieCellCost': '1'}});
     const app = await startApp(browser);
     const input = browser.document.getElementById('roadie-file');
-    const file = new browser.window.File([JSON.stringify(plan)], 'road.json', {'type': 'application/json'});
-    Object.defineProperty(input, 'files', {'value': [file], 'configurable': true});
+    const files = [new browser.window.File([JSON.stringify(plan)], 'road.json', {'type': 'application/json'})];
+    if (imageName !== null) {
+        files.push(new browser.window.File(['png'], imageName, {'type': 'image/png'}));
+    }
+    Object.defineProperty(input, 'files', {'value': files, 'configurable': true});
     fire(browser, input, 'change');
     for (let count = 0; count < 20 && browser.document.getElementById('roadie-map')?.disabled !== false; count++) {
         await flush();
@@ -65,7 +69,7 @@ async function startMap(context, plan = {...placedPlan, 'site': siteConfig}) {
 // Fire a pointer event at a plan point (or a map point, "[x, y]" pixels in the map) - returns the map point
 function pointer(browser, page, type, planPoint = null, mapPoint = null) {
     const [x, y] = mapPoint ?? page.toScreen(planPoint);
-    fire(browser, page.svg, type, {'clientX': x + 10, 'clientY': y + 20, 'pointerId': 1});
+    fire(browser, page.svg, type, {'clientX': x + 10, 'clientY': y + 20, 'pointerId': 1, 'button': 0});
     return [x, y];
 }
 
@@ -182,7 +186,7 @@ test('the map page', async (context) => {
     assert.equal(page.drawing.length, 2);
     clickMap(browser, page, [60, 60]);
     fire(browser, svg, 'dblclick');
-    assert.deepEqual([page.marks.length, page.marks[3].name, page.marks[3].kind, page.drawing], [4, 'Area 2', 'area', null]);
+    assert.deepEqual([page.marks.length, page.marks[3].name, page.marks[3].kind, page.drawing], [4, 'Exclusion 2', 'area', null]);
     assert.deepEqual(rounded(page.marks[3].points), [[20, 20], [60, 20], [60, 60]]);
     assert.equal(document.querySelector('#roadie-map-selection h2').textContent, 'Area to avoid');
 
@@ -197,24 +201,41 @@ test('the map page', async (context) => {
     fire(browser, document, 'keydown', {'key': 'Escape'});
     assert.deepEqual([page.drawing, page.selected, page.marks.length], [null, null, 5]);
 
-    // Draw places - each click is one, named for its count
+    // Draw places - each click is one, named for its count. A double-click is one place, not two.
     fire(browser, document.querySelector('[data-tool="place"]'), 'click');
     clickMap(browser, page, [200, 100]);
+    clickMap(browser, page, [200.5, 100]);
+    fire(browser, svg, 'dblclick');
     clickMap(browser, page, [220, 100]);
     assert.deepEqual(page.marks.slice(5).map((mark) => mark.name), ['Place 2', 'Place 3']);
 
-    // Delete the last place
+    // Delete the last place - a click where it was adds it again
     document.getElementById('roadie-map-delete').click();
     assert.deepEqual([page.marks.length, page.selected, document.getElementById('roadie-map-selection').innerHTML], [6, null, '']);
+    clickMap(browser, page, [220, 100]);
+    assert.deepEqual([page.marks.length, page.marks[6].name, page.selected], [7, 'Place 3', 6]);
+    document.getElementById('roadie-map-delete').click();
+    assert.deepEqual([page.marks.length, page.selected], [6, null]);
 
-    // Keys in the selection's name - and keys without a drawing - do nothing
+    // The keys of the selection's name are its own - and keys without a drawing do nothing
     fire(browser, document.querySelector('[data-tool="select"]'), 'click');
     clickMap(browser, page, [200, 100]);
+    document.getElementById('roadie-map-name').focus();
     fire(browser, document.getElementById('roadie-map-name'), 'keydown', {'key': 'Escape'});
     assert.equal(page.selected, 5);
+    document.getElementById('roadie-map-name').blur();
     fire(browser, document, 'keydown', {'key': 'Backspace'});
     fire(browser, document, 'keydown', {'key': 'Enter'});
     assert.deepEqual([page.selected, page.marks.length], [5, 6]);
+
+    // Another button's pointer (a context menu's has no pointer up) doesn't drag the map - nor does a cancelled pointer
+    const viewBefore = {...page.view};
+    fire(browser, svg, 'pointerdown', {'clientX': 510, 'clientY': 320, 'pointerId': 1, 'button': 2});
+    pointer(browser, page, 'pointermove', null, [600, 350]);
+    pointer(browser, page, 'pointerdown', null, [500, 300]);
+    fire(browser, svg, 'pointercancel');
+    pointer(browser, page, 'pointermove', null, [600, 350]);
+    assert.deepEqual(page.view, viewBefore);
 
     // Drag the map to move it, and scroll to zoom it around the pointer - within its limits
     pointer(browser, page, 'pointerdown', null, [500, 300]);
@@ -241,7 +262,7 @@ test('the map page', async (context) => {
     assert.equal(window.location.hash, '#var=');
     const {site} = app.loaded;
     assert.deepEqual([app.loaded.changed, app.loaded.saved], [true, false]);
-    assert.deepEqual(site.exclusions.map((area) => [area.name, area.found]), [['Barn', undefined], ['Area 2', undefined]]);
+    assert.deepEqual(site.exclusions.map((area) => [area.name, area.found]), [['Barn', undefined], ['Exclusion 2', undefined]]);
     assert.deepEqual(site.exclusions[0].points.slice(0, 2), barn.points.slice(0, 2));
     assert.notDeepEqual(site.exclusions[0].points[2], barn.points[2]);
     assert.deepEqual(site.roads, [track, {'name': 'Road 2', 'points': site.roads[1].points}]);
@@ -279,13 +300,18 @@ test('the map page, its backdrops', async (context) => {
     fire(browser, backdrop, 'change');
     assert.equal(page.reliefURL, reliefURL);
 
-    // A plan without a map image has no map backdrop - and a plan's map image file is a local file's object URL
+    // A plan without a map image has no map backdrop - nor does a plan whose map image's file is missing
     const noImage = await startMap(context);
     assert.equal(noImage.browser.document.querySelector('#roadie-map-backdrop option[value="map"]').disabled, true);
-    const fileImage = await startMap(context, {...placedPlan, 'image': 'road.png', 'site': siteConfig});
-    assert.equal(fileImage.browser.document.querySelector('#roadie-map-backdrop option[value="map"]').disabled, true);
-    fileImage.app.localFile = () => Promise.resolve(new fileImage.browser.window.Blob(['png']));
-    assert.equal(await fileImage.page.mapImageURL(), 'blob:http://localhost/1');
+    const missing = await startMap(context, {...placedPlan, 'image': 'road.png', 'site': siteConfig});
+    assert.equal(missing.browser.document.querySelector('#roadie-map-backdrop option[value="map"]').disabled, true);
+
+    // A plan's map image file is a local file - its object URL is made once
+    const fileImage = await startMap(context, {...placedPlan, 'image': 'plans/road.png', 'site': siteConfig}, 'road.png');
+    assert.equal(fileImage.page.imageURL, 'blob:http://localhost/1');
+    assert.equal(fileImage.browser.document.querySelector('#roadie-map-backdrop option[value="map"]').disabled, false);
+    assert.deepEqual(await fileImage.app.imageURL(null, 'plans/road.png'), {'url': 'blob:http://localhost/1', 'missing': false});
+    assert.equal(fileImage.browser.objectURLs.length, 1);
 });
 
 
@@ -368,7 +394,7 @@ test('the map page, default names and empty marks', async (context) => {
         'A run found it for the notes\' place "Barn". The model "test-model" found it on the site\'s map. Edit it'
     ));
     clickMap(browser, page, [290, 210]);
-    assert.equal(document.getElementById('roadie-map-name').value, 'Area 2');
+    assert.equal(document.getElementById('roadie-map-name').value, 'Exclusion 2');
     clickMap(browser, page, [300, 50]);
     assert.ok(document.getElementById('roadie-map-found').textContent.includes(' Its coordinates are the notes\'. '));
 

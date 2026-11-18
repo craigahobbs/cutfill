@@ -26,7 +26,7 @@ class TestMain(unittest.TestCase):
     def test_main(self):
         with unittest.mock.patch('threading.Thread') as mock_thread, \
              unittest.mock.patch('webbrowser.open') as mock_open, \
-             unittest.mock.patch('waitress.serve') as mock_serve, \
+             unittest.mock.patch('waitress.create_server') as mock_serve, \
              unittest.mock.patch('sys.stdout', StringIO()) as stdout, \
              unittest.mock.patch('sys.stderr', StringIO()) as stderr:
             main([])
@@ -39,6 +39,7 @@ class TestMain(unittest.TestCase):
 
             # The application is served to this computer only
             mock_serve.assert_called_once()
+            mock_serve.return_value.run.assert_called_once_with()
             serve_args, serve_kwargs = mock_serve.call_args
             application_wrap = serve_args[0]
             self.assertDictEqual(serve_kwargs, {'host': '127.0.0.1', 'port': 8080})
@@ -64,7 +65,7 @@ class TestMain(unittest.TestCase):
     def test_main_options(self):
         # Another port, no web browser, and no logging
         with unittest.mock.patch('threading.Thread') as mock_thread, \
-             unittest.mock.patch('waitress.serve') as mock_serve, \
+             unittest.mock.patch('waitress.create_server') as mock_serve, \
              unittest.mock.patch('sys.stdout', StringIO()) as stdout, \
              unittest.mock.patch('sys.stderr', StringIO()) as stderr:
             main(['-p', '9000', '-n', '-q'])
@@ -79,3 +80,20 @@ class TestMain(unittest.TestCase):
             self.assertListEqual(statuses, ['404 Not Found'])
             self.assertEqual(stdout.getvalue(), '')
             self.assertEqual(stderr.getvalue(), '')
+
+
+    def test_main_port_in_use(self):
+        # The port is in use - it's an error, and the web browser isn't opened
+        with unittest.mock.patch('threading.Thread') as mock_thread, \
+             unittest.mock.patch('waitress.create_server', side_effect=OSError(48, 'Address already in use')), \
+             unittest.mock.patch('sys.stdout', StringIO()) as stdout, \
+             unittest.mock.patch('sys.stderr', StringIO()) as stderr:
+            with self.assertRaises(SystemExit) as cm_exc:
+                main(['-p', '9000'])
+            self.assertEqual(cm_exc.exception.code, 1)
+            mock_thread.assert_not_called()
+            self.assertEqual(stdout.getvalue(), '')
+            self.assertEqual(
+                stderr.getvalue(),
+                'roadie: Could not serve at http://127.0.0.1:9000/ - Address already in use (another port is the "-p" argument)\n'
+            )

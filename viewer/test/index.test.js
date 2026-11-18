@@ -21,7 +21,6 @@ test('index.html preloads every application module', () => {
     assert.deepEqual(JSON.parse(importMap), {'imports': {
         'schema-markdown/': './schema-markdown/',
         'node:buffer': './plan/lib/browser/buffer.js',
-        'node:util': './plan/lib/browser/util.js',
         'node:zlib': './plan/lib/browser/zlib.js',
         './viewer/lib/': './lib/'
     }});

@@ -1,9 +1,9 @@
 // draft.js - a draft of a road plan model's descriptions: the facts of the plan and of each option that the tools know,
 // and what a plan's run adds to them
 
-import {analyzeOption, culvertDiameter, planCriteria, planTopo} from '../../viewer/lib/model.js';
+import {analyzeOption, culvertDiameter, planCriteria, siteMarkNames} from '../../viewer/lib/model.js';
 import {displayQuantity, fixedTrim, station as formatStation, number, unitLabel} from '../../viewer/lib/format.js';
-import {existingRoadGrades} from './routeCli.js';
+import {existingRoadGrades} from './engineer.js';
 import {groundElevation} from './design.js';
 import {lineIndex} from './roads.js';
 import {polylineStations} from './route.js';
@@ -106,12 +106,26 @@ export function lineRuns(x, y, stations) {
 }
 
 
-// Create the draft's Markdown lines of a plan. "additions" are what a planning process adds to the plan's facts: the
-// road's "purpose" (a paragraph, or null), its "featureNotes" (a line for each feature it added), its "optionNotes"
-// (sentences about its options), and its "limitations" (sentences).
-export function draftLines(plan, {purpose = null, featureNotes = [], optionNotes = [], limitations = []} = {}) {
+// Set a plan's description, and its options' - their draft (draftDescriptions). The descriptions are Markdown, and a "~"
+// of a name or of a model's words isn't its strikethrough.
+export function describePlan(plan, topo, additions = {}) {
+    const escape = (lines) => lines.map((line) => line.replaceAll('~', '\\~'));
+    const descriptions = draftDescriptions(plan, topo, additions);
+    plan.description = escape(descriptions.plan);
+    plan.options = plan.options.map((option, ixOption) => {
+        const {name, ...members} = option;
+        delete members.description;
+        return {name, 'description': escape(descriptions.options[ixOption]), ...members};
+    });
+}
+
+
+// Create the draft of a plan's descriptions - the plan's ("plan") and each of its options' ("options"), as Markdown
+// lines. "topo" is the plan's topography (planTopo), and "additions" are what a planning process adds to the plan's
+// facts: the road's "purpose" (a paragraph, or null), its "featureNotes" (a line for each feature it added), its
+// "optionNotes" (sentences about its options), and its "limitations" (sentences).
+export function draftDescriptions(plan, topo, {purpose = null, featureNotes = [], optionNotes = [], limitations = []} = {}) {
     const {units} = plan;
-    const topo = planTopo(plan);
     const criteria = planCriteria(plan);
     const lengthText = (value, digits = 0) => `${number(value, digits)} ${units}`;
     const stationText = (value) => formatStation(value, units);
@@ -125,8 +139,6 @@ export function draftLines(plan, {purpose = null, featureNotes = [], optionNotes
     const distance = Math.hypot(plan.end.x - plan.start.x, plan.end.y - plan.start.y);
     const straightGrade = Math.abs(climb) / Math.max(distance, 1e-9) * 100;
     const lines = [
-        '# Plan',
-        '',
         ...(purpose !== null ? [purpose, ''] : []),
         `**The site.** From ${pointText(plan.start, 'start')} to ${pointText(plan.end, 'end')}. The straight line between them ` +
             `${climb < 0 ? 'descends' : 'climbs'} ${lengthText(Math.abs(climb))} in ${lengthText(distance)} (${gradeText(straightGrade)})` +
@@ -138,7 +150,7 @@ export function draftLines(plan, {purpose = null, featureNotes = [], optionNotes
 
     // The features that were added to the site, and its places to pass through
     const added = topo.features.filter((feature) => feature.added ?? false);
-    const places = (plan.site?.passThrough ?? []).map(({name = null}, ixPlace) => name ?? `Place ${ixPlace + 1}`);
+    const places = siteMarkNames(plan.site ?? {}, 'passThrough');
     if (added.length > 0 || places.length > 0) {
         lines.push('', '**Features added to the site.** They aren\'t the USGS\'s - verify them in the field:', '');
         for (const [type, typeName] of Object.entries(featureTypeNames)) {
@@ -171,7 +183,8 @@ export function draftLines(plan, {purpose = null, featureNotes = [], optionNotes
     const roads = lineIndex(topo.features, 'road', Math.max(topo.spacing, criteria.minRadius) * 2);
     const analyses = plan.options.map((option, ixOption) => analyzeOption(plan, ixOption, topo));
     const ixLeast = analyses.reduce((ixBest, analysis, ix) => (analysis.score < analyses[ixBest].score ? ix : ixBest), 0);
-    plan.options.forEach((option, ixOption) => {
+    const options = plan.options.map((option, ixOption) => {
+        const optionLines = [];
         const analysis = analyses[ixOption];
         const {section} = option;
         const structures = option.structures ?? [];
@@ -179,10 +192,7 @@ export function draftLines(plan, {purpose = null, featureNotes = [], optionNotes
         const more = number((analysis.score / least.score - 1) * 100, 0);
         const costText = ixOption === ixLeast ? 'The least-cost option' :
             `It costs ${more === '0' ? 'the same as' : `${more}% more than`} the least-cost option, "${least.name}"`;
-        lines.push(
-            '',
-            `# Option: ${option.name}`,
-            '',
+        optionLines.push(
             `${costText} - its cost score is ${number(analysis.score, 1)}.${ixOption === ixLeast ? '' : costDifference(analysis, least)} ` +
                 `It's ${lengthText(analysis.length)} long and ` +
                 `${lengthText(section.width, section.width % 1 === 0 ? 0 : 1)} wide, ${section.surface ?? 'gravel'}, and ` +
@@ -198,7 +208,7 @@ export function draftLines(plan, {purpose = null, featureNotes = [], optionNotes
         const runTexts = lineRuns(alignmentX, alignmentY, stations).map(({direction, length}) => (
             `${direction} for about ${lengthText(Math.round(length / 10) * 10)}`
         ));
-        lines.push(
+        optionLines.push(
             `- **Line.** From the start, it runs ${runTexts.slice(0, -1).join(', ')}` +
             `${['', '', ' and ', ', and '][Math.min(runTexts.length, 3)]}${runTexts.at(-1)} to the end.`
         );
@@ -208,7 +218,7 @@ export function draftLines(plan, {purpose = null, featureNotes = [], optionNotes
                 roads, criteria.minRadius, alignmentX, alignmentY, alignmentZ, stations, structure
             );
             const over = grade !== null && Math.max(grade, steepest) > criteria.maxGrade;
-            lines.push(
+            optionLines.push(
                 `- **Existing road.** It follows ${names.length > 0 ? names.join(', ') : 'an existing road'} for ` +
                 `${lengthText(structure.endStation - structure.station)} (stations ${stationText(structure.station)} to ` +
                 `${stationText(structure.endStation)})${grade === null ? '' : ` - as built, its grade averages ${gradeText(grade)}` +
@@ -217,7 +227,7 @@ export function draftLines(plan, {purpose = null, featureNotes = [], optionNotes
             );
         }
         if (existingRoads.length > 0) {
-            lines.push(
+            optionLines.push(
                 '- **Existing road upgrade.** An existing road is costed as an upgrade, with no earthwork - verify its width, grade, ' +
                 'and surface in the field.'
             );
@@ -239,7 +249,7 @@ export function draftLines(plan, {purpose = null, featureNotes = [], optionNotes
                 structureTexts.push(`${typeStructures.length} ${typeName}${typeStructures.length === 1 ? '' : 's'}${details}`);
             }
         }
-        lines.push(`- **Structures.** ${structureTexts.length > 0 ? structureTexts.join(', ') : 'None'}.`);
+        optionLines.push(`- **Structures.** ${structureTexts.length > 0 ? structureTexts.join(', ') : 'None'}.`);
 
         // Its earthwork - the volumes, and the deepest cut and fill
         const volumeText = (value) => `${number(displayQuantity(units, 'volume', value), 0)} ${unitLabel(units, 'volume')}`;
@@ -258,17 +268,18 @@ export function draftLines(plan, {purpose = null, featureNotes = [], optionNotes
         );
         const balanceText = analysis.borrow > 0 ? `, with ${volumeText(analysis.borrow)} of borrow (import)` :
             (analysis.waste > 0 ? `, with ${volumeText(analysis.waste)} of waste (export)` : '');
-        lines.push(
+        optionLines.push(
             `- **Earthwork.** ${volumeText(analysis.cut)} of cut and ${volumeText(analysis.fill)} of fill${balanceText}. ` +
             `${depthText(deepCut, 'cut')} ${depthText(deepFill, 'fill')}`
         );
 
         // Its largest cost items, and its design warnings
         const costs = [...analysis.costs].sort((first, second) => second.cost - first.cost).slice(0, costItemCount);
-        lines.push(
+        optionLines.push(
             `- **Cost.** Its largest items: ${costs.map(({name, cost}) => `${name.toLowerCase()} ${number(cost / 1000, 1)}`).join(', ')}.`,
             `- **Design warnings.** ${analysis.warnings.length === 0 ? 'None' : analysis.warnings.join('. ')}.`
         );
+        return optionLines;
     });
-    return lines;
+    return {'plan': lines, options};
 }

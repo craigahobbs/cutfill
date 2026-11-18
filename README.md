@@ -11,8 +11,8 @@ Then view the options' report and 3D views, edit the plan and run it again, and 
 
 ![The Roadie viewer](example/screenshot.png)
 
-The application needs only Python 3.11 or later. A site must be in the United States, where the USGS
-has 1 meter lidar terrain.
+The application needs only Python 3.11 or later (and `git`, to install it). A site must be in the
+United States, where the USGS has 1 meter lidar terrain.
 
 
 ## Installing
@@ -249,8 +249,9 @@ The report's "Explore" links open the full-window **3D explorer**, controlled wi
 
 ### Viewing a road plan
 
-The application views a road plan that's opened, or made by a run. The viewer is also a web site (see
-[Publishing](#publishing)) that views plans without installing anything:
+The application views a road plan that's opened, or made by a run. The viewer is also a web site,
+[craigahobbs.github.io/roadie/viewer/](https://craigahobbs.github.io/roadie/viewer/) (see
+[Publishing](#publishing)), that views plans without installing anything:
 
 - **Open a local plan** - on the viewer's home page, select or drop the plan's JSON file (and its
   source map image, to show it in the report). Local files stay on your computer - they're kept in
@@ -337,7 +338,8 @@ road, which follows the track to the hilltop, and an all-new road. The plan's im
 [example.png](example/example.png), is the USGS topographic map of the site, for the report's source
 map.
 
-Run the application, and open `example/example.json` to view it. On the project's web site,
+Run the application, and open the example's file to view it - `example/example.json` in the
+repository, or [download it](https://craigahobbs.github.io/roadie/example/example.json). On the project's web site,
 [view the example](viewer/#url=../example/example.json) - the site's viewer links to it from its home
 page, too.
 

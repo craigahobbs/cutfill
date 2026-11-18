@@ -298,12 +298,6 @@ export class ExplorePage {
 
 
     keyDown(event) {
-        // Leave the keys of focused inputs alone
-        const {activeElement} = this.app.document;
-        if (activeElement !== null && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA' ||
-            activeElement.tagName === 'SELECT' || activeElement.isContentEditable)) {
-            return;
-        }
         const [width, height] = this.size();
         const result = this.explorer.keyDown(event, width, height);
         if (result === 'back') {

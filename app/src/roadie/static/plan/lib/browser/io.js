@@ -1,17 +1,19 @@
-// io.js - the planning tools' input and output functions in a web browser, and a road's plan made with them (the
-// "auto" command) - for the Roadie application's page. The tools' Node modules are the page's import map's
-// ("util.js", "buffer.js", and "zlib.js").
+// io.js - the planning tools' input and output functions in a web browser, and a road's plan made with them
+// (autoPlan) - for the Roadie application's page. The tools' Node modules are the page's import map's ("buffer.js" and
+// "zlib.js").
 //
-// The tools read and write files as they go, so a browser's files are in memory - the plan config and the road plan
-// are the page's, and the plan's map image is a data URL in the plan. The USGS's services, its elevation models, and
-// Ollama are fetched from the browser: they answer other sites' pages.
+// A plan is made in memory - the plan config and the road plan are the page's - and the files of its work directory
+// (its terrain cache, the model's saved answers) and its map image are in memory, too: the map image is a data URL in
+// the plan. The USGS's services, its elevation models, and Ollama are fetched from the browser: they answer other
+// sites' pages.
 
 import {fetchBytes, fetchJson} from '../usgs.js';
 import {isLayoutPlan, siteLayout} from '../terrain.js';
 import {ollamaAsk, ollamaHostDefault} from '../ollama.js';
 import {Buffer} from 'node:buffer';
-import {autoCommand} from '../auto.js';
+import {autoPlan} from '../auto.js';
 import {openElevationImage} from '../elevationImage.js';
+import {validateSite} from '../../../viewer/lib/model.js';
 
 
 // The steps of a plan - the page shows them as the plan is made - and a site's default margin and grid spacing (the
@@ -24,9 +26,9 @@ export {siteDefaults} from '../terrain.js';
 export {ollamaHostDefault} from '../ollama.js';
 
 
-// The paths of a plan's files in memory - its plan config, its plan, and its map image - and the paths of its work
-// directory's files that are kept from one plan to the next (the terrain cache, and the model's saved answers)
-const sitePath = 'site.json';
+// The paths of a plan's files in memory - its plan (its work directory's files, and its map image, are named for it)
+// and its map image - and the paths of its work directory's files that are kept from one plan to the next (the terrain
+// cache, and the model's saved answers)
 const planPath = 'plan.json';
 const imagePath = 'plan.png';
 const keptPrefixes = ['plan.work/terrain/', 'plan.work/decisions.json'];
@@ -112,18 +114,7 @@ async function svgPng(window, svg) {
 }
 
 
-// Is a plan a plan of the plan config's site - the same projection center and units? A plan is made again from its
-// site only if it is - it's a new plan, otherwise.
-function isSitePlan(plan, site) {
-    try {
-        return isLayoutPlan(siteLayout(site), plan);
-    } catch {
-        return false;
-    }
-}
-
-
-// Plan a road in the browser (the "auto" command) - "site" is the plan config (a road site model), and "plan" is the
+// Plan a road in the browser (autoPlan) - "site" is the plan config (a road site model), and "plan" is the
 // road plan made from it before, or null. A plan of the same site is made again - its site's data, and the features
 // that were added to it, are kept (its options are the run's) - unless "fetch" is true: the USGS's services are asked
 // for its site's data again. "model" is the Ollama model to ask what the site's notes ask for (or null), and "status"
@@ -132,20 +123,21 @@ function isSitePlan(plan, site) {
 // model's saved answers are kept, so a plan made again doesn't fetch its terrain or ask the model again. "signal" is
 // an abort signal that stops the plan (or null) - the plan stops when its current step's computation is done, its
 // result is "stopped", and its work is thrown away: the files are the files before it. Returns the plan's exit code,
-// its report's lines, and the road plan model - its map image is a data URL (null if the plan failed).
+// its report's lines, and the road plan model - its map image is a data URL (null if the plan failed). The page's plan
+// isn't changed - the run's plan is made from a copy of it.
 export async function planRoad(window, {site, plan = null}, options = {}) {
     const {model = null, ollamaHost = ollamaHostDefault, status = null, files = new Map(), signal = null, fetch = false} = options;
 
-    // The plan's files - the plan config, the plan, and the files kept from the page's earlier plans
+    // The plan's files - the files kept from the page's earlier plans
     for (const path of [...files.keys()]) {
         if (!keptPrefixes.some((prefix) => path.startsWith(prefix))) {
             files.delete(path);
         }
     }
     const keptFiles = new Map(files);
-    files.set(sitePath, JSON.stringify(site));
-    if (plan !== null && isSitePlan(plan, site)) {
-        files.set(planPath, JSON.stringify(plan));
+    const validated = validateSite(site);
+    if ('error' in validated) {
+        return {'code': 1, 'lines': ['error: The plan config is invalid:', '', validated.error], 'plan': null};
     }
 
     // Plan the road
@@ -158,8 +150,11 @@ export async function planRoad(window, {site, plan = null}, options = {}) {
     };
     let result;
     try {
-        const args = [...(model !== null ? ['--model', model] : []), ...(fetch ? ['--fetch'] : [])];
-        result = await autoCommand([sitePath, planPath, ...args], io);
+        // A plan is made again from its site only if it's a plan of the plan config's site - the same projection center
+        // and units. It's a new plan, otherwise.
+        const isSitePlan = plan !== null && isLayoutPlan(siteLayout(validated.site), plan);
+        const planValue = isSitePlan ? JSON.parse(JSON.stringify(plan)) : {};
+        result = await autoPlan(io, planPath, validated.site, planValue, {model, 'isFetch': fetch});
     } catch ({message}) {
         result = {'code': 1, 'lines': [`error: ${message}`]};
     }
@@ -170,13 +165,13 @@ export async function planRoad(window, {site, plan = null}, options = {}) {
         }
         return {'code': 1, 'lines': ['The plan was stopped'], 'plan': null, 'stopped': true};
     } else if (result.code !== 0) {
-        return {...result, 'plan': null};
+        return {'code': result.code, 'lines': result.lines, 'plan': null};
     }
 
     // The plan - its map image is in it, a data URL
-    const newPlan = JSON.parse(files.get(planPath));
+    const newPlan = {...result.plan};
     if (newPlan.image === imagePath && files.has(imagePath)) {
         newPlan.image = `data:image/png;base64,${Buffer.from(files.get(imagePath)).toString('base64')}`;
     }
-    return {...result, 'plan': newPlan};
+    return {'code': 0, 'lines': result.lines, 'plan': newPlan};
 }

@@ -1,8 +1,7 @@
 import {addDraws, drawAreaText, planDraws, topoDraws} from '../lib/draws.js';
-import {planText, planTopo} from '../../viewer/lib/model.js';
 import assert from 'node:assert/strict';
+import {planTopo} from '../../viewer/lib/model.js';
 import test from 'node:test';
-import {testIo} from './terrainHelpers.js';
 
 
 // Create a plan of a grid of elevations from a function of x and y - 10 foot (or meter) spacing
@@ -144,46 +143,59 @@ test('planDraws, the plan\'s streams', () => {
 
 
 test('addDraws', () => {
-    // The draw is added as a stream, named for it - its line, simplified
-    const io = testIo({'files': {'road.json': JSON.stringify(valleyPlan())}});
-    assert.deepEqual(addDraws(io, 'road.json', [1], 0.1), {'code': 0, 'lines': [
+    // The draw is added as a stream, named for it - its line, simplified. The plan's topography is a new one.
+    const plan = valleyPlan();
+    const {topography} = plan;
+    assert.deepEqual(addDraws(plan, planTopo(plan), [1], 0.1), {'error': null, 'lines': [
         'Added stream "Draw 1": draw 1 (drains 1.3 acres), 2 points, 270 feet long, from 100,270 to 100,0'
     ]});
-    const plan = JSON.parse(io.files['road.json']);
     assert.deepEqual(plan.topography.features, [
-        {'type': 'stream', 'name': 'Draw 1', 'points': [{'x': 100, 'y': 270}, {'x': 100, 'y': 0}], 'added': true}
+        {'type': 'stream', 'points': [{'x': 100, 'y': 270}, {'x': 100, 'y': 0}], 'name': 'Draw 1', 'added': true}
     ]);
-    assert.equal(io.files['road.json'], planText(plan));
+    assert.deepEqual([Object.keys(plan.topography.features[0]), 'features' in topography], [['type', 'points', 'name', 'added'], false]);
     assert.deepEqual({...plan, 'topography': {'spacing': 10, 'elevations': plan.topography.elevations}}, valleyPlan());
 
-    // It's along a stream now, so it isn't a draw
+    // It's along a stream now, so it isn't a draw - and the plan is as it was
     assert.deepEqual(drawTexts(plan, 0.1), []);
-    assert.deepEqual(addDraws(io, 'road.json', [1], 0.1), {'code': 1, 'lines': ['error: no draw 1']});
+    const added = plan.topography;
+    assert.deepEqual(addDraws(plan, planTopo(plan), [1], 0.1), {'error': 'no draw 1', 'lines': []});
+    assert.equal(plan.topography, added);
 
     // Several draws are added at once - a draw's number doesn't change when another draw is added, and the added draws
     // (and those beside them) aren't draws any more
-    const several = testIo({'files': {'road.json': JSON.stringify(valleysPlan())}});
-    assert.deepEqual(addDraws(several, 'road.json', [3, 1], 0.07).lines.map((line) => line.replace(/\(drains .*$/, '')), [
+    const several = valleysPlan();
+    assert.deepEqual(addDraws(several, planTopo(several), [3, 1], 0.07).lines.map((line) => line.replace(/\(drains .*$/, '')), [
         'Added stream "Draw 3": draw 3 ', 'Added stream "Draw 1": draw 1 '
     ]);
-    const severalPlan = JSON.parse(several.files['road.json']);
-    assert.deepEqual(severalPlan.topography.features.map(({name}) => name), ['Draw 3', 'Draw 1']);
+    assert.deepEqual(several.topography.features.map(({name}) => name), ['Draw 3', 'Draw 1']);
     const before = drawTexts(valleysPlan(), 0.07);
-    const after = drawTexts(severalPlan, 0.07);
+    const after = drawTexts(several, 0.07);
     assert.deepEqual([before.length, after.length, after[0]], [24, 20, '5: drains 0.27 acres - 210 long, from 200,210 to 200,0']);
     assert.deepEqual(after, before.slice(4));
 
     // A draw above a stream is added down to the stream - after the plan's features
-    const above = testIo({'files': {'road.json': JSON.stringify(streamPlan([[100, 100], [100, 0]]))}});
-    addDraws(above, 'road.json', [1], 0.1);
-    assert.deepEqual(JSON.parse(above.files['road.json']).topography.features, [
+    const above = streamPlan([[100, 100], [100, 0]]);
+    addDraws(above, planTopo(above), [1], 0.1);
+    assert.deepEqual(above.topography.features, [
         {'type': 'stream', 'points': [{'x': 100, 'y': 100}, {'x': 100, 'y': 0}], 'name': 'Creek'},
-        {'type': 'stream', 'name': 'Draw 1', 'points': [{'x': 100, 'y': 270}, {'x': 100, 'y': 150}], 'added': true}
+        {'type': 'stream', 'points': [{'x': 100, 'y': 270}, {'x': 100, 'y': 150}], 'name': 'Draw 1', 'added': true}
     ]);
 
-    // A plan that can't be loaded, or is invalid - and the default least area of a draw
-    assert.deepEqual(addDraws(testIo(), 'missing.json', [1]), {'code': 1, 'lines': ['error: Could not load the road plan "missing.json"']});
-    const invalid = addDraws(testIo({'files': {'road.json': '{"title": "Plan"}'}}), 'road.json', [1]);
-    assert.deepEqual([invalid.code, invalid.lines[0]], [1, 'error: The road plan "road.json" is invalid:']);
-    assert.deepEqual(addDraws(testIo({'files': {'road.json': JSON.stringify(valleyPlan('meters'))}}), 'road.json', [1]).code, 0);
+    // The default least area of a draw
+    const meters = valleyPlan('meters');
+    assert.equal(addDraws(meters, planTopo(meters), [1]).error, null);
+});
+
+
+test('topoDraws, a terrain\'s draws are found once', () => {
+    // The draws are the terrain's - they're the same for another topography of its elevation rows, whatever its features
+    const plan = valleyPlan();
+    const draws = topoDraws(planTopo(plan), 1000);
+    assert.equal(topoDraws(planTopo({...plan, 'topography': {...plan.topography, 'features': []}}), 1000), draws);
+
+    // Another least area's draws, another spacing's, and another terrain's, are their own
+    assert.notEqual(topoDraws(planTopo(plan), 2000), draws);
+    assert.notEqual(topoDraws(planTopo({...plan, 'topography': {...plan.topography, 'spacing': 20}}), 1000), draws);
+    assert.notEqual(topoDraws(planTopo(valleyPlan()), 1000), draws);
+    assert.deepEqual(topoDraws(planTopo(valleyPlan()), 1000), draws);
 });

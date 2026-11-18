@@ -18,14 +18,25 @@ node bin/plan.js route <plan.json> -n NAME       # engineer a road option - its 
 
 ## A plan's run
 
-`auto` plans a road by procedure (`lib/auto.js`) - the application's run (`lib/browser/io.js`'s `planRoad`). Its
-steps are its code's, in order: `site`, the notes' directives (with a model), the notes' places (the plan config's
-marks), `options` and an option through each place to pass through (with the unmapped draws they cross added as
-streams, until they cross none - `lib/draws.js`), `keep`, and the descriptions (`lib/draft.js`'s, with what the run
-did - `describe`, `lib/options.js`). If the Existing Roads or New Road option is at the site's edge, or there's no
-road within the grade limit, the plan config's margin is enlarged by half and the site is created again (at most
-twice). The run updates the plan config's file when its marks or its margin change - the plan keeps it, too (its
-`site` member), so the application's loaded plan's config is the run's.
+`auto` plans a road by procedure (`lib/auto.js`'s `autoPlan`) - the application's run (`lib/browser/io.js`'s
+`planRoad`). Its steps are its code's, in order: the site, the notes' directives (with a model), the notes' places
+(the plan config's marks), the standard options and an option through each place to pass through (with the unmapped
+draws they cross added as streams, until they cross none - `lib/draws.js`), another corridor (once the other options
+cross no unmapped draws - if it's an option that crosses any, they're added and the options are engineered again), the
+options it keeps (the best first), and the descriptions (`lib/draft.js`'s, with what the run did). If the Existing
+Roads or New Road option is at the site's edge, or there's no road within the grade limit, the plan config's margin
+is enlarged by half and the site is created again (at most twice). The run's plan config changes when its marks or
+its margin do - the plan keeps it (its `site` member), so the application's loaded plan's config is the run's, and
+the command line writes its file.
+
+A run makes its plan in memory: the tools' functions take a plan and change it or return one (`createSite`,
+`standardOptions`, `corridorOption`, `engineerOption`, `keepOptions`, `addDraws`, `describePlan`), and a plan is
+read and written only by the command line's commands (`lib/cli.js` - it's the one module that parses arguments, and
+it isn't the browser's) and the application's page. The plan a run returns is in the model's order - its site's plan
+is validated, and what the tools add to it is made in that order. A run's files are its work directory's (the
+terrain cache, the model's saved answers, and the plots a model was asked of) and its map image. A terrain's draws,
+and a topography's route lattices (one with its existing roads, and one without), are found once and kept, so a
+run's options share them.
 
 A model doesn't run the plan: it's asked questions (`lib/ollama.js`, Ollama's chat API), each a paragraph and at most
 one image, each answered with a JSON object of the question's schema that `auto` checks. The notes question's answer
@@ -49,11 +60,10 @@ grid is the same, too - so a place it didn't find isn't asked again.
 
 `lib/browser/` is the tools in a web browser, for the Roadie application's page: `io.js` is the tools' input and
 output functions there - files in memory, the USGS's services, its elevation models, and Ollama by `fetch`, and a
-plot's PNG image by a canvas - and `planRoad`, which runs a plan config with `auto` and returns the road plan, its
+plot's PNG image by a canvas - and `planRoad`, which runs a plan config with `autoPlan` and returns the road plan, its
 map image a data URL (a run of the same site keeps the plan's site data and the features that were added to it - its
-options are the run's - and an abort signal stops it). `util.js`, `buffer.js`, and `zlib.js` are the Node modules
-the tools import (`parseArgs`, a buffer's base64 text, and `crc32` and `deflateSync`) - the page's import map names
-them. `auto` reports what it's doing - its step's key (`autoSteps`) and text - to the input and output functions'
+options are the run's - and an abort signal stops it). `buffer.js` and `zlib.js` are the Node modules the tools
+import (a buffer's base64 text, and `crc32` and `deflateSync`) - the page's import map names them. `auto` reports what it's doing - its step's key (`autoSteps`) and text - to the input and output functions'
 `status` function, if they have it.
 
 

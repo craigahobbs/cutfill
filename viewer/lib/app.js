@@ -76,6 +76,7 @@ export class RoadieApp {
         this.importPlan = () => import('../../plan/lib/browser/io.js');
         this.runFiles = new Map();
         this.planValues = new WeakMap();
+        this.imageURLs = new WeakMap();
         this.openError = null;
         this.loadedValue = undefined;
         this.fileHandle = null;
@@ -99,7 +100,15 @@ export class RoadieApp {
         window.addEventListener('afterprint', () => {
             this.printing = false;
         });
-        this.document.addEventListener('keydown', (event) => this.page?.keyDown?.(event));
+        this.document.addEventListener('keydown', (event) => {
+            // The keys of a focused input are its own
+            const {activeElement} = this.document;
+            const isInput = activeElement !== null && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA' ||
+                activeElement.tagName === 'SELECT' || activeElement.isContentEditable);
+            if (!isInput) {
+                this.page?.keyDown?.(event);
+            }
+        });
 
         // Open dropped plan files anywhere
         this.document.addEventListener('dragover', (event) => {
@@ -246,21 +255,35 @@ export class RoadieApp {
         }
         const data = new PlanData(validated.plan, file);
 
-        // The source map image - a local plan's image is a local file of the same name, unless it's a data URL
+        // The source map image
         const {image} = validated.plan;
         if (image !== undefined) {
-            if (isLocal && !/^data:/i.test(image)) {
-                const imageBlob = await this.localFile(image.slice(image.lastIndexOf('/') + 1));
-                if (imageBlob !== null) {
-                    data.imageURL = this.window.URL.createObjectURL(imageBlob);
-                } else {
-                    data.imageMissing = image;
-                }
+            const {url, missing} = await this.imageURL(isLocal ? null : file, image);
+            if (missing) {
+                data.imageMissing = image;
             } else {
-                data.imageURL = planImageURL(file, image);
+                data.imageURL = url;
             }
         }
         return data;
+    }
+
+
+    // Get a plan's map image's URL - "file" is the plan's URL, or null for a local plan: its image is a local file of the
+    // image's name (unless it's a data URL - the image itself), whose object URL is made once. Returns the "url" (null
+    // if a local plan's image file is "missing").
+    async imageURL(file, image) {
+        if (file !== null || /^data:/i.test(image)) {
+            return {'url': planImageURL(file ?? '', image), 'missing': false};
+        }
+        const blob = await this.localFile(image.slice(image.lastIndexOf('/') + 1));
+        if (blob === null) {
+            return {'url': null, 'missing': true};
+        }
+        if (!this.imageURLs.has(blob)) {
+            this.imageURLs.set(blob, this.window.URL.createObjectURL(blob));
+        }
+        return {'url': this.imageURLs.get(blob), 'missing': false};
     }
 
 

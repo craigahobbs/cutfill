@@ -22,8 +22,8 @@ The project is three subprojects, and the top-level makefile delegates to them:
   [chisel](https://github.com/craigahobbs/chisel#readme) back end (`app/src/roadie/app.py`) that's only the front
   end's statics, for now. The front end does the work in the browser: its home page opens a plan (file dialog) or
   makes a new one (a config form made from the model's types - `viewer/lib/form.js`), shows the loaded plan - its
-  config, and its road options - runs it with `plan/lib/browser/io.js` (`planRoad` - the `auto` command, with a
-  browser's input and output functions), and saves it to a file. A plan is its config (a road site model) and, once
+  config, and its road options - runs it with `plan/lib/browser/io.js` (`planRoad` - the run's procedure, `autoPlan`,
+  with a browser's input and output functions), and saves it to a file. A plan is its config (a road site model) and, once
   it's run, its road options (a road plan model with the config as its `site` member) - a plan without road options
   is its config's file. The tools' modules stay importable in a browser: a Node module they import needs a stand-in in
   `plan/lib/browser/` and the page's import map (`viewer/index.html`). See [app/README.md](app/README.md).
@@ -68,6 +68,10 @@ Run `make` in `viewer/` or `plan/` for a subproject's own targets (e.g.
   questions (Ollama's - `plan/lib/ollama.js`) with checked JSON answers: what the notes ask for, and where their places
   are on the site's map. A model doesn't run the plan, and its question is asked without thinking, with a limited
   answer.
+- A run makes its plan in memory (`plan/lib/auto.js`'s `autoPlan`): the tools' functions take a plan and change it or
+  return one, and only the command line's commands (`plan/lib/cli.js` - the one module that parses arguments, which
+  isn't the browser's) and the application's page read and write a plan. What the tools add to a plan is made in the
+  model's order (a test checks a run's plan), so a plan's file is the same whether it's made or made again.
 - A plan that's made again is made the same: `auto` doesn't change what a later run reads but the plan config's marks
   and margin (the roads its notes rule out stay the plan's roads - `--rule-out`), the places the notes name are the
   plan config's marks once they're found (with how they were found - `SiteFound`), and `site` keeps a plan's site data

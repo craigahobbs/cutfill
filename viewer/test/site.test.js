@@ -1,4 +1,4 @@
-import {roadieTypes, validateSite} from '../lib/model.js';
+import {roadieTypes, siteMarkFeatures, siteMarkNames, siteMarkPrefixes, validateSite} from '../lib/model.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
@@ -128,4 +128,38 @@ test('roadieTypes, the road site model', () => {
             'spacing?'
         ]
     );
+});
+
+
+test('siteMarkNames', () => {
+    // A mark without a name is named for its place among its member's marks
+    const site = {
+        'exclusions': [{'name': 'Barn', 'points': []}, {'points': []}],
+        'roads': [{'points': []}, {'name': 'Hilltop track', 'points': []}],
+        'passThrough': [{'latitude': 40, 'longitude': -105}, {'name': 'Gate', 'latitude': 40, 'longitude': -105}]
+    };
+    assert.deepEqual(siteMarkPrefixes, {'exclusions': 'Exclusion', 'roads': 'Road', 'passThrough': 'Place'});
+    assert.deepEqual(Object.keys(siteMarkPrefixes).map((member) => siteMarkNames(site, member)), [
+        ['Barn', 'Exclusion 2'], ['Road 1', 'Hilltop track'], ['Place 1', 'Gate']
+    ]);
+    assert.deepEqual(Object.keys(siteMarkPrefixes).map((member) => siteMarkNames({}, member)), [[], [], []]);
+});
+
+
+test('siteMarkFeatures', () => {
+    // A plan's features that are a plan config's marks - its exclusion areas, and its added roads, of the marks' names
+    const site = {'exclusions': [{'name': 'Barn', 'points': []}, {'points': []}], 'roads': [{'points': []}]};
+    const isMark = siteMarkFeatures(site);
+    const features = [
+        {'type': 'exclusion', 'name': 'Barn'}, {'type': 'exclusion', 'name': 'Exclusion 2'}, {'type': 'exclusion', 'name': 'Pond'},
+        {'type': 'exclusion'}, {'type': 'road', 'name': 'Road 1', 'added': true}, {'type': 'road', 'name': 'Road 1'},
+        {'type': 'road', 'name': 'Mill Rd', 'added': true}, {'type': 'stream', 'name': 'Barn', 'added': true}
+    ];
+    assert.deepEqual(features.map((feature) => isMark(feature)), [true, true, false, false, true, false, false, false]);
+
+    // The marks of several plan configs - a plan's own, and the one it's made from again
+    const other = {'exclusions': [{'name': 'Pond', 'points': []}], 'roads': [{'name': 'Mill Rd', 'points': []}]};
+    const isEither = siteMarkFeatures({}, site, other);
+    assert.deepEqual(features.map((feature) => isEither(feature)), [true, true, true, false, true, false, true, false]);
+    assert.deepEqual(features.map((feature) => siteMarkFeatures()(feature)), features.map(() => false));
 });

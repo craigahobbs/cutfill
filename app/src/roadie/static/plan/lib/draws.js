@@ -2,9 +2,7 @@
 // that a road crosses to the plan, as streams
 
 import {lineIndex, nearestLine} from './roads.js';
-import {readPlan, writePlan} from './planFile.js';
 import {StateHeap} from './route.js';
-import {planTopo} from '../../viewer/lib/model.js';
 import {simplifyLine} from './features.js';
 
 
@@ -29,16 +27,18 @@ const neighbors = [
 // area it drains, at its end), its "points" ([x, y] arrays, from its head down), and the area that drains to each of
 // its points ("areas" - at its point on a longer draw, the area it drains above that draw).
 export function topoDraws(topo, minArea) {
-    // A topography's draws are kept - a plan's options are each checked against them
-    let areaDraws = topoDrawsCache.get(topo);
+    // A terrain's draws are kept (they're its elevation rows', whatever its features) - a plan's options are each
+    // checked against them, and a plan's run adds the draws they cross and checks them again
+    let areaDraws = topoDrawsCache.get(topo.rows);
     if (areaDraws === undefined) {
         areaDraws = new Map();
-        topoDrawsCache.set(topo, areaDraws);
+        topoDrawsCache.set(topo.rows, areaDraws);
     }
-    if (!areaDraws.has(minArea)) {
-        areaDraws.set(minArea, findDraws(topo, minArea));
+    const key = `${topo.spacing} ${minArea}`;
+    if (!areaDraws.has(key)) {
+        areaDraws.set(key, findDraws(topo, minArea));
     }
-    return areaDraws.get(minArea);
+    return areaDraws.get(key);
 }
 const topoDrawsCache = new WeakMap();
 
@@ -236,33 +236,28 @@ export function drawCrossings(topo, units, x, y, stations, existing) {
 }
 
 
-// Add a plan's draws (planDraws - "numbers" are their numbers, at the least "area") to it as streams - "io" is the tools'
-// input and output functions. A draw's stream is named for it ("Draw NUMBER"), and it's the draw's part that isn't
-// along the plan's streams. Returns the exit code and the report's lines.
-export function addDraws(io, planPath, numbers, area = null) {
-    const {plan, error} = readPlan(io, planPath);
-    if (error !== undefined) {
-        return {'code': 1, 'lines': error};
-    }
+// Add a plan's draws (planDraws - "numbers" are their numbers, at the least "area") to it as streams - "topo" is the
+// plan's topography (planTopo), which isn't the plan's once its features change. A draw's stream is named for it
+// ("Draw NUMBER"), and it's the draw's part that isn't along the plan's streams. Returns the report's "lines", and the
+// "error" - null, or the draw that the plan doesn't have (the plan is as it was).
+export function addDraws(plan, topo, numbers, area = null) {
     const {units} = plan;
-    const topo = planTopo(plan);
     const {draws} = planDraws(topo, units, area);
     const lines = [];
     const streams = [];
     for (const number of numbers) {
         const draw = draws.find((planDraw) => planDraw.number === number) ?? null;
         if (draw === null) {
-            return {'code': 1, 'lines': [`error: no draw ${number}`]};
+            return {'lines': [], 'error': `no draw ${number}`};
         }
         const points = simplifyLine(draw.points, topo.spacing * 0.75);
         const name = `Draw ${number}`;
-        streams.push({'type': 'stream', name, 'points': points.map(([x, y]) => ({x, y})), 'added': true});
+        streams.push({'type': 'stream', 'points': points.map(([x, y]) => ({x, y})), name, 'added': true});
         lines.push(
             `Added stream "${name}": draw ${number} (drains ${drawAreaText(units, draw.area)}), ${points.length} points, ` +
             `${Math.round(lineLength(points))} ${units} long, from ${points[0].join(',')} to ${points.at(-1).join(',')}`
         );
     }
-    plan.topography.features = [...topo.features, ...streams];
-    writePlan(io, planPath, plan);
-    return {'code': 0, lines};
+    plan.topography = {...plan.topography, 'features': [...topo.features, ...streams]};
+    return {lines, 'error': null};
 }

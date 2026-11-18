@@ -34,14 +34,6 @@ def main(argv=None):
     # Create the back-end application
     application = Roadie()
 
-    # Launch the web browser on a thread (it may block)
-    host = '127.0.0.1'
-    url = f'http://{host}:{args.port}/'
-    if args.browser:
-        webbrowser_thread = threading.Thread(target=webbrowser.open, args=(url,))
-        webbrowser_thread.daemon = True
-        webbrowser_thread.start()
-
     # Wrap the back end to log the requests that fail - an error status
     def application_wrap(environ, start_response):
         def log_start_response(status, response_headers):
@@ -50,9 +42,24 @@ def main(argv=None):
             return start_response(status, response_headers)
         return application(environ, log_start_response)
 
-    # Serve the application - to this computer only. The server's queue warnings aren't shown - the application's page
-    # loads its modules at once, so its requests wait for the server's threads.
+    # Create the server - to this computer only. It binds its port, so a port that's in use is an error before the web
+    # browser is opened. The server's queue warnings aren't shown - the application's page loads its modules at once,
+    # so its requests wait for the server's threads.
+    host = '127.0.0.1'
+    url = f'http://{host}:{args.port}/'
     logging.getLogger('waitress.queue').setLevel(logging.ERROR)
+    try:
+        server = waitress.create_server(application_wrap, host=host, port=args.port)
+    except OSError as exc:
+        parser.exit(1, f'roadie: Could not serve at {url} - {exc.strerror} (another port is the "-p" argument)\n')
+
+    # Launch the web browser on a thread (it may block)
+    if args.browser:
+        webbrowser_thread = threading.Thread(target=webbrowser.open, args=(url,))
+        webbrowser_thread.daemon = True
+        webbrowser_thread.start()
+
+    # Serve the application
     if not args.quiet:
         print(f'roadie: Serving at {url} ...')
-    waitress.serve(application_wrap, host=host, port=args.port)
+    server.run()

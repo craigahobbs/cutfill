@@ -1,4 +1,4 @@
-import {exclusionFeatures, lineFeatures, siteRoadFeatures, siteRoadNames, snapStreams} from '../lib/features.js';
+import {exclusionFeatures, lineFeatures, siteRoadFeatures, snapStreams} from '../lib/features.js';
 import {layoutLatLong, siteLayout} from '../lib/terrain.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -165,14 +165,13 @@ test('siteRoadFeatures', () => {
         })
     });
     const site = testSite({'roads': [road('Hilltop track', [10, 10], [100, 50], [200, 50]), road(null, [300, 100], [500, 100])]});
-    assert.deepEqual(siteRoadNames(site), ['Hilltop track', 'Road 2']);
     assert.deepEqual(siteRoadFeatures(layout, site), [
         {'type': 'road', 'name': 'Hilltop track', 'points': [{'x': 10, 'y': 10}, {'x': 100, 'y': 50}, {'x': 200, 'y': 50}], 'added': true},
         {'type': 'road', 'name': 'Road 2', 'points': [{'x': 300, 'y': 100}, {'x': 340, 'y': 100}], 'added': true}
     ]);
 
     // A site without roads
-    assert.deepEqual([siteRoadNames(testSite()), siteRoadFeatures(layout, testSite())], [[], []]);
+    assert.deepEqual(siteRoadFeatures(layout, testSite()), []);
 });
 
 

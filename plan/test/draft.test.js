@@ -1,8 +1,8 @@
-import {draftLines, lineRuns} from '../lib/draft.js';
+import {describePlan, draftDescriptions, lineRuns} from '../lib/draft.js';
+import {planTopo, validatePlan} from '../../viewer/lib/model.js';
 import {planePlan, roadPlan} from './roadFixtures.js';
 import assert from 'node:assert/strict';
 import {cliMain} from '../lib/cli.js';
-import {describeCommand} from '../lib/options.js';
 import {fixturePlan} from '../../viewer/test/fixture.js';
 import test from 'node:test';
 import {testIo} from './terrainHelpers.js';
@@ -18,6 +18,16 @@ const limitations = '**Limitations.** The terrain is the USGS 3D Elevation Progr
 // The existing roads' upgrade line
 const upgrade = '- **Existing road upgrade.** An existing road is costed as an upgrade, with no earthwork - verify its width, grade, ' +
     'and surface in the field.';
+
+
+// Get a plan's draft's lines - its description's, and each option's, under their headings
+function draftLines(plan) {
+    const descriptions = draftDescriptions(plan, planTopo(plan));
+    return [
+        '# Plan', '', ...descriptions.plan,
+        ...plan.options.flatMap((option, ixOption) => ['', `# Option: ${option.name}`, '', ...descriptions.options[ixOption]])
+    ];
+}
 
 
 // Run a planning command on a plan ("road.json") - returns the plan's files
@@ -66,15 +76,38 @@ Its deepest fill is 5.3 feet (station 1+59).
 - **Cost.** Its largest items: bridges 316.1, mobilization 35.5, surfacing (asphalt) 14.6.
 - **Design warnings.** The bridge deck is below the ground from 2+35 to 2+48.
 `);
+});
 
-    // The draft is the describe command's file
-    const described = testIo({'files': {'road.json': JSON.stringify(fixturePlan()), 'descriptions.md': draft}});
-    assert.deepEqual(describeCommand(['road.json', 'descriptions.md'], described), {'code': 0, 'lines': [
-        'The plan\'s description: 5 lines',
-        'Option "Direct"\'s description: 7 lines',
-        'Option "Bridge - East"\'s description: 9 lines',
-        'Wrote road.json'
-    ]});
+
+test('describePlan', () => {
+    // The plan's description, and its options', are their drafts - an option's description is in the model's order,
+    // whether it had one or not
+    const plan = fixturePlan();
+    plan.options[1] = {...plan.options[1], 'description': ['An old description.']};
+    const [direct, bridge] = plan.options;
+    const descriptions = draftDescriptions(plan, planTopo(plan));
+    describePlan(plan, planTopo(plan));
+    assert.deepEqual([plan.description, plan.options.map(({description}) => description)], [descriptions.plan, descriptions.options]);
+    assert.deepEqual(plan.description.map((line) => line.slice(0, 12)), ['**The site.*', '', '**Design cri', '', '**Limitation']);
+    assert.deepEqual(plan.options.map(({description}) => description.length), [7, 9]);
+    assert.deepEqual(plan.options.map((option) => Object.keys(option).slice(0, 3)), [
+        ['name', 'description', 'section'], ['name', 'description', 'section']
+    ]);
+    assert.deepEqual(Object.keys(validatePlan(plan).plan.options[0]), Object.keys(plan.options[0]));
+
+    // The options are new ones - the plan's options before aren't changed
+    assert.deepEqual([plan.options[0] === direct, bridge.description], [false, ['An old description.']]);
+
+    // A "~" isn't the description's Markdown - a name's, or the words of what the process adds
+    const named = fixturePlan();
+    named.options[0].name = 'Direct ~1';
+    describePlan(named, planTopo(named), {
+        'purpose': 'A road of ~400 feet.', 'optionNotes': ['About ~5% more.'], 'limitations': ['The gate is ~here~.']
+    });
+    assert.deepEqual([named.description[0], named.description[6], named.description.at(-1).slice(-20)], [
+        'A road of \\~400 feet.', '**Options.** About \\~5% more.', 'he gate is \\~here\\~.'
+    ]);
+    assert.ok(named.options[1].description[0].startsWith('It costs 703% more than the least-cost option, "Direct \\~1" - '));
 });
 
 

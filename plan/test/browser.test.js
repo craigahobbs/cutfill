@@ -7,71 +7,7 @@ import {Buffer} from '../lib/browser/buffer.js';
 import {Buffer as NodeBuffer} from 'node:buffer';
 import assert from 'node:assert/strict';
 import {grayPng} from '../lib/png.js';
-import {parseArgs as nodeParseArgs} from 'node:util';
-import {parseArgs} from '../lib/browser/util.js';
 import test from 'node:test';
-
-
-// Parse arguments with the browser's parseArgs and Node's - returns each one's values and positionals, or its error
-function parseBoth(config) {
-    return [parseArgs, nodeParseArgs].map((parse) => {
-        try {
-            const {values, positionals} = parse(config);
-            return {'values': {...values}, positionals};
-        } catch {
-            return 'error';
-        }
-    });
-}
-
-
-test('parseArgs', () => {
-    // The browser's parseArgs parses the tools' commands' arguments as Node's does
-    const options = {
-        'name': {'type': 'string', 'short': 'n'},
-        'via': {'type': 'string', 'short': 'v', 'multiple': true},
-        'surface': {'type': 'string', 'short': 's', 'default': 'gravel'},
-        'all-new': {'type': 'boolean', 'default': false},
-        'fresh': {'type': 'boolean'}
-    };
-    for (const args of [
-        [],
-        ['plan.json'],
-        ['plan.json', '-n', 'Road', '--via', '10,20', '-v', '30,40', '--all-new', 'extra'],
-        ['--name=Hill Road', '--surface=asphalt', 'plan.json'],
-        ['-nRoad', '--fresh', 'plan.json'],
-        ['plan.json', '--', '-n', '--unknown'],
-        ['--name', '-', 'plan.json'],
-        ['-'],
-
-        // Errors - an unknown option, a missing value, a boolean option's value, and a value that looks like an option
-        ['--unknown'],
-        ['-x'],
-        ['--name'],
-        ['-n'],
-        ['--fresh=yes'],
-        ['--name', '--fresh'],
-        ['--name', '-5']
-    ]) {
-        const [browser, node] = parseBoth({args, options, 'allowPositionals': true});
-        assert.deepEqual(browser, node, JSON.stringify(args));
-    }
-    assert.deepEqual(parseArgs({'args': ['a', '--fresh'], options, 'allowPositionals': true}), {
-        'values': Object.assign(Object.create(null), {'fresh': true, 'surface': 'gravel', 'all-new': false}),
-        'positionals': ['a']
-    });
-    assert.equal('toString' in parseArgs({'args': []}).values, false);
-
-    // Positional arguments aren't allowed, unless they are
-    for (const args of [[], ['plan.json'], ['--fresh', 'plan.json']]) {
-        const [browser, node] = parseBoth({args, options});
-        assert.deepEqual(browser, node, JSON.stringify(args));
-    }
-    assert.throws(() => parseArgs({'args': ['plan.json']}), {'name': 'TypeError', 'message': 'Unexpected argument \'plan.json\''});
-    assert.throws(() => parseArgs({'args': ['--unknown'], options}), {'message': 'Unknown option \'--unknown\''});
-    assert.throws(() => parseArgs({'args': ['--name'], options}), {'message': 'Option \'--name\' argument missing'});
-    assert.throws(() => parseArgs({'args': ['--fresh=1'], options}), {'message': 'Option \'--fresh=1\' does not take an argument'});
-});
 
 
 test('Buffer', () => {
@@ -214,11 +150,11 @@ test('browserIo, files', () => {
     assert.equal(io.files, files);
     assert.equal(io.readFile('plan.json'), '{"title": "Hill"}');
     assert.deepEqual([...io.readBytes('plan.json')].slice(0, 3), [123, 34, 116]);
-    io.writeFile('plan.work/descriptions.md', '# Plan');
+    io.writeFile('plan.work/notes.txt', '# Plan');
     io.writeBytes('plan.png', Uint8Array.from([1, 2, 3]));
-    assert.equal(io.readFile('plan.work/descriptions.md'), '# Plan');
+    assert.equal(io.readFile('plan.work/notes.txt'), '# Plan');
     assert.deepEqual([...io.readBytes('plan.png')], [1, 2, 3]);
-    assert.deepEqual([...files.keys()], ['plan.json', 'plan.work/descriptions.md', 'plan.png']);
+    assert.deepEqual([...files.keys()], ['plan.json', 'plan.work/notes.txt', 'plan.png']);
     assert.throws(() => io.readFile('other.json'), {'message': 'No such file "other.json"'});
     assert.throws(() => io.readFile('plan.png'), {'message': 'No such file "plan.png"'});
     assert.throws(() => io.readBytes('other.json'), {'message': 'No such file "other.json"'});
@@ -296,9 +232,9 @@ test('planRoad', async () => {
     assert.equal(result.code, 0);
     assert.deepEqual(result.lines.filter((line) => /^Notes|^Option \d|^Wrote/.test(line)), [
         'Notes: avoid "Barn" - an exclusion area from x 300 to 380, y 60 to 120',
-        'Option 0: "New Road" - cost score 72.6, design warnings: 0',
-        'Wrote plan.json - its descriptions are "plan.work/descriptions.md"'
+        'Option 0: "New Road" - cost score 72.6, design warnings: 0'
     ]);
+    assert.deepEqual(Object.keys(result), ['code', 'lines', 'plan']);
     assert.deepEqual([statuses[0], statuses.at(-1)], [
         'Creating the site - its terrain, streams, roads, and map are the USGS\'s', 'Writing the descriptions'
     ]);
@@ -316,6 +252,7 @@ test('planRoad', async () => {
         ['Barn', {'place': 'Barn', 'model': 'test-model', 'why': 'A block.'}]
     ]);
     assert.equal(files.has('other.json'), false);
+    assert.deepEqual([...files.keys()].filter((path) => !path.startsWith('plan.work/')), ['plan.png']);
     assert.deepEqual(Object.keys(JSON.parse(files.get('plan.work/decisions.json')).answers), ['notes', 'avoid:Barn', 'avoid:Barn:closer']);
     assert.ok([...files.keys()].some((path) => path.startsWith('plan.work/terrain/')));
     assert.equal(window.fetches.filter((url) => url.endsWith('/api/chat')).length, 3);
@@ -325,8 +262,13 @@ test('planRoad', async () => {
     // The plan made again, from its plan config - its site's data is kept (the USGS isn't asked for it), its marks are the
     // plan config's, and the model's answers are the files'
     const fetchCount = window.fetches.length;
+    const planBefore = JSON.stringify(plan);
     const again = await planRoad(window, {'site': plan.site, plan}, {'model': 'test-model', files});
     assert.equal(again.code, 0);
+    assert.equal(JSON.stringify(plan), planBefore);
+
+    // The plan is in memory - its files are its work directory's (its map image is the plan's data URL)
+    assert.deepEqual([...files.keys()].filter((path) => !path.startsWith('plan.work/')), []);
     assert.ok(again.lines[0].startsWith('Site: the plan\'s site data is kept'));
     assert.deepEqual(window.fetches.slice(fetchCount), []);
     assert.equal(again.plan.image, plan.image);
@@ -355,7 +297,7 @@ test('planRoad', async () => {
 test('planRoad, failures', async () => {
     // A plan config that isn't one
     const invalid = await planRoad(fakeWindow(), {'site': {}});
-    assert.deepEqual([invalid.code, invalid.lines[0], invalid.plan], [1, 'error: The road site "site.json" is invalid:', null]);
+    assert.deepEqual([invalid.code, invalid.lines[0], invalid.plan], [1, 'error: The plan config is invalid:', null]);
 
     // A plan that fails - its question's plot can't be drawn
     const site = testSite({'margin': 150, 'spacing': 10});
@@ -366,7 +308,7 @@ test('planRoad, failures', async () => {
     // A plan config that isn't one, with a plan - the plan isn't the site's
     const {plan} = await planRoad(fakeWindow(), {site});
     const invalidSite = await planRoad(fakeWindow(), {'site': {}, plan});
-    assert.deepEqual([invalidSite.code, invalidSite.lines[0]], [1, 'error: The road site "site.json" is invalid:']);
+    assert.deepEqual([invalidSite.code, invalidSite.lines[0]], [1, 'error: The plan config is invalid:']);
 
     // A plan without a map image keeps its image
     const noMap = await planRoad(fakeWindow({'mapType': 'text/html'}), {site});

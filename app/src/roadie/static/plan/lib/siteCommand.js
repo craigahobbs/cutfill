@@ -3,11 +3,11 @@
 // (the USGS National Map's streams, roads, and trails, and the site's exclusion areas), and its topographic map image
 
 import {elevationModels, roadLines, streamLines, topoMapImageUrl, trailLines} from './usgs.js';
-import {exclusionFeatures, exclusionNames, lineFeatures, siteRoadFeatures, siteRoadNames, snapDistance, snapStreams} from './features.js';
+import {exclusionFeatures, lineFeatures, siteRoadFeatures, snapDistance, snapStreams} from './features.js';
 import {
     isLayoutGrid, isLayoutPlan, layoutBox, layoutGeoreference, layoutLatLong, layoutSize, readTile, siteLayout, siteTerrain
 } from './terrain.js';
-import {elevation as planElevation, planTopo, validateSite} from '../../viewer/lib/model.js';
+import {elevation as planElevation, planTopo, siteMarkFeatures, validateSite} from '../../viewer/lib/model.js';
 import {latLongText} from '../../viewer/lib/geo.js';
 import {nearestText} from './roads.js';
 import {round} from '../../viewer/lib/format.js';
@@ -21,7 +21,7 @@ export const siteUsage = [
     '  Create a road plan model\'s site from a road site model - its topography, from the USGS 3D Elevation Program\'s',
     '  1 meter elevation models, its georeference, its start and end points, its streams, roads, and exclusion areas,',
     '  and its topographic map image ("<plan>.png"). An existing plan\'s options are kept, and the features that were',
-    '  added to it (the "feature" and "draws" commands\'). If the existing plan\'s grid is the site\'s - the same points,',
+    '  added to it (the draws a plan\'s run added, say). If the existing plan\'s grid is the site\'s - the same points,',
     '  units, margin, and spacing - its site\'s data (its terrain, streams, roads, trails, and map) is kept, and the',
     '  USGS\'s services aren\'t asked for it again, unless "--fetch" is given. A plan\'s design criteria and cost rates',
     '  are the site\'s. If there\'s no site file, it\'s written from the plan\'s own site model.'
@@ -45,7 +45,23 @@ export async function siteCommand(args, io) {
         return null;
     }
     const [sitePath, planPath] = positionals;
-    const error = (lines) => ({'code': 1, 'lines': lines});
+    const loaded = loadSite(io, sitePath, planPath);
+    if ('error' in loaded) {
+        return {'code': 1, 'lines': loaded.error};
+    }
+    const created = await createSite(io, loaded.site, loaded.plan, planPath, isFetch);
+    if ('error' in created) {
+        return {'code': 1, 'lines': created.error};
+    }
+    writePlan(io, planPath, created.plan);
+    return {'code': 0, 'lines': [...loaded.lines, ...created.lines, `Wrote ${planPath}`]};
+}
+
+
+// Load a road site model's file, and its plan's file, if there is one - "io" is the tools' input and output functions.
+// If there's no site file, it's written from the plan's own site model. Returns the "site" (it's valid), the "plan"
+// (the file's value - an empty object, if there's none), and the report's "lines" - or the "error" text lines.
+export function loadSite(io, sitePath, planPath) {
     const readText = (path) => {
         try {
             return io.readFile(path);
@@ -61,17 +77,17 @@ export async function siteCommand(args, io) {
         try {
             plan = JSON.parse(planFile);
         } catch {
-            return error([`error: Could not load the road plan "${planPath}"`]);
+            return {'error': [`error: Could not load the road plan "${planPath}"`]};
         }
     }
 
     // Load and validate the road site model - if there's no file, it's written from the plan's own site model
-    const siteLines = [];
+    const lines = [];
     let siteFile = readText(sitePath);
     if (siteFile === null && (plan?.site ?? null) !== null) {
         siteFile = `${JSON.stringify(plan.site, null, 4)}\n`;
         io.writeFile(sitePath, siteFile);
-        siteLines.push(`Wrote ${sitePath} - the plan's road site model`);
+        lines.push(`Wrote ${sitePath} - the plan's road site model`);
     }
     let siteValue = null;
     try {
@@ -80,13 +96,24 @@ export async function siteCommand(args, io) {
         // The file isn't JSON
     }
     if (siteFile === null || siteValue === null) {
-        return error([`error: Could not load the road site "${sitePath}"`]);
+        return {'error': [`error: Could not load the road site "${sitePath}"`]};
     }
     const validated = validateSite(siteValue);
     if ('error' in validated) {
-        return error([`error: The road site "${sitePath}" is invalid:`, '', validated.error]);
+        return {'error': [`error: The road site "${sitePath}" is invalid:`, '', validated.error]};
     }
-    const {site} = validated;
+    return {'site': validated.site, plan, lines};
+}
+
+
+// Create a plan's site - "io" is the tools' input and output functions, "site" is the road site model, and "planValue"
+// is the site's existing plan (an empty object, if there's none - it isn't changed). The site's elevation model tiles
+// are cached in the plan's work directory, and its topographic map image is the plan's file's, so "planPath" is the
+// plan's file's path. The plan's site data is kept, if its grid is the site's, unless "isFetch". Returns the "plan" and
+// the report's "lines" - or the "error" text lines.
+export async function createSite(io, site, planValue, planPath, isFetch = false) {
+    const error = (lines) => ({'error': lines});
+    let plan = planValue;
     const {units} = site;
 
     // An existing plan is the site's - its projection center and its units are the site's
@@ -101,8 +128,7 @@ export async function siteCommand(args, io) {
 
     // The plan's site data is kept, if its grid is the site's - unless it's fetched again
     if (!isFetch && isSited && isLayoutGrid(layout, plan)) {
-        const kept = keepSite(io, planPath, plan, site, layout);
-        return {...kept, 'lines': [...siteLines, ...kept.lines]};
+        return keepSite(plan, site, layout);
     }
 
     // The topography - the site's elevation model tiles are cached in the plan's work directory - and the streams
@@ -178,7 +204,7 @@ export async function siteCommand(args, io) {
     // were added to it
     const exclusions = exclusionFeatures(layout, site);
     const siteRoads = siteRoadFeatures(layout, site);
-    const isMark = siteMarks(plan, site);
+    const isMark = siteMarkFeatures(plan.site ?? {}, site);
     const kept = (shifted.topography?.features ?? []).filter((feature) => (
         !isMark(feature) && (feature.type === 'rock' || feature.type === 'exclusion' || (feature.added ?? false))
     ));
@@ -196,11 +222,9 @@ export async function siteCommand(args, io) {
         features
     };
     plan = sitePlan(shifted, site, layout, {...(image !== null ? {image} : {}), units, georeference, topography});
-    writePlan(io, planPath, plan);
 
     // Report
     const lines = [
-        ...siteLines,
         `Grid: ${nCols} x ${nRows} at ${spacing} ${units} spacing ` +
             `(${layoutSize(layout).map(Math.round).join(' x ')} ${units}), a margin of ${Math.round(layout.margin)} ${units}`,
         `Elevations: ${minZ.toFixed(1)} to ${maxZ.toFixed(1)} ${units}, contours every ${topography.contourInterval} ${units}`
@@ -233,8 +257,8 @@ export async function siteCommand(args, io) {
     if (image !== null) {
         lines.push(`Topographic map image: ${imagePath}`);
     }
-    lines.push(...warnings, ...pointLines(plan, layout), `Wrote ${planPath}`);
-    return {'code': 0, lines};
+    lines.push(...warnings, ...pointLines(plan, layout));
+    return {plan, lines};
 }
 
 
@@ -247,19 +271,6 @@ function pointLines(plan, layout) {
         return `${name}: "${point.label}" (${point.x}, ${point.y}) at ${latLongText(layoutLatLong(layout, point.x, point.y))}, ` +
             `ground ${ground.toFixed(1)}${nearestText(plan.topography.features, plan.units, point.x, point.y)}`;
     });
-}
-
-
-// Get the function that tests whether a plan's feature is a site's mark - one of the site's exclusion areas or roads,
-// or one of those of the site that the plan was made from. A plan's other exclusion areas are its own, and its roads
-// that were added by a tool, too.
-function siteMarks(plan, site) {
-    const planSite = plan.site ?? {};
-    const exclusions = new Set([...exclusionNames(planSite), ...exclusionNames(site)]);
-    const roads = new Set([...siteRoadNames(planSite), ...siteRoadNames(site)]);
-    return ({type, name = null, added = false}) => (
-        (type === 'exclusion' && exclusions.has(name)) || (type === 'road' && added && roads.has(name))
-    );
 }
 
 
@@ -281,23 +292,21 @@ function sitePlan(plan, site, layout, members) {
 
 
 // Keep a plan's site data - its terrain, streams, roads, trails, and map - for the site: its title, points' labels,
-// exclusion areas, roads, criteria, and cost rates are the site's. Returns the command's result.
-function keepSite(io, planPath, plan, site, layout) {
+// exclusion areas, roads, criteria, and cost rates are the site's. Returns the "plan", and the report's "lines".
+function keepSite(plan, site, layout) {
     const exclusions = exclusionFeatures(layout, site);
     const siteRoads = siteRoadFeatures(layout, site);
-    const isMark = siteMarks(plan, site);
+    const isMark = siteMarkFeatures(plan.site ?? {}, site);
     const features = (plan.topography.features ?? []).filter((feature) => !isMark(feature));
     const keptPlan = sitePlan(
         plan, site, layout, {'topography': {...plan.topography, 'features': [...features, ...exclusions, ...siteRoads]}}
     );
-    writePlan(io, planPath, keptPlan);
-    return {'code': 0, 'lines': [
+    return {'plan': keptPlan, 'lines': [
         'Site: the plan\'s site data is kept - its terrain, streams, roads, trails, and map (its grid is the site\'s - fetch ' +
             'them again with --fetch)',
         `Features: ${featureCount(exclusions, 'exclusion area')}${siteRoads.length > 0 ? `, ${featureCount(siteRoads, 'road')}` : ''} ` +
             'from the site',
-        ...pointLines(keptPlan, layout),
-        `Wrote ${planPath}`
+        ...pointLines(keptPlan, layout)
     ]};
 }
 

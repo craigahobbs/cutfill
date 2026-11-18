@@ -4,26 +4,26 @@
 import {cellContours, contourInterval, contourLevel, planMarkers, roadColor, roadFeatureColor, streamColor, terrainShade} from './draw.js';
 import {escapeHtml, px, round} from './format.js';
 import {planLatLong, planPoint} from './geo.js';
-import {planTopo, validateSite} from './model.js';
+import {planTopo, siteMarkFeatures, siteMarkNames, siteMarkPrefixes, validateSite} from './model.js';
 import {argsURL} from './args.js';
 
 
-// The marks' kinds - each one's plan config member, its name, and its default name's prefix
+// The marks' kinds - each one's plan config member, and its name
 const markKinds = {
-    'area': {'member': 'exclusions', 'name': 'Area to avoid', 'prefix': 'Area'},
-    'road': {'member': 'roads', 'name': 'Existing road', 'prefix': 'Road'},
-    'place': {'member': 'passThrough', 'name': 'Place to pass through', 'prefix': 'Place'}
+    'area': {'member': 'exclusions', 'name': 'Area to avoid'},
+    'road': {'member': 'roads', 'name': 'Existing road'},
+    'place': {'member': 'passThrough', 'name': 'Place to pass through'}
 };
 
 
-// The tools - each one's name, and its hint
-const tools = {
-    'select': ['Select', 'Select a mark to rename or delete it, or drag its points. Drag the map to move it, and scroll to zoom.'],
-    'area': ['Area to avoid', 'Click the area\'s corners - double-click or press Enter to finish it, Backspace removes its last ' +
-        'corner, and Escape cancels it.'],
-    'road': ['Existing road', 'Click the road\'s points - double-click or press Enter to finish it, Backspace removes its last ' +
-        'point, and Escape cancels it.'],
-    'place': ['Place to pass through', 'Click the place.']
+// The tools' hints - the select tool's, and each kind of mark's
+const toolHints = {
+    'select': 'Select a mark to rename or delete it, or drag its points. Drag the map to move it, and scroll to zoom.',
+    'area': 'Click the area\'s corners - double-click or press Enter to finish it, Backspace removes its last corner, and Escape ' +
+        'cancels it.',
+    'road': 'Click the road\'s points - double-click or press Enter to finish it, Backspace removes its last point, and Escape ' +
+        'cancels it.',
+    'place': 'Click the place.'
 };
 
 
@@ -84,15 +84,15 @@ export class MapPage {
         this.drawing = null;
         this.selected = null;
         this.drag = null;
-        this.imageURL = await this.mapImageURL();
+        this.imageURL = 'image' in plan ? (await app.imageURL(null, plan.image)).url : null;
         this.reliefURL = null;
         if (this.closed) {
             return;
         }
 
         // The page
-        const toolButtons = Object.entries(tools).map(([tool, [name]]) => (
-            `<button type="button" class="roadie-button" data-tool="${tool}">${escapeHtml(name)}</button>`
+        const toolButtons = Object.keys(toolHints).map((tool) => (
+            `<button type="button" class="roadie-button" data-tool="${tool}">${escapeHtml(markKinds[tool]?.name ?? 'Select')}</button>`
         ));
         const backdropOptions = Object.entries(backdrops).map(([backdrop, name]) => (
             `<option value="${backdrop}"${backdrop === 'map' && this.imageURL === null ? ' disabled' : ''}>${escapeHtml(name)}</option>`
@@ -125,6 +125,9 @@ export class MapPage {
         this.svg.addEventListener('pointerdown', (event) => this.pointerDown(event));
         this.svg.addEventListener('pointermove', (event) => this.pointerMove(event));
         this.svg.addEventListener('pointerup', (event) => this.pointerUp(event));
+        this.svg.addEventListener('pointercancel', () => {
+            this.drag = null;
+        });
         this.svg.addEventListener('dblclick', () => this.finishDrawing());
         this.svg.addEventListener('wheel', (event) => this.wheel(event), {'passive': false});
 
@@ -135,17 +138,6 @@ export class MapPage {
         this.setBackdrop('contours');
         this.setTool('select');
         this.renderView();
-    }
-
-
-    // The plan's topographic map image's URL - a data URL, or its local file's - or null if it has none
-    async mapImageURL() {
-        const image = this.plan.image ?? null;
-        if (image === null || /^data:/i.test(image)) {
-            return image;
-        }
-        const blob = await this.app.localFile(image.slice(image.lastIndexOf('/') + 1));
-        return blob !== null ? this.app.window.URL.createObjectURL(blob) : null;
     }
 
 
@@ -196,10 +188,11 @@ export class MapPage {
     setTool(tool) {
         this.tool = tool;
         this.drawing = null;
+        this.placed = null;
         for (const button of this.app.document.querySelectorAll('[data-tool]')) {
             button.setAttribute('aria-pressed', `${button.dataset.tool === tool}`);
         }
-        [, this.app.document.getElementById('roadie-map-hint').textContent] = tools[tool];
+        this.app.document.getElementById('roadie-map-hint').textContent = toolHints[tool];
         this.renderMarks();
     }
 
@@ -227,7 +220,7 @@ export class MapPage {
     // marks, its road options' centerlines, and its start and end points (the marks are drawn by themselves)
     renderFeatures() {
         const {plan, topo} = this;
-        const isMark = markFeatures(plan.site);
+        const isMark = siteMarkFeatures(plan.site);
         const lines = [];
         const pointsText = (points) => points.map(({x, y}) => `${px(x)},${px(y)}`).join(' ');
         const line = (points, stroke, width, dash = null) => (
@@ -319,6 +312,7 @@ export class MapPage {
         });
         document.getElementById('roadie-map-delete').addEventListener('click', () => {
             this.marks.splice(this.selected, 1);
+            this.placed = null;
             this.select(null);
         });
     }
@@ -363,8 +357,12 @@ export class MapPage {
     }
 
 
-    // A pointer is down - a drag of the selected mark's point, a drag of the map, or (if it doesn't move) a click
+    // A pointer is down - a drag of the selected mark's point, a drag of the map, or (if it doesn't move) a click. Only
+    // the main button draws - another's (a context menu's, say) has no pointer up.
     pointerDown(event) {
+        if (event.button !== 0) {
+            return;
+        }
         const point = this.eventPoint(event);
         const hit = this.tool === 'select' ? this.hit(point) : null;
         this.svg.setPointerCapture?.(event.pointerId);
@@ -416,16 +414,26 @@ export class MapPage {
         if (this.tool === 'select') {
             this.select(drag.hit?.[0] ?? null);
         } else if (this.tool === 'place') {
-            this.addMark('place', [this.toPlan(point)]);
+            // A click where a place was just added is the same place (a double-click's second click)
+            if (this.placed === null || !this.isNear(this.placed, point)) {
+                this.addMark('place', [this.toPlan(point)]);
+                this.placed = this.toPlan(point);
+            }
         } else {
             // A point close to the drawing's last is the same point (a double-click's second click)
             this.drawing ??= [];
             const last = this.drawing.at(-1) ?? null;
-            if (last === null || Math.hypot(...this.toScreen(last).map((value, ix) => value - point[ix])) > dragPixels) {
+            if (last === null || !this.isNear(last, point)) {
                 this.drawing.push(this.toPlan(point));
             }
             this.renderMarks();
         }
+    }
+
+
+    // Is a plan point at a map point - within a click's movement of it?
+    isNear(markPoint, point) {
+        return Math.hypot(...this.toScreen(markPoint).map((value, ix) => value - point[ix])) <= dragPixels;
     }
 
 
@@ -444,7 +452,7 @@ export class MapPage {
 
     // A key - the drawing's: Enter finishes it, Backspace removes its last point, and Escape cancels it (or the selection)
     keyDown(event) {
-        if (this.view === undefined || event.target?.tagName === 'INPUT' || event.target?.tagName === 'SELECT') {
+        if (this.view === undefined) {
             return;
         }
         if (event.key === 'Enter') {
@@ -469,9 +477,9 @@ export class MapPage {
     }
 
 
-    // Add a mark, named for its kind's count, and select it
+    // Add a mark, named for its kind's count (as the plan config's marks without names are), and select it
     addMark(kind, points) {
-        const {prefix} = markKinds[kind];
+        const prefix = siteMarkPrefixes[markKinds[kind].member];
         const names = new Set(this.marks.map(({name}) => name));
         let number = this.marks.filter((mark) => mark.kind === kind).length + 1;
         while (names.has(`${prefix} ${number}`)) {
@@ -509,12 +517,13 @@ export class MapPage {
 // (or null), and "source" (its plan config object - it's written as it was, unless it's edited)
 function siteMarks(plan, site) {
     const marks = [];
-    for (const [kind, {member, prefix}] of Object.entries(markKinds)) {
+    for (const [kind, {member}] of Object.entries(markKinds)) {
+        const names = siteMarkNames(site, member);
         for (const [ixMark, source] of (site[member] ?? []).entries()) {
             const points = kind === 'place' ? [source] : source.points;
             marks.push({
                 kind,
-                'name': source.name ?? `${prefix} ${ixMark + 1}`,
+                'name': names[ixMark],
                 'points': points.map(({latitude, longitude}) => planPoint(plan, latitude, longitude)),
                 'found': source.found ?? null,
                 source
@@ -535,18 +544,6 @@ function configMark(plan, mark) {
         return {'latitude': round(latitude, 7), 'longitude': round(longitude, 7)};
     });
     return mark.kind === 'place' ? {'name': mark.name, ...latLongs[0]} : {'name': mark.name, 'points': latLongs};
-}
-
-
-// Get the function that tests whether a plan's feature is one of its config's marks (the site command's features of
-// them) - they're drawn as marks, not features
-function markFeatures(site) {
-    const names = (member, prefix) => new Set((site[member] ?? []).map(({name = null}, ix) => name ?? `${prefix} ${ix + 1}`));
-    const exclusions = names('exclusions', 'Exclusion');
-    const roads = names('roads', 'Road');
-    return ({type, name = null, added = false}) => (
-        (type === 'exclusion' && exclusions.has(name)) || (type === 'road' && added && roads.has(name))
-    );
 }
 
 

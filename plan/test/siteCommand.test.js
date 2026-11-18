@@ -556,7 +556,7 @@ usage: plan site <site.json> <plan.json> [--fetch]
   Create a road plan model's site from a road site model - its topography, from the USGS 3D Elevation Program's
   1 meter elevation models, its georeference, its start and end points, its streams, roads, and exclusion areas,
   and its topographic map image ("<plan>.png"). An existing plan's options are kept, and the features that were
-  added to it (the "feature" and "draws" commands'). If the existing plan's grid is the site's - the same points,
+  added to it (the draws a plan's run added, say). If the existing plan's grid is the site's - the same points,
   units, margin, and spacing - its site's data (its terrain, streams, roads, trails, and map) is kept, and the
   USGS's services aren't asked for it again, unless "--fetch" is given. A plan's design criteria and cost rates
   are the site's. If there's no site file, it's written from the plan's own site model.

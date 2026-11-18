@@ -61,7 +61,7 @@ class TestApp(unittest.TestCase):
         loads = re.findall(r'(?:href|src)="([^"]+)"', page)
         imports = re.findall(r'"(\./[^"]+\.js)"', page)
         self.assertIn('lib/app.js', loads)
-        self.assertIn('./plan/lib/browser/util.js', imports)
+        self.assertIn('./plan/lib/browser/buffer.js', imports)
         loaded = [url for url in loads + imports if not url.startswith('data:')]
         self.assertListEqual([url for url in loaded if f'/{url.removeprefix("./")}' not in urls], [])
 

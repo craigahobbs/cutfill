@@ -1,5 +1,6 @@
-import {bestRoad, corridorReason, optionsUsage, routeCommands, routeUsage} from '../lib/routeCli.js';
+import {bestRoad, corridorReason} from '../lib/engineer.js';
 import {blockedPlan, expected, hillPlan, planePlan, roadPlan} from './roadFixtures.js';
+import {optionsCommand, optionsUsage, routeCommand, routeUsage} from '../lib/cli.js';
 import {planText, validatePlan} from '../../viewer/lib/model.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -10,7 +11,7 @@ import test from 'node:test';
 function run(plan, argv) {
     const files = {'plan.json': typeof plan === 'string' ? plan : JSON.stringify(plan)};
     const written = [];
-    const result = routeCommands[argv[0]](argv.slice(1), {
+    const result = {'route': routeCommand, 'options': optionsCommand}[argv[0]](argv.slice(1), {
         'readFile': (path) => {
             if (!(path in files)) {
                 throw new Error(`No such file "${path}"`);
@@ -91,7 +92,6 @@ function switchbackPlan() {
 test('routeUsage', () => {
     assert.deepEqual(routeUsage.slice(0, 2), ['usage: plan route <plan.json> -n NAME [-v X,Y]... [options]', '']);
     assert.ok(routeUsage.every((line) => line.length <= 120));
-    assert.deepEqual(Object.keys(routeCommands), ['route', 'options']);
     assert.equal(optionsUsage[0], 'usage: plan options <plan.json> [options]');
     assert.ok(optionsUsage.every((line) => line.length <= 120));
     assert.deepEqual(optionsUsage.slice(-12, -2), routeUsage.slice(13, 23));
@@ -505,6 +505,22 @@ test('options, no road within the grade limit', () => {
             'longer corridor, or a steeper grade)'
     ]);
     assert.deepEqual([failed.result.code, failed.written], [1, null]);
+
+    // An existing road that the grade limit can't reach - it's a steep road that starts just up the slope from the start
+    // point - isn't an option: the all-new road is
+    const steep = planePlan({'rise': 0.15, 'size': 61});
+    steep.start = {'x': 282, 'y': 47};
+    steep.end = {'x': 282, 'y': 553};
+    steep.topography.features = [{'type': 'road', 'name': 'Steep Rd', 'points': [{'x': 282, 'y': 70.5}, {'x': 282, 'y': 553}]}];
+    const steepRun = run(steep, ['options', 'plan.json']);
+    assert.deepEqual([steepRun.result.code, steepRun.result.names], [0, ['New Road', 'East Corridor']]);
+    assert.deepEqual(steepRun.result.lines.slice(2, 6), [
+        'The profile can\'t reach the existing road at station 74 - searching with stricter grades',
+        'No "Existing Roads" option: no road within the 11% grade limit - the profile can\'t reach the existing road at station ' +
+            '74 (try other via points, a longer corridor, or a steeper grade)',
+        'The profile ends 12.7 feet below the end point - searching with stricter grades',
+        'Option "New Road": 704 feet long, 142 alignment points, max grade 11.0%, max cut 3.9, max fill 1.1'
+    ]);
 
     // Neither is there a road that follows the plan's existing roads, where they don't reach the end point
     const short = corridorPlan();

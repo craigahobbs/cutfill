@@ -1,24 +1,24 @@
-// auto.js - the "auto" command - plan a road by procedure: the tools do every step of the plan, in order, and a model
-// (if there is one) is asked only the questions that the tools can't answer - what the plan config's notes ask for, and
-// where the places they name are on the map. Each question is small, and its answer is a JSON object that's checked -
-// a model doesn't run the plan. The places it finds are the plan config's marks (its exclusion areas and its places to
-// pass through), so a plan that's made again doesn't look for them again - and a mark can be corrected.
+// auto.js - plan a road by procedure: the tools do every step of the plan, in order, and a model (if there is one) is
+// asked only the questions that the tools can't answer - what the plan config's notes ask for, and where the places
+// they name are on the map. Each question is small, and its answer is a JSON object that's checked - a model doesn't
+// run the plan. The places it finds are the plan config's marks (its exclusion areas and its places to pass through),
+// so a plan that's made again doesn't look for them again - and a mark can be corrected. The plan is made in memory:
+// its files are its caller's (the command line's - cli.js - or the Roadie application's page's - browser/io.js).
 
 import {addDraws, drawCrossings} from './draws.js';
-import {corridorNames, routeCommands} from './routeCli.js';
-import {describeCommand, keepCommand} from './options.js';
+import {
+    corridorNames, corridorOption, engineerOption, keepOptions, roadArguments, roadSurfaces, standardOptions
+} from './engineer.js';
 import {layoutPoint, siteLayout} from './terrain.js';
-import {planCriteria, planTopo} from '../../viewer/lib/model.js';
+import {orderPlan, planCriteria, planTopo, siteMarkNames, validateSitePlan} from '../../viewer/lib/model.js';
 import {planMapBase64, planPlot} from './plot.js';
-import {readPlan, writePlan} from './planFile.js';
 import {Buffer} from 'node:buffer';
-import {draftLines} from './draft.js';
+import {createSite} from './siteCommand.js';
+import {describePlan} from './draft.js';
 import {existingMask} from './structures.js';
-import {parseArgs} from 'node:util';
 import {planLatLong} from '../../viewer/lib/geo.js';
 import {polylineStations} from './route.js';
 import {round} from '../../viewer/lib/format.js';
-import {siteCommand} from './siteCommand.js';
 
 
 // The steps of a plan - their keys (the status function's), and what they do. The notes are read only with a model.
@@ -28,43 +28,6 @@ export const autoSteps = [
     {'key': 'options', 'text': 'Engineer the road options', 'isModel': false},
     {'key': 'describe', 'text': 'Describe the plan', 'isModel': false}
 ];
-
-
-// The "auto" command's usage text lines
-export const autoUsage = [
-    'usage: plan auto <site.json> <plan.json> [--model MODEL] [--fresh] [--fetch] [options]',
-    '',
-    '  Plan a road by procedure: create the plan\'s site, engineer its standard options (and add the unmapped draws they',
-    '  cross, as streams), keep the best options, and set the descriptions - their facts. If the standard options are at',
-    '  the site\'s edge, or there\'s no road within the grade limit, the site\'s margin is enlarged (at most twice). With a',
-    '  model (an Ollama model - a local model, or one of Ollama\'s cloud models), the model is asked what the site\'s notes',
-    '  ask for - the road\'s width and surface, a maximum grade, bridges, the existing roads to rule out, and the places to',
-    '  avoid or to pass through - and where each place is on the site\'s map, unless the notes give its coordinates. The',
-    '  places are the site\'s marks - its exclusion areas and places to pass through - so the site file is updated: a',
-    '  mark that was found isn\'t looked for again, and a mark for a place that the notes no longer name is removed.',
-    '',
-    'options:',
-    '  --model MODEL          the Ollama model to ask (default is none - the site\'s notes aren\'t read) - the Roadie',
-    '                         application\'s (the command line doesn\'t ask a model)',
-    '  --fresh                ask the model again - don\'t use its saved answer, and look for the notes\' places again',
-    '  --fetch                fetch the site\'s data from the USGS again - an existing plan\'s, if it\'s the site\'s, is kept',
-    '  -w, --width WIDTH      the road width (default is the notes\', or 14 feet / 4.3 meters)',
-    '  -s, --surface SURFACE  the road surface - native, gravel, asphalt, or concrete (default is the notes\', or gravel)'
-];
-
-
-// The command's options
-const commandOptions = {
-    'model': {'type': 'string'},
-    'fresh': {'type': 'boolean', 'default': false},
-    'fetch': {'type': 'boolean', 'default': false},
-    'width': {'type': 'string', 'short': 'w'},
-    'surface': {'type': 'string', 'short': 's'}
-};
-
-
-// The road surfaces
-const surfaces = ['native', 'gravel', 'asphalt', 'concrete'];
 
 
 // The directives' limits - a width, a maximum grade, a minimum radius, and a bridge's fill depth that the notes can ask
@@ -143,27 +106,25 @@ const pointSchema = {
 };
 
 
-// The "auto" command - "io" is the tools' input and output functions. Its "ask" function asks a model a question
-// (ollamaAsk's question object) and returns its answer. Returns the command's exit code and its output text lines,
-// or null if its arguments are invalid.
-export async function autoCommand(args, io) {
-    let parsed;
-    try {
-        parsed = parseArgs({args, 'options': commandOptions, 'allowPositionals': true});
-    } catch {
-        return null;
-    }
-    const {values, positionals} = parsed;
-    const width = 'width' in values ? Number(values.width) : null;
-    if (positionals.length !== 2 || values.model === '' || (width !== null && !(width > 0)) ||
-        ('surface' in values && !surfaces.includes(values.surface))) {
-        return null;
-    }
-    const [sitePath, planPath] = positionals;
-    const model = values.model ?? null;
+// Plan a road by procedure - "io" is the tools' input and output functions: its "ask" function asks a model a question
+// (ollamaAsk's question object) and returns its answer, and its "status" function, if it has one, is told what the plan
+// is doing. "site" is the plan config (a road site model - it's valid), and "planValue" is its existing plan (an empty
+// object, if there's none - it isn't changed). The plan's work directory is its file's ("planPath" - the terrain cache,
+// the model's saved answers, and the plots the model was asked of), and its map image is its file's. The options are
+// the "model" to ask (null for none - the notes aren't read), whether to ask it again ("isFresh" - its saved answers
+// aren't used, and the notes' places are found again), whether to fetch the site's data again ("isFetch"), and the
+// road's "width" and "surface" (null for the notes', or the defaults). Returns the exit "code", the report's "lines",
+// the "plan" (null if its site wasn't created - if the plan failed, it's the plan as it was last whole), and the plan
+// config ("site" - the run's, if its marks or its margin changed).
+export async function autoPlan(io, planPath, site, planValue, options = {}) {
+    const {model = null, isFresh = false, isFetch = false, width = null, surface = null} = options;
     const work = `${planPath.replace(/\.json$/i, '')}.work`;
     const lines = [];
-    const fail = (errorLines) => ({'code': 1, 'lines': [...lines, ...errorLines]});
+    let config = site;
+    let plan = null;
+    let topo = null;
+    const result = (code, resultLines) => ({code, 'lines': resultLines, 'plan': plan !== null ? orderPlan(plan) : null, 'site': config});
+    const fail = (errorLines) => result(1, [...lines, ...errorLines]);
     const failure = (error) => fail(error.lines ?? [`error: ${error.message}`]);
 
     // The plan's report, and its status - what it's doing. The status is shown as the plan is made, if the input and
@@ -175,43 +136,40 @@ export async function autoCommand(args, io) {
         await io.status?.(text, step);
     };
 
-    // Create the plan's site. The plan config is the plan's site model - the run updates its file, when its marks or its
-    // margin change, and creates the site again (its site data is kept, if its grid is the same). The notes' design
-    // criteria are the plan's, but for the plan config's own.
-    await status('site', 'Creating the site - its terrain, streams, roads, and map are the USGS\'s');
-    const site = await siteCommand([sitePath, planPath, ...(values.fetch ? ['--fetch'] : [])], io);
-    if (site.code !== 0) {
-        return site;
-    }
-    report(...site.lines.slice(0, -1));
-    const loadPlan = () => readPlan(io, planPath).plan;
-    let plan = loadPlan();
-    let topo = planTopo(plan);
-    let config = plan.site;
-    const {units} = plan;
+    // Create the plan's site - the plan config's. The run's plan config changes when its marks or its margin do, and its
+    // site is created again (its site data is kept, if its grid is the same). The notes' design criteria are the
+    // plan's, but for the plan config's own. The sited plan is validated - it's the model's, in the model's order.
     const notesCriteria = {};
-    const updateConfig = (oldConfig, members) => {
-        const updated = {...oldConfig, ...members};
+    const updateConfig = (members) => {
+        config = {...config, ...members};
         for (const [member, value] of Object.entries(members)) {
             if (value === null) {
-                delete updated[member];
+                delete config[member];
             }
         }
-        io.writeFile(sitePath, `${JSON.stringify(updated, null, 4)}\n`);
-        return updated;
     };
-    const createSite = async () => {
-        const created = await siteCommand([sitePath, planPath], io);
-        if (created.code !== 0) {
-            throw Object.assign(new Error('The site wasn\'t created'), {'lines': created.lines});
+    const createPlanSite = async (sitePlan, isFetchSite = false) => {
+        const created = await createSite(io, config, sitePlan, planPath, isFetchSite);
+        const validated = 'error' in created ? null : validateSitePlan(created.plan);
+        if (validated === null || 'error' in validated) {
+            throw Object.assign(new Error('The site wasn\'t created'), {
+                'lines': validated === null ? created.error : [`error: The road plan "${planPath}" is invalid:`, '', validated.error]
+            });
         }
+        ({plan} = validated);
         if (Object.keys(notesCriteria).length > 0) {
-            const sited = loadPlan();
-            sited.criteria = {...sited.criteria, ...notesCriteria};
-            writePlan(io, planPath, sited);
+            plan.criteria = {...plan.criteria, ...notesCriteria};
         }
-        return created;
+        topo = planTopo(plan);
+        return created.lines;
     };
+    await status('site', 'Creating the site - its terrain, streams, roads, and map are the USGS\'s');
+    try {
+        report(...await createPlanSite(planValue, isFetch));
+    } catch (error) {
+        return failure(error);
+    }
+    const {units} = plan;
 
     // The model's saved answers - they're used again: the notes' answer while the notes and the model are the same, and a
     // place's answer while the site's grid is the same, too (a place that's found is the plan config's mark, though)
@@ -219,7 +177,7 @@ export async function autoCommand(args, io) {
     const decisionsPath = `${work}/decisions.json`;
     const grid = JSON.stringify([plan.georeference, topo.width, topo.height]);
     const answers = new Map();
-    if (!values.fresh) {
+    if (!isFresh) {
         try {
             const saved = JSON.parse(io.readFile(decisionsPath));
             if (saved.model === model && JSON.stringify(saved.notes) === JSON.stringify(notes)) {
@@ -270,7 +228,6 @@ export async function autoCommand(args, io) {
             }
             if (Object.keys(notesCriteria).length > 0) {
                 plan.criteria = {...plan.criteria, ...notesCriteria};
-                writePlan(io, planPath, plan);
                 report(`Notes: ${Object.entries(notesCriteria).map(([member, value]) => `${criteriaNames[member]} ${value}`).join(', ')}`);
             }
             if (directives.width !== null || directives.surface !== null) {
@@ -295,13 +252,11 @@ export async function autoCommand(args, io) {
             }
 
             // The notes' places - the plan config's marks
-            const marks = await findPlaces(io, ask, status, {
-                work, planPath, plan, topo, config, model, directives, 'isFresh': values.fresh
-            });
+            const marks = await findPlaces(io, ask, status, {work, planPath, plan, topo, config, model, directives, isFresh});
             report(...marks.lines);
             if (marks.members !== null) {
-                config = updateConfig(config, marks.members);
-                await createSite();
+                updateConfig(marks.members);
+                await createPlanSite(plan);
             }
         }
     } catch (error) {
@@ -310,23 +265,35 @@ export async function autoCommand(args, io) {
 
     // Engineer the options - the standard options, and an option through each place to pass through - and add the
     // unmapped draws they cross, as streams, until they cross none. If the site may be too small for the standard
-    // options, its margin is enlarged and its site is created again.
-    const designArgs = [
-        ...((width ?? directives.width) !== null ? ['--width', `${width ?? directives.width}`] : []),
-        ...((values.surface ?? directives.surface) !== null ? ['--surface', values.surface ?? directives.surface] : []),
-        ...(directives.bridgeFill !== null ? ['--bridge-fill', `${directives.bridgeFill}`] : []),
-        ...ruledOut.flatMap((name) => ['--rule-out', name])
-    ];
-    let options;
+    // options, its margin is enlarged and its site is created again. Another corridor is engineered once the other
+    // options cross no unmapped draws (it's a choice against the standard options as they'll be, and it's often not an
+    // option) - if it's an option that crosses unmapped draws, they're added, and the options are engineered again.
+    const roadArgs = roadArguments({
+        'width': width ?? directives.width,
+        'surface': surface ?? directives.surface ?? roadArguments().surface,
+        'bridgeFill': directives.bridgeFill,
+        'ruleOut': ruledOut
+    });
+    let standard;
+    let corridor;
     let names;
     let placeLines;
     let placeUnhandled;
     const draws = [];
+    const addCrossedDraws = (optionNames) => {
+        const crossed = crossedDraws(plan, topo, optionNames).filter((number) => !draws.includes(number));
+        if (crossed.length > 0) {
+            addDraws(plan, topo, crossed);
+            topo = planTopo(plan);
+            draws.push(...crossed);
+        }
+        return crossed.length > 0;
+    };
     for (let enlargements = 0; ;) {
         await status('options', 'Engineering the standard options');
-        options = routeCommands.options([planPath, ...designArgs], io);
-        const isGradeFailure = options.code !== 0 && options.lines.at(-1).startsWith('error: no road within the ');
-        if ((isGradeFailure || (options.code === 0 && options.atEdge)) && enlargements < enlargeLimit) {
+        standard = standardOptions(plan, topo, roadArgs);
+        const isGradeFailure = standard.error !== null && standard.isGrade;
+        if ((isGradeFailure || (standard.error === null && standard.atEdge)) && enlargements < enlargeLimit) {
             enlargements += 1;
             const margin = Math.round(siteLayout(config).margin * enlargeFactor);
             report(
@@ -334,33 +301,36 @@ export async function autoCommand(args, io) {
                     `the site's margin is enlarged to ${margin} ${units}`
             );
             await status('site', 'Creating the larger site - its terrain, streams, roads, and map are the USGS\'s');
-            config = updateConfig(config, {margin});
+            updateConfig({margin});
             try {
-                report(...(await createSite()).lines.slice(0, -1));
+                report(...await createPlanSite(plan));
             } catch (error) {
                 return failure(error);
             }
             continue;
         }
-        if (options.code !== 0) {
+        if (standard.error !== null) {
             return fail([
-                ...options.lines,
+                ...standard.lines,
+                `error: ${standard.error}`,
                 ...(isGradeFailure ? [
                     `error: The site was enlarged ${enlargements} times - the road needs a higher maximum grade (the plan config's ` +
                         'design criteria)'
                 ] : [])
             ]);
         }
-        plan = loadPlan();
-        topo = planTopo(plan);
-        ({names} = options);
+
+        // The plan's options are in cost score order - the draws they cross are added in their order
+        keepOptions(plan, topo);
+        names = [...standard.names];
 
         // The options through the places to pass through
         placeLines = [];
         placeUnhandled = [];
         const layout = siteLayout(config);
+        const placeNames = siteMarkNames(config, 'passThrough');
         for (const [ixPlace, place] of (config.passThrough ?? []).entries()) {
-            const placeName = place.name ?? `Place ${ixPlace + 1}`;
+            const placeName = placeNames[ixPlace];
             const [x, y] = layoutPoint(layout, place.latitude, place.longitude).map((value) => Math.round(value));
             const name = `Via ${placeName}`;
             if (x < 0 || y < 0 || x > topo.width || y > topo.height) {
@@ -368,61 +338,62 @@ export async function autoCommand(args, io) {
                 continue;
             }
             await status('options', `Engineering the option "${name}"`);
-            const routed = routeCommands.route([planPath, '-n', name, '-v', `${x},${y}`, ...designArgs], io);
-            if (routed.code === 0) {
+            const routed = engineerOption(plan, topo, {...roadArgs, name, 'via': [[x, y]]});
+            if (routed.error === null) {
                 names.push(name);
-                placeLines.push(...routed.lines.filter((line) => !/^Wrote /.test(line)), `Notes: "${name}" passes through "${placeName}"`);
+                placeLines.push(...routed.lines, `Notes: "${name}" passes through "${placeName}"`);
             } else {
-                placeUnhandled.push(`pass through "${placeName}" - ${routed.lines.at(-1).replace(/^error: /, '')}`);
+                placeUnhandled.push(`pass through "${placeName}" - ${routed.error}`);
             }
         }
 
         // The unmapped draws the options cross - each is added as a stream, and the options are engineered again
-        plan = loadPlan();
-        topo = planTopo(plan);
-        const crossed = crossedDraws(plan, topo, names).filter((number) => !draws.includes(number));
-        if (crossed.length === 0) {
+        if (addCrossedDraws(names)) {
+            continue;
+        }
+
+        // Another corridor - if there's one that's a real choice against the standard options
+        await status('options', 'Engineering another corridor');
+        corridor = corridorOption(plan, topo, roadArgs, standard.followsRoads);
+        if (corridor.name === null) {
+            break;
+        } else if (!addCrossedDraws([corridor.name])) {
+            names.push(corridor.name);
             break;
         }
-        addDraws(io, planPath, crossed);
-        draws.push(...crossed);
     }
     if (draws.length > 0) {
         report(`Draws: added the unmapped draws the options crossed, as streams - ${draws.map((number) => `Draw ${number}`).join(', ')}`);
     }
-    report(...options.lines.filter((line) => !/^Option \d+: |^Wrote /.test(line)), ...placeLines);
+    report(...standard.lines, ...corridor.lines, ...placeLines);
     directives.unhandled.push(...placeUnhandled);
 
     // Keep the plan's options - those it engineered, the best first. If there are too many, the other corridor is the
     // first that isn't kept.
     await status('describe', 'Writing the descriptions');
-    let kept = keepCommand([planPath, ...names], io);
+    let keptLines = keepOptions(plan, topo, names);
     if (names.length > optionLimit) {
-        const ordered = loadPlan().options.map(({name}) => name);
+        const ordered = plan.options.map(({name}) => name);
         const isCorridor = (name) => corridorNames.includes(name);
         const keptNames = [...ordered.filter((name) => !isCorridor(name)), ...ordered.filter(isCorridor)];
-        kept = keepCommand([planPath, ...keptNames.slice(0, optionLimit)], io);
+        keptLines = keepOptions(plan, topo, keptNames.slice(0, optionLimit));
     }
-    report(...kept.lines.filter((line) => /^Option \d+: /.test(line)));
+    report(...keptLines);
 
     // The descriptions - the plan's facts, and what the plan did with its notes
-    plan = loadPlan();
     for (const text of directives.unhandled) {
         report(`Notes: NOT acted on - ${text}`);
     }
     if (directives.unhandled.length > 0) {
         limitations.push(`These of the site's notes weren't acted on: ${directives.unhandled.join('; ')}.`);
     }
-    const descriptionsPath = `${work}/descriptions.md`;
-    io.writeFile(descriptionsPath, `${draftLines(plan, {
+    describePlan(plan, topo, {
         'purpose': directives.purpose,
         'featureNotes': [...markNotes(config, directives), ...(draws.length > 0 ? [drawsNote] : [])],
-        'optionNotes': options.corridorNote !== null ? [options.corridorNote] : [],
+        'optionNotes': corridor.note !== null ? [corridor.note] : [],
         limitations
-    }).join('\n')}\n`);
-    describeCommand([planPath, descriptionsPath], io);
-    report(`Wrote ${planPath} - its descriptions are "${descriptionsPath}"`);
-    return {'code': 0, lines};
+    });
+    return result(0, lines);
 }
 
 
@@ -625,7 +596,7 @@ function notesDirectives(answer, units, notes) {
     return {
         'purpose': text(answer.purpose) !== '' ? text(answer.purpose) : null,
         'width': within('width', limits[units].width, 'a width of'),
-        'surface': surfaces.includes(surface) ? surface : null,
+        'surface': roadSurfaces.includes(surface) ? surface : null,
         'maxGrade': within('maxGrade', gradeLimits, 'a maximum grade of'),
         'minRadius': within('minRadius', limits[units].minRadius, 'a minimum radius of'),
         'bridgeFill': within('bridgeFill', limits[units].bridgeFill, 'a bridge for fill deeper than'),
