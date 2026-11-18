@@ -35,7 +35,12 @@ make run FILE=<plan.json>    # view a plan in the browser
 - Number formatting is `toFixed`'s (`fixed`/`fixedTrim`/`px` in `format.js`), and `round` is
   `Math.round(x * 10 ** d) / 10 ** d` - the drawings and the command line's output depend on them.
 - `index.html` preloads every application module (a unit test checks the list) - add a `modulepreload` link with a new
-  module. Its import map resolves the `schema-markdown` package, which `make app` stages next to `lib/`. The home page
+  module. Its import map resolves the `schema-markdown` package, which `make app` stages next to `lib/` - and, for the Roadie
+  application (`../app/`), the planning tools' Node modules and their imports of the viewer's modules. The road page
+  (`RoadPage` - the application's home page, when the page's back end answers `getRoad`) edits the road site model of
+  the application's back end's road, and plans the
+  road, with the planning tools - it imports them (`importPlan`), and the project's web site doesn't have them. Its
+  form is made from the road site model's types (`form.js`), so don't hand-write a member's control. The home page
   links to an example plan if the page's `roadie` element has a `data-example` attribute (the plan's URL) - the
   project's web site adds it (the top-level makefile's `site`).
 - ESLint's `id-length` rule allows the coordinate names `x`, `y`, and `z` (`ESLINT_ARGS` in the makefile) - other names

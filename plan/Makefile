@@ -44,10 +44,10 @@ clean:
 help:
 	@echo "            [auto|evaluate|plan|run|update]"
 	@echo ""
-	@echo "  make plan FILE=<plan>.site.json [OUTPUT=<plan.json>]  Engineer road plan options for a road site (Claude Code)"
-	@echo "  make auto FILE=<plan>.site.json [OUTPUT=<plan.json>]  Plan a road by procedure - the tools, and an Ollama model's answers"
+	@echo "  make plan FILE=<site.json> OUTPUT=<plan.json>  Engineer road plan options for a road site (Claude Code)"
+	@echo "  make auto FILE=<site.json> OUTPUT=<plan.json>  Plan a road by procedure - the tools, and an Ollama model's answers"
 	@echo "    (auto accepts OLLAMA_MODEL=<model> - without it, the site's notes aren't read - and ARGS=<the auto command's arguments>)"
-	@echo "  make update FILE=<plan.json>               Update a road plan model with review feedback (Claude Code)"
+	@echo "  make update FILE=<plan.json> [SITE=<site.json>]  Update a road plan model with review feedback (Claude Code)"
 	@echo "    (plan and update accept MODEL=<model> [default: $(MODEL)] and EFFORT=<effort> [default: $(EFFORT)],"
 	@echo "     OLLAMA=1 to launch Claude Code with an Ollama model - MODEL then names the Ollama model,"
 	@echo "     and GROK=1 to launch the Grok CLI instead - MODEL then names the Grok model)"
@@ -63,10 +63,15 @@ $(VIEWER_BUILD):
 
 
 # Engineer road plan options for a road site - launches Claude Code (or Grok) with the planning instructions
-# (PLAN.md). FILE is the road site model ("<plan>.site.json"). Outputs OUTPUT (default is "<plan>.json");
-# intermediate work files go in the output's ".work/" directory (e.g., "<plan>.work/").
-PLAN_OUTPUT = $(if $(OUTPUT),$(OUTPUT),$(patsubst %.site,%,$(basename $(FILE))).json)
+# (PLAN.md). FILE is the road site model (a JSON file), and OUTPUT is the road plan model to write (another JSON
+# file); intermediate work files go in the output's ".work/" directory (e.g., "<plan>.work/").
+PLAN_OUTPUT = $(OUTPUT)
 PLAN_WORK = $(basename $(PLAN_OUTPUT)).work
+
+# Check a plan's files - FILE is a road site model's file, and OUTPUT is another file. The argument is the usage.
+PLAN_FILES = (test -n "$(FILE)" -a -n "$(OUTPUT)" || (echo 'usage: $(1)' && exit 1)) && \
+	(test -f "$(FILE)" || (echo 'error: "$(FILE)" does not exist' && exit 1)) && \
+	(test "$(OUTPUT)" != "$(FILE)" || (echo 'error: OUTPUT is the road plan model to write - not the road site model, "$(FILE)"' && exit 1))
 
 # The Claude Code model and effort level for the plan and update sessions. OLLAMA=1 launches Claude Code
 # with an Ollama model instead ("ollama launch claude") - MODEL then names the Ollama model, and when it
@@ -98,9 +103,7 @@ directory. Their modules are in \"$(CURDIR)/lib/\", and the viewer's are in \"$(
 
 .PHONY: plan
 plan: build/npm.build
-	@test -n "$(FILE)" || (echo 'usage: make plan FILE=<plan>.site.json [OUTPUT=<plan.json>] [MODEL=<model>] [EFFORT=<effort>] [OLLAMA=1|GROK=1]' && exit 1)
-	@test -f "$(FILE)" || (echo 'error: "$(FILE)" does not exist' && exit 1)
-	@test "$(PLAN_OUTPUT)" != "$(FILE)" || (echo 'error: "$(FILE)" is not a road site model file ("<plan>.site.json") - use OUTPUT to name the road plan model' && exit 1)
+	@$(call PLAN_FILES,make plan FILE=<site.json> OUTPUT=<plan.json> [MODEL=<model>] [EFFORT=<effort>] [OLLAMA=1|GROK=1])
 	mkdir -p "$(PLAN_WORK)"
 	$(AGENT) \
 		--allowedTools "$(call AGENT_TOOLS,$(PLAN_WORK))" \
@@ -120,19 +123,19 @@ PLAN.md exactly. Write the road plan model to \"$(PLAN_OUTPUT)\" and put interme
 # are the auto command's other arguments (the road's width and surface, or --fresh).
 .PHONY: auto
 auto: build/npm.build
-	@test -n "$(FILE)" || (echo 'usage: make auto FILE=<plan>.site.json [OUTPUT=<plan.json>] [OLLAMA_MODEL=<model>] [ARGS=<arguments>]' && exit 1)
-	@test -f "$(FILE)" || (echo 'error: "$(FILE)" does not exist' && exit 1)
-	@test "$(PLAN_OUTPUT)" != "$(FILE)" || (echo 'error: "$(FILE)" is not a road site model file ("<plan>.site.json") - use OUTPUT to name the road plan model' && exit 1)
+	@$(call PLAN_FILES,make auto FILE=<site.json> OUTPUT=<plan.json> [OLLAMA_MODEL=<model>] [ARGS=<arguments>])
 	$(PLAN_TOOL) auto "$(FILE)" "$(PLAN_OUTPUT)"$(if $(OLLAMA_MODEL), --model "$(OLLAMA_MODEL)") $(ARGS)
 
 
-# Update an existing road plan model with review feedback (Claude Code or Grok) - the session asks for the feedback
+# Update an existing road plan model with review feedback (Claude Code or Grok) - the session asks for the feedback.
+# SITE is the plan's road site model, for the session to read.
 UPDATE_WORK = $(basename $(FILE)).work
 
 .PHONY: update
 update: build/npm.build
-	@test -n "$(FILE)" || (echo 'usage: make update FILE=<plan.json> [MODEL=<model>] [EFFORT=<effort>] [OLLAMA=1|GROK=1]' && exit 1)
+	@test -n "$(FILE)" || (echo 'usage: make update FILE=<plan.json> [SITE=<site.json>] [MODEL=<model>] [EFFORT=<effort>] [OLLAMA=1|GROK=1]' && exit 1)
 	@test -f "$(FILE)" || (echo 'error: "$(FILE)" does not exist' && exit 1)
+	@test -z "$(SITE)" -o -f "$(SITE)" || (echo 'error: "$(SITE)" does not exist' && exit 1)
 	mkdir -p "$(UPDATE_WORK)"
 	$(AGENT) \
 		--allowedTools "$(call AGENT_TOOLS,$(UPDATE_WORK))" \
@@ -141,7 +144,8 @@ update: build/npm.build
 		$(call AGENT_NAME,Roadie update: $(notdir $(FILE))) \
 		"Update the road plan model \"$(FILE)\" with review feedback by following the \"Updating a plan\" \
 instructions in PLAN.md exactly. Intermediate work files (including any from the original planning \
-session) are in \"$(UPDATE_WORK)/\". $(AGENT_PROMPT) Ask me for the review feedback first."
+session) are in \"$(UPDATE_WORK)/\".$(if $(SITE), The plan's road site model is \"$(SITE)\".) $(AGENT_PROMPT) Ask me for \
+the review feedback first."
 
 
 # Print a road plan model's analysis and cost (DETAIL=1 adds the station table)

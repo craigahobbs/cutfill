@@ -15,9 +15,18 @@ const pageSize = 100;
 
 
 // Fetch a URL's JSON - "fetchFn" is the fetch function, and "sleep" is a function that waits a number of
-// milliseconds. The National Map's services fail now and then, so a failed request is tried again, a few times.
+// milliseconds. The National Map's services fail now and then, so a failed request is tried again, a few times. A
+// service that fails may respond with its error, not a failed status (the product service's "error" is its message,
+// and the feature services' has a "message") - that's a failed request, too.
 export function fetchJson(fetchFn, sleep, url, tries = 4) {
-    return fetchRetry(fetchFn, sleep, url, tries, (response) => response.json());
+    return fetchRetry(fetchFn, sleep, url, tries, async (response) => {
+        const value = await response.json();
+        const error = value?.error ?? null;
+        if (error !== null) {
+            throw new Error(`the service's error: "${typeof error === 'string' ? error : (error.message ?? JSON.stringify(error))}"`);
+        }
+        return value;
+    });
 }
 
 

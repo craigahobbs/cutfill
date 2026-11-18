@@ -1,4 +1,6 @@
 import {FakeIndexedDB, fakeBrowser, fire, flush, startApp} from './appHelpers.js';
+import {siteTypes, validateSite} from '../../plan/lib/site.js';
+import {RoadieApp} from '../lib/app.js';
 import assert from 'node:assert/strict';
 import {fixturePlan} from './fixture.js';
 import test from 'node:test';
@@ -13,8 +15,8 @@ const fixtureFiles = {'plans/fixture.json': fixtureText};
 const storage = {'roadieCellCost': '1'};
 
 
-// The home page's HTML, with its recent plans' HTML, its documentation link's URL, and its back end's roads' HTML
-function homeHtml(recentHtml = '', docURL = '#var.vDoc=true', roadsHtml = '') {
+// The home page's HTML, with its recent plans' HTML, and its documentation link's URL
+function homeHtml(recentHtml = '', docURL = '#var.vDoc=true') {
     return [
         '<h1>Roadie</h1>',
         '<p>Roadie is a 3D viewer for road grading plan models. A road grading plan model contains the site topography, ' +
@@ -25,7 +27,6 @@ function homeHtml(recentHtml = '', docURL = '#var.vDoc=true', roadsHtml = '') {
         '<p>Select or drop a road plan model JSON file - and its source map image, to show it in the report. ' +
             'The files stay on your computer.</p>',
         '</div>',
-        `<div id="roadie-roads">${roadsHtml}</div>`,
         `<div id="roadie-recent">${recentHtml}</div>`,
         '<p>To view a road plan model URL, use the "file" argument: <code>#var.vFile=\'plan.json\'</code></p>',
         '<hr>',
@@ -95,7 +96,7 @@ test('the home page', async (context) => {
     assert.deepEqual(indexedDB.requests, [['files', 'readonly', 'getAll', null]]);
 
     // Nothing is fetched, logged, or drawn
-    assert.deepEqual(browser.fetches, ['getRoads']);
+    assert.deepEqual(browser.fetches, ['getRoad']);
     assert.deepEqual(browser.logs, []);
     assert.equal(browser.clock.timeouts.size, 0);
     assert.equal(browser.clock.frames.size, 0);
@@ -123,71 +124,385 @@ test('the home page with an example road plan', async (context) => {
     await startApp(browser);
     const exampleLink = '<p><a href="#var.vFile=\'plans%2Ffixture.json\'">View the example road plan</a></p>';
     assert.equal(main.innerHTML, homeHtml().replace('<p>To view a road plan', `${exampleLink}\n<p>To view a road plan`));
-    assert.deepEqual(browser.fetches, ['getRoads']);
+    assert.deepEqual(browser.fetches, ['getRoad']);
 
     // The link opens the example's report
     browser.window.location.hash = main.querySelector('a[href*="vFile"]').getAttribute('href');
     await flush();
-    assert.deepEqual(browser.fetches, ['getRoads', 'plans/fixture.json']);
+    assert.deepEqual(browser.fetches, ['getRoad', 'plans/fixture.json']);
     assert.equal(browser.document.title, 'Fixture Plan');
 });
 
 
-test('the home page lists the back end\'s roads', async (context) => {
-    // The Roadie application's back end has its directory's roads - a road's plan is a link to it, with the page's
-    // other arguments
-    const roads = [
-        {'name': 'creek', 'site': 'creek.site.json'},
-        {'name': 'hill & dale', 'plan': 'hill & dale.json', 'site': 'hill & dale.site.json'},
-        {'name': 'ridge', 'plan': 'ridge.json'},
-        {'name': 5}
-    ];
-    const files = {'getRoads': JSON.stringify({'directory': '/roads', roads}), 'files/ridge.json': fixtureText};
-    const browser = fakeBrowser(context, {files, storage, 'hash': '#var.vOption=1'});
-    await startApp(browser);
-    assert.deepEqual(browser.fetches, ['getRoads']);
-    assert.equal(browser.main.innerHTML, homeHtml(
-        '',
-        '#var.vDoc=true&amp;var.vOption=1',
-        '<h2 id="roads">Roads</h2><ul>' +
-            '<li><p>creek - a road site that isn\'t planned yet</p></li>' +
-            '<li><p><a href="#var.vFile=\'files%2Fhill%20%26%20dale.json\'&amp;var.vOption=1">hill &amp; dale</a></p></li>' +
-            '<li><p><a href="#var.vFile=\'files%2Fridge.json\'&amp;var.vOption=1">ridge</a></p></li>' +
-            '</ul>'
-    ));
+// Ollama's models' URL, and its response
+const modelsURL = 'http://127.0.0.1:11434/api/tags';
+const modelsText = JSON.stringify({'models': [{'name': 'qwen:27b'}, {'name': 5}, {'name': 'a<b'}]});
 
-    // A road's link opens its plan - the back end's file
-    browser.window.location.hash = browser.main.querySelector('#roadie-roads li:last-child a').getAttribute('href');
+
+// The back end's road, and its road site model
+const roadText = JSON.stringify({'site': 'hill & dale.json', 'plan': 'hill & dale plan.json', 'hasSite': true, 'hasPlan': false});
+const planHref = '#var.vFile=\'files%2Fhill%2520%2526%2520dale%2520plan.json\'&amp;var.vOption=1';
+const siteModel = {
+    'title': 'Hill Road',
+    'units': 'meters',
+    'start': {'latitude': 46.1, 'longitude': -119.2, 'label': 'Road end'},
+    'end': {'latitude': 46.2, 'longitude': -119.1},
+    'notes': ['Stay off the barn.', 'A gravel road.'],
+    'exclusions': [{'points': [
+        {'latitude': 46.1, 'longitude': -119.1}, {'latitude': 46.2, 'longitude': -119.1}, {'latitude': 46.2, 'longitude': -119.2}
+    ]}],
+    'criteria': {'maxGrade': 10}
+};
+
+
+// Start the application with the planning tools - the road site's model, and "planRoad", a function that plans a road
+async function startRoadApp(browser, planRoad = null) {
+    const app = new RoadieApp(browser.window);
+    app.importPlan = () => Promise.resolve({planRoad, siteTypes, validateSite});
+    app.start();
+    await flush();
+    return app;
+}
+
+
+// Run the application's timeouts - a plan's status is drawn before the plan goes on
+async function runPlan(browser) {
+    await flush();
+    while (browser.clock.timeouts.size > 0) {
+        browser.clock.runTimeout();
+        await flush();
+    }
+}
+
+
+// Set the value of a road site form's member
+function setMember(browser, member, value) {
+    browser.document.querySelector(`[data-member="${member}"]`).value = value;
+}
+
+
+test('the road page', async (context) => {
+    // The Roadie application's page is its back end's road's - the road site model is a form
+    const files = {'getRoad': roadText, 'site': JSON.stringify(siteModel), [modelsURL]: modelsText};
+    const browser = fakeBrowser(context, {files, 'hash': '#var.vOption=1'});
+    await startRoadApp(browser);
+    const {document} = browser;
+    assert.equal(document.title, 'Roadie: hill & dale.json');
+    assert.deepEqual(browser.fetches, ['getRoad', 'site', modelsURL]);
+    assert.equal(document.querySelector('h1').textContent, 'Roadie');
+    assert.equal(document.querySelector('p').innerHTML, 'The road site model, <code>hill &amp; dale.json</code>, is the road\'s ' +
+        'start and end points, and its planning instructions.');
+    const members = [...document.querySelectorAll('#roadie-site [data-member]')].map((control) => [control.dataset.member, control.value]);
+    assert.deepEqual(members.filter(([member]) => !member.startsWith('costRates.')), [
+        ['title', 'Hill Road'], ['units', 'meters'],
+        ['start.latitude', '46.1'], ['start.longitude', '-119.2'], ['start.label', 'Road end'], ['start.description', ''],
+        ['end.latitude', '46.2'], ['end.longitude', '-119.1'], ['end.label', ''], ['end.description', ''],
+        ['notes', 'Stay off the barn.\nA gravel road.'],
+        ['criteria.maxGrade', '10'], ['criteria.minRadius', ''], ['criteria.rockCutSlope', ''], ['criteria.maxWallHeight', ''],
+        ['margin', ''], ['spacing', '']
+    ]);
+    assert.equal(members.length, 17 + siteTypes.CostRates.struct.members.length);
+    assert.deepEqual([...document.querySelectorAll('#roadie-site details')].map((details) => details.open), [true, false]);
+    assert.equal(document.querySelector('#roadie-site em').parentElement.textContent, 'Exclusions The areas the road must avoid ' +
+        '(buildings, wetlands, a neighbor\'s land, etc.) It isn\'t edited here - it\'s kept as it is.');
+    const select = document.getElementById('roadie-plan-model');
+    assert.deepEqual([...select.options].map(({value, textContent}) => [value, textContent]), [
+        ['', 'No model - the site\'s notes aren\'t read'], ['qwen:27b', 'qwen:27b'], ['a<b', 'a<b']
+    ]);
+    assert.equal(document.querySelector('#plan + p code').textContent, 'hill & dale plan.json');
+    assert.equal(document.getElementById('roadie-plan-view').innerHTML, 'The road isn\'t planned yet.');
+    assert.equal(
+        browser.main.lastElementChild.innerHTML, '<a href="#var.vDoc=true&amp;var.vOption=1">Road plan model documentation</a>'
+    );
+
+    // Edit the road site, and save it - a map's point is pasted into a latitude, and the form isn't submitted
+    const form = document.getElementById('roadie-site');
+    const siteStatus = document.getElementById('roadie-site-status');
+    setMember(browser, 'title', ' Hill & Dale Road ');
+    setMember(browser, 'start.label', '');
+    setMember(browser, 'notes', 'A paved road.\n\n  Stay off the barn.  \n');
+    setMember(browser, 'margin', '300');
+    const paste = fire(browser, document.querySelector('[data-member="end.latitude"]'), 'paste', {
+        'clipboardData': {'getData': (format) => (format === 'text' ? ' (46.25, -119.15) ' : null)}
+    });
+    assert.equal(paste.defaultPrevented, true);
+    assert.equal(fire(browser, form, 'submit').defaultPrevented, true);
+    fire(browser, document.getElementById('roadie-site-save'), 'click');
+    await flush();
+    assert.equal(siteStatus.innerHTML, 'The road site is saved.');
+    const saved = {
+        'title': 'Hill & Dale Road',
+        'units': 'meters',
+        'start': {'latitude': 46.1, 'longitude': -119.2},
+        'end': {'latitude': 46.25, 'longitude': -119.15},
+        'notes': ['A paved road.', 'Stay off the barn.'],
+        'exclusions': siteModel.exclusions,
+        'criteria': {'maxGrade': 10},
+        'margin': 300
+    };
+    assert.deepEqual(browser.puts, [['site', `${JSON.stringify(saved, null, 4)}\n`]]);
+
+    // A road site that isn't valid isn't saved
+    setMember(browser, 'start.latitude', 'abc');
+    fire(browser, document.getElementById('roadie-site-save'), 'click');
+    await flush();
+    assert.equal(
+        siteStatus.innerHTML,
+        '<strong>Error:</strong> Invalid value "abc" (type "string") for member "start.latitude", expected type "float"'
+    );
+    assert.equal(browser.puts.length, 1);
+
+    // The page is the road's again, when a plan's page is left
+    browser.window.location.hash = '#var.vDoc=true';
+    await flush();
+    assert.equal(document.title, 'Roadie Road Plan Model');
+    browser.window.location.hash = '#var=';
+    await flush();
+    assert.equal(document.title, 'Roadie: hill & dale.json');
+    assert.equal(document.querySelector('[data-member="title"]').value, 'Hill Road');
+});
+
+
+test('the road page, a road is planned', async (context) => {
+    // A road is planned by the planning tools, from its saved road site - with one of Ollama's models, or none
+    const calls = [];
+    const planRoad = async (window, road, {model, ollamaHost, progress, status}) => {
+        calls.push([window === browser.window, road, model, ollamaHost, browser.puts.length]);
+        await status('Creating the site');
+        progress(['Grid: 10 x 10', 'Features: none']);
+        await status('Engineering <the> options');
+        progress(['Option "New Road"']);
+        return {'code': 0, 'lines': ['Grid: 10 x 10', 'Features: none', 'Option "New Road"', 'Wrote hill & dale plan.json']};
+    };
+    const files = {'getRoad': roadText, 'site': JSON.stringify(siteModel), [modelsURL]: modelsText};
+    const browser = fakeBrowser(context, {files, 'hash': '#var.vOption=1'});
+    await startRoadApp(browser, planRoad);
+    const {document} = browser;
+
+    // Plan the road, with a model - the road site is saved, and the plan's status and its report are shown as it's made
+    const controls = ['roadie-plan-start', 'roadie-plan-model', 'roadie-site-save'].map((id) => document.getElementById(id));
+    const [start, select] = controls;
+    const status = document.getElementById('roadie-plan-status');
+    const log = document.getElementById('roadie-plan-log');
+    const view = document.getElementById('roadie-plan-view');
+    select.value = 'qwen:27b';
+    setMember(browser, 'title', 'Dale Road');
+    fire(browser, start, 'click');
+    assert.deepEqual(controls.map((control) => control.disabled), [true, true, true]);
+    await flush();
+    assert.deepEqual([status.innerHTML, log.textContent], ['Creating the site…', '']);
+    assert.equal(JSON.parse(browser.puts[0][1]).title, 'Dale Road');
+    browser.clock.runTimeout();
+    await flush();
+    assert.deepEqual([status.innerHTML, log.textContent], ['Engineering &lt;the&gt; options…', 'Grid: 10 x 10\nFeatures: none\n']);
+    assert.equal(view.innerHTML, 'The road isn\'t planned yet.');
+    await runPlan(browser);
+    const road = {'site': 'hill & dale.json', 'plan': 'hill & dale plan.json'};
+    assert.deepEqual(calls, [[true, road, 'qwen:27b', 'http://127.0.0.1:11434', 1]]);
+    assert.equal(log.textContent, 'Grid: 10 x 10\nFeatures: none\nOption "New Road"\nWrote hill & dale plan.json\n');
+    assert.equal(status.innerHTML, 'The road is planned.');
+    assert.equal(view.innerHTML, `<a href="${planHref}">View the road plan</a>`);
+    assert.deepEqual(controls.map((control) => control.disabled), [false, false, false]);
+
+    // Again, without a model
+    select.value = '';
+    fire(browser, start, 'click');
+    assert.deepEqual([status.innerHTML, log.textContent], ['', '']);
+    await runPlan(browser);
+    assert.deepEqual(calls[1], [true, road, null, 'http://127.0.0.1:11434', 2]);
+    assert.equal(log.textContent, 'Grid: 10 x 10\nFeatures: none\nOption "New Road"\nWrote hill & dale plan.json\n');
+});
+
+
+test('the road page, a road that\'s planned', async (context) => {
+    // The road's plan is the back end's file
+    const files = {
+        'getRoad': JSON.stringify({'site': 'site.json', 'plan': 'ridge.json', 'hasSite': true, 'hasPlan': true}),
+        'site': JSON.stringify(siteModel),
+        'files/ridge.json': fixtureText
+    };
+    const browser = fakeBrowser(context, {files, storage});
+    await startRoadApp(browser);
+    const view = browser.document.getElementById('roadie-plan-view');
+    assert.equal(view.innerHTML, '<a href="#var.vFile=\'files%2Fridge.json\'">View the road plan</a>');
+    browser.window.location.hash = view.querySelector('a').getAttribute('href');
     await flush();
     assert.equal(browser.document.title, 'Fixture Plan');
-    assert.deepEqual(browser.fetches, ['getRoads', 'files/ridge.json']);
+    assert.deepEqual(browser.fetches, ['getRoad', 'site', modelsURL, 'files/ridge.json']);
 });
 
 
-test('the home page without a back end', async (context) => {
-    // The back end has no roads, it doesn't answer with roads, or there's no back end - the home page has no roads
-    for (const response of [JSON.stringify({'directory': '/roads', 'roads': []}), '{"roads": 5}', '<html>', null, undefined]) {
-        const browser = fakeBrowser(context, {'files': {'getRoads': response}});
-        await startApp(browser);
-        assert.deepEqual(browser.fetches, ['getRoads']);
-        assert.equal(browser.main.innerHTML, homeHtml());
+test('the road page, a new road', async (context) => {
+    // A road without a road site model is new. Ollama doesn't answer, so there are no models.
+    const results = [
+        () => Promise.resolve({'code': 1, 'lines': ['error: no road within the 11% grade limit']}),
+        () => Promise.reject(new Error('Failed to fetch'))
+    ];
+    const files = {'getRoad': JSON.stringify({'site': 'site.json', 'plan': 'hill.json', 'hasSite': false, 'hasPlan': false})};
+    const browser = fakeBrowser(context, {files});
+    await startRoadApp(browser, () => results.shift()());
+    const {document} = browser;
+    assert.deepEqual(browser.fetches, ['getRoad', 'site', modelsURL]);
+    assert.equal(document.querySelector('p').innerHTML, 'The road site model, <code>site.json</code>, is the road\'s ' +
+        'start and end points, and its planning instructions. This road is new - it has no road site model yet.');
+    const members = [...document.querySelectorAll('#roadie-site [data-member]')].map((control) => [control.dataset.member, control.value]);
+    assert.deepEqual(members.filter(([, value]) => value !== ''), [['units', 'feet']]);
+    assert.equal(document.querySelector('#roadie-site em'), null);
+    assert.deepEqual([...document.querySelectorAll('#roadie-site details')].map((details) => details.open), [false, false]);
+    assert.equal(document.getElementById('roadie-plan-model').options.length, 1);
+
+    // The road isn't planned until its road site is saved
+    const start = document.getElementById('roadie-plan-start');
+    const siteStatus = document.getElementById('roadie-site-status');
+    const planStatus = document.getElementById('roadie-plan-status');
+    const log = document.getElementById('roadie-plan-log');
+    fire(browser, start, 'click');
+    await runPlan(browser);
+    assert.equal(siteStatus.innerHTML, '<strong>Error:</strong> Required member "title" missing');
+    assert.deepEqual([log.textContent, planStatus.innerHTML], ['error: The road site isn\'t saved\n', 'The road isn\'t planned.']);
+    assert.deepEqual(browser.puts, []);
+
+    // The back end doesn't save the road site
+    const values = [['title', 'Hill'], ['start.latitude', '46.1'], ['start.longitude', '-119.2'], ['end.latitude', '46.1']];
+    for (const [member, value] of values) {
+        setMember(browser, member, value);
+    }
+    const longitude = document.querySelector('[data-member="end.longitude"]');
+    fire(browser, longitude, 'paste', {'clipboardData': {'getData': () => '46.2, -119.1'}});
+    fire(browser, start, 'paste', {'clipboardData': {'getData': () => '46.2, -119.1'}});
+    fire(browser, document.querySelector('[data-member="end.latitude"]'), 'paste', {'clipboardData': {'getData': () => '-119.1'}});
+    assert.equal(longitude.value, '');
+    longitude.value = '-119.1';
+    for (const [response, message] of [[403, 'Could not save the road site (status 403)'], [null, 'Could not save the road site']]) {
+        browser.files['PUT site'] = response;
+        fire(browser, start, 'click');
+        await runPlan(browser);
+        assert.equal(siteStatus.innerHTML, `<strong>Error:</strong> ${message}`);
+        assert.equal(log.textContent, 'error: The road site isn\'t saved\n');
+    }
+    delete browser.files['PUT site'];
+
+    // The road site is saved, and the plan fails - its report is its error
+    for (const logText of ['error: no road within the 11% grade limit\n', 'error: Failed to fetch\n']) {
+        fire(browser, start, 'click');
+        await runPlan(browser);
+        assert.equal(siteStatus.innerHTML, 'The road site is saved.');
+        assert.deepEqual([log.textContent, planStatus.innerHTML], [logText, 'The road isn\'t planned.']);
+        assert.equal(start.disabled, false);
+    }
+    assert.equal(document.getElementById('roadie-plan-view').innerHTML, 'The road isn\'t planned yet.');
+    assert.deepEqual(JSON.parse(browser.puts[2][1]), {
+        'title': 'Hill', 'units': 'feet', 'start': {'latitude': 46.1, 'longitude': -119.2}, 'end': {'latitude': 46.1, 'longitude': -119.1}
+    });
+});
+
+
+test('the road page, a file that isn\'t a road site model', async (context) => {
+    // The road's file isn't a JSON object - the road site is new, and saving it replaces the file
+    for (const text of ['<html>', 'null', '[1]', '"hill"']) {
+        const browser = fakeBrowser(context, {'files': {'getRoad': roadText, 'site': text}});
+        await startRoadApp(browser);
+        assert.equal(browser.document.querySelector('p strong').textContent, 'The file isn\'t a road site model - saving the road ' +
+            'site replaces it.');
+        assert.equal(browser.document.querySelector('[data-member="units"]').value, 'feet');
     }
 });
 
 
-test('the home page, left before its roads are listed', async (context) => {
-    let answer;
-    const files = {...fixtureFiles, 'getRoads': new Promise((resolve) => {
-        answer = resolve;
-    })};
-    const browser = fakeBrowser(context, {files, storage});
-    await startApp(browser);
-    browser.window.location.hash = '#var.vFile=\'plans%2Ffixture.json\'';
-    await flush();
-    assert.equal(browser.document.title, 'Fixture Plan');
-    answer(JSON.stringify({'roads': [{'name': 'ridge', 'plan': 'ridge.json'}]}));
-    await flush();
-    assert.equal(browser.document.getElementById('roads'), null);
+test('the road page, a road that can\'t be loaded', async (context) => {
+    // The application's planning tools, or its back end, don't answer
+    for (const [siteText, importPlan] of [
+        ['{}', () => Promise.reject(new Error('Failed to fetch dynamically imported module'))],
+        [null, () => Promise.resolve({siteTypes, validateSite})]
+    ]) {
+        const browser = fakeBrowser(context, {'files': {'getRoad': roadText, 'site': siteText}});
+        const app = new RoadieApp(browser.window);
+        app.importPlan = importPlan;
+        app.start();
+        await flush();
+        assert.equal(browser.main.innerHTML, '<h1>Roadie</h1>\n' +
+            '<p><strong>Error:</strong> The road can\'t be loaded - the Roadie application\'s planning tools, or its back end, ' +
+            'didn\'t answer.</p>');
+    }
+});
+
+
+test('the road page, left while its road is loaded', async (context) => {
+    // The page is left before the back end or Ollama answers, or before the road's site model is read - the page isn't drawn
+    for (const pending of ['getRoad', modelsURL, 'site']) {
+        let answer;
+        const files = {...fixtureFiles, 'getRoad': roadText, 'site': '{}', [pending]: new Promise((resolve) => {
+            answer = resolve;
+        })};
+        const browser = fakeBrowser(context, {files, storage});
+        await startRoadApp(browser);
+        assert.equal(browser.main.innerHTML, pending === 'getRoad' ? '' : '<h1>Roadie</h1><p class="roadie-loading">Loading the road…</p>');
+        browser.window.location.hash = '#var.vFile=\'plans%2Ffixture.json\'';
+        await flush();
+        assert.equal(browser.document.title, 'Fixture Plan');
+        answer(pending === 'getRoad' ? roadText : '{}');
+        await flush();
+        assert.equal(browser.document.title, 'Fixture Plan');
+        assert.equal(browser.document.getElementById('roadie-site'), null);
+    }
+});
+
+
+test('the road page, left while its road is saved or planned', async (context) => {
+    // The page is left while its road site is saved, or while its road is planned - the plan goes on, but the page doesn't
+    const hooks = {};
+    const pending = () => new Promise((resolve) => {
+        hooks.finish = resolve;
+    });
+    const planRoad = (window, road, {progress, status}) => {
+        Object.assign(hooks, {progress, status});
+        return pending();
+    };
+    for (const isSave of [true, false]) {
+        const files = {...fixtureFiles, 'getRoad': roadText, 'site': JSON.stringify(siteModel)};
+        if (isSave) {
+            files['PUT site'] = pending();
+        }
+        const browser = fakeBrowser(context, {files, storage});
+        await startRoadApp(browser, planRoad);
+        fire(browser, browser.document.getElementById(isSave ? 'roadie-site-save' : 'roadie-plan-start'), 'click');
+        await runPlan(browser);
+        browser.window.location.hash = '#var.vFile=\'plans%2Ffixture.json\'';
+        await flush();
+        assert.equal(browser.document.title, 'Fixture Plan');
+        const html = browser.main.innerHTML;
+        if (isSave) {
+            hooks.finish(200);
+        } else {
+            assert.equal(hooks.status('Engineering the options'), null);
+            hooks.progress(['Option "New Road"']);
+            hooks.finish({'code': 0, 'lines': ['Wrote hill.json']});
+        }
+        await flush();
+        assert.equal(browser.main.innerHTML, html);
+        assert.equal(browser.document.getElementById('roadie-plan-log'), null);
+    }
+});
+
+
+test('the planning tools', async (context) => {
+    // The application's planning tools are the project's - the road site's model, and a road's plan in a browser
+    const browser = fakeBrowser(context);
+    const tools = await new RoadieApp(browser.window).importPlan();
+    assert.equal(typeof tools.planRoad, 'function');
+    assert.equal(tools.siteTypes, siteTypes);
+    assert.equal(tools.validateSite, validateSite);
+});
+
+
+test('the home page without a back end', async (context) => {
+    // The back end doesn't answer with a road, or there's no back end - the page is the home page
+    for (const response of ['{"site": "site.json"}', '{"site": "site.json", "plan": 5}', 'null', '<html>', null, undefined]) {
+        const browser = fakeBrowser(context, {'files': {'getRoad': response}});
+        await startApp(browser);
+        assert.deepEqual(browser.fetches, ['getRoad']);
+        assert.equal(browser.main.innerHTML, homeHtml());
+    }
 });
 
 
@@ -249,10 +564,14 @@ test('the home page, left before its recent local plans are listed', async (cont
     await startApp(browser);
     await selectFiles(browser, [localFile(browser, 'plan.json', fixtureText)]);
 
-    // Navigate from the home page to the documentation before the database answers
+    // Navigate from the home page to the documentation before the database answers - the home page is drawn when the
+    // page's back end doesn't answer with a road
     browser = fakeBrowser(context, {indexedDB});
     const {document, main, window} = browser;
     const started = startApp(browser);
+    while (main.innerHTML === '') {
+        await Promise.resolve();
+    }
     assert.equal(main.innerHTML, homeHtml());
     window.location.hash = '#var.vDoc=true';
     fire(browser, window, 'hashchange');
@@ -490,7 +809,7 @@ test('a page left while its plan loads', async (context) => {
     await flush();
     assert.equal(document.title, 'Fixture Plan');
     assert.deepEqual(headings(browser), directHeadings);
-    assert.deepEqual(browser.fetches, ['plans/fixture.json', 'getRoads']);
+    assert.deepEqual(browser.fetches, ['plans/fixture.json', 'getRoad']);
 });
 
 
@@ -526,7 +845,7 @@ test('opening a local plan', async (context) => {
     assert.deepEqual(indexedDB.records('files'), [{'name': 'plan.json', 'type': 'application/json', 'blob': planFile, 'time': 1500}]);
     assert.equal(indexedDB.records('files')[0].blob, planFile);
     assert.deepEqual(indexedDB.requests, [['files', 'readonly', 'getAll', null], ['files', 'readwrite', 'put', 'plan.json']]);
-    assert.deepEqual(browser.fetches, ['getRoads']);
+    assert.deepEqual(browser.fetches, ['getRoad']);
 
     // The report's links are the local plan's
     assert.equal(main.querySelector('table a').getAttribute('href'), "#var.vFile='local%3Aplan.json'&var.vOption=1");
@@ -619,7 +938,7 @@ test('opening a local plan, then its source map image', async (context) => {
     await flush();
     await dropFiles(browser, [localFile(browser, 'other.png', 'PNG', 'image/png')]);
     assert.equal(document.title, 'Fixture Plan');
-    assert.deepEqual(browser.fetches, ['getRoads', 'plans/fixture.json']);
+    assert.deepEqual(browser.fetches, ['getRoad', 'plans/fixture.json']);
 });
 
 

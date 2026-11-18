@@ -55,6 +55,23 @@ test('fetchJson, failed requests are tried again', async () => {
     assert.deepEqual(await fetchJson(state.fetch, state.sleep, 'https://example.com/a'), [1]);
     assert.deepEqual([state.urls.length, state.sleeps], [2, [1000]]);
 
+    // A service's error is a failed request, too - the product service's is a message, and the feature services' has one
+    state = fetcher([{'error': 'Expecting value: line 1 column 1 (char 0)', 'showToast': true}, {'error': {'code': 500}}, null]);
+    assert.equal(await fetchJson(state.fetch, state.sleep, 'https://example.com/a'), null);
+    assert.deepEqual([state.urls.length, state.sleeps], [3, [1000, 2000]]);
+    for (const [error, message] of [
+        ['Expecting value: line 1 column 1 (char 0)', 'Expecting value: line 1 column 1 (char 0)'],
+        [{'code': 500, 'message': 'Error performing query operation'}, 'Error performing query operation'],
+        [{'code': 500}, '{"code":500}']
+    ]) {
+        state = fetcher([{error}, {error}]);
+        await assert.rejects(
+            fetchJson(state.fetch, state.sleep, 'https://example.com/a', 2),
+            {'message': `Could not fetch "https://example.com/a" (the service's error: "${message}")`}
+        );
+        assert.deepEqual([state.urls.length, state.sleeps], [2, [1000]]);
+    }
+
     // After four tries, the request fails - with its last failure
     state = fetcher(['fetch failed', 500, 502, 504, {'total': 3}]);
     await assert.rejects(

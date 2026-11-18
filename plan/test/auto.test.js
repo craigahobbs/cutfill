@@ -32,7 +32,9 @@ function siteRoad(site, name, points) {
 // Run the "auto" command for a site - "answers" are the model's: its notes answer ("notes"), and each place's answers
 // by its name (an area's answer and its closer answer, or a point's answer). Returns the tools' input and output
 // functions object (testIo), with the command's exit "code", the model's "asks", and the written "plan".
-async function runAuto(site, {args = [], answers = {}, roads = [], elevation = valley, mapImage = pngBytes, files = {}, io = null} = {}) {
+async function runAuto(
+    site, {args = [], answers = {}, roads = [], elevation = valley, mapImage = pngBytes, files = {}, io = null, progress = false} = {}
+) {
     const autoIo = io ?? testIo({
         'files': {...files, 'site.json': JSON.stringify(site)},
         'images': {[item.downloadURL]: testImage({elevation})},
@@ -43,6 +45,16 @@ async function runAuto(site, {args = [], answers = {}, roads = [], elevation = v
     autoIo.output.length = 0;
     autoIo.asks = [];
     autoIo.renderPng = () => pngBytes;
+
+    // The plan's progress - its report's lines as they're made, and its statuses
+    autoIo.progressLines = [];
+    autoIo.statuses = [];
+    if (progress) {
+        autoIo.progress = (lines) => {
+            autoIo.progressLines.push(...lines);
+        };
+        autoIo.status = (text) => Promise.resolve(autoIo.statuses.push(text));
+    }
     autoIo.ask = ({model, question, images, schema}) => {
         const place = question.match(/must (?:avoid|pass through): "([^"]*)"/)?.[1] ?? null;
         const key = place === null ? 'notes' : `${place}${question.includes('first estimate') ? ':closer' : ''}`;
@@ -155,8 +167,23 @@ test('auto, the notes', async () => {
         'Stall': {'found': true, 'x': 340, 'y': 90, 'why': 'A stall.'}
     };
     const roads = [siteRoad(site, 'Mill Rd', [[100, 500], [500, 500]])];
-    const io = await runAuto(site, {'args': ['--model', 'test-model'], answers, roads});
+    const io = await runAuto(site, {'args': ['--model', 'test-model'], answers, roads, 'progress': true});
     assert.equal(io.code, 0);
+
+    // The plan's progress - its report's lines, as they're made, and what it's doing
+    assert.equal(`${io.progressLines.join('\n')}\n`, io.output.join(''));
+    assert.deepEqual(io.statuses, [
+        'Creating the site - its terrain, streams, roads, and map are the USGS\'s',
+        'Asking the model "test-model" what the site\'s notes ask for',
+        ...['Barn', 'Pond', 'Shed', 'Well', 'Yard', 'Field', 'Ford', 'Cliff', 'Stall'].map(
+            (name) => `Asking the model "test-model" where "${name}" is on the map`
+        ),
+        'Engineering the standard options',
+        'Engineering the standard options',
+        'Engineering the option "Via Ford"',
+        'Engineering the option "Via Stall"',
+        'Writing the descriptions and the plots'
+    ]);
     assert.equal(io.output.join(''), `\
 ${siteLines.replace('0 roads', '1 road').replace('"Start"', '"Gate"').replace('"End"', '"House"').
         replace('ground 1703.6', 'ground 1703.6, nearest road "Mill Rd" 350 meters away').

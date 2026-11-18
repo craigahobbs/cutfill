@@ -155,7 +155,8 @@ export class FakeIndexedDB {
 
 // Create the application's browser - a jsdom window of the application's page with a fake clock (and the time functions
 // mocked to it), local storage items ("storage"), IndexedDB, fetch (of the "files" - a URL's text or a promise of it, or
-// null for a network error; any other URL isn't found), intersection observer, canvas 2D context, object URLs, and
+// null for a network error; any other URL isn't found. A file that's written is one of the "puts" - a "PUT <URL>" file is
+// its response's status, or a promise of it, or null), intersection observer, canvas 2D context, object URLs, and
 // scrolling. The browser object has the window and what the fakes record.
 export function fakeBrowser(testContext, {hash = '', search = '', files = {}, storage = {}, indexedDB = new FakeIndexedDB()} = {}) {
     const logs = [];
@@ -170,12 +171,14 @@ export function fakeBrowser(testContext, {hash = '', search = '', files = {}, st
         'document': window.document,
         'main': window.document.getElementById('roadie'),
         'clock': new FakeClock(),
+        files,
         'fetches': [],
+        'puts': [],
         'observers': [],
         'objectURLs': [],
         'scrolls': []
     };
-    const {clock, fetches, observers, objectURLs, scrolls} = browser;
+    const {clock, fetches, puts, observers, objectURLs, scrolls} = browser;
 
     // The time
     testContext.mock.method(performance, 'now', () => clock.time);
@@ -190,11 +193,18 @@ export function fakeBrowser(testContext, {hash = '', search = '', files = {}, st
         window.localStorage.setItem(key, value);
     }
     window.indexedDB = indexedDB;
-    window.fetch = (url) => {
-        fetches.push(url);
-        const text = files[url];
+    window.fetch = (url, {method = 'GET', body = null} = {}) => {
+        const key = method === 'GET' ? url : `${method} ${url}`;
+        const text = files[key];
+        if (method === 'GET') {
+            fetches.push(url);
+        } else {
+            puts.push([url, body]);
+        }
         if (text === null) {
             return Promise.reject(new TypeError('Failed to fetch'));
+        } else if (method === 'PUT') {
+            return Promise.resolve(text).then((status = 200) => ({'ok': status === 200, status}));
         }
         return Promise.resolve(text !== undefined ? {'ok': true, 'text': () => Promise.resolve(text)} : {'ok': false});
     };

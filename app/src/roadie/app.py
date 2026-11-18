@@ -16,69 +16,72 @@ ROADIE_TYPES = schema_markdown.parse_schema_markdown('''\
 group "Roadie"
 
 
-# Get the directory's roads - its road site models and its road plan models
-action getRoads
+# Get the application's road - its road site model's file and its road plan model's file
+action getRoad
     urls
         GET
 
     output
-        # The directory's path
-        string directory
+        # The road site model's file name
+        string site
 
-        # The directory's roads, in name order
-        Road[] roads
+        # The road plan model's file name
+        string plan
 
+        # True if the road site model's file exists - a new road's doesn't, until it's saved
+        bool hasSite
 
-# A road - its road site model, its road plan model, or both
-struct Road
-
-    # The road's name - its files' name
-    string name
-
-    # The road site model's file ("<name>.site.json"), if the road has one
-    optional string site
-
-    # The road plan model's file ("<name>.json"), if the road has one
-    optional string plan
+        # True if the road plan model's file exists - the road is planned
+        bool hasPlan
 ''')
 
 
-# The files' URLs - a file of the directory, or of a directory within it (a plan's work directory, say)
+# The road site model's file's URL
+SITE_URL = '/site'
+
+
+# The plan's files' URLs - a file of the plan's directory, or of the plan's work directory
 FILE_URLS = ('/files/{name1}', '/files/{name1}/{name2}', '/files/{name1}/{name2}/{name3}')
 
 
-# The files that may be written - their extensions
-WRITE_EXTENSIONS = ('.f32', '.json', '.md', '.png', '.txt')
+# The plan's work directory's files that may be written - their extensions
+WRITE_EXTENSIONS = ('.json', '.md', '.png', '.txt')
 
 
-# The text of a road plan model's file that a JSON file of a directory is a road plan model by - a plan's
-# topography is its largest member, and it's within the start of the file
-PLAN_TEXT = '"topography"'
-PLAN_TEXT_LENGTH = 65536
+# The files of the plan's directory that may be read - a plan's map image is one - by their extensions
+IMAGE_EXTENSIONS = ('.gif', '.jpeg', '.jpg', '.pdf', '.png', '.svg', '.webp')
 
 
-# The Roadie back-end API WSGI application class - "root" is the directory of the roads, and "static_dir" is the
-# front end's directory (the package's, by default)
+# The Roadie back-end API WSGI application class - "site" is the road site model's file, "plan" is the road plan
+# model's file (neither need exist), and "static_dir" is the front end's directory (the package's, by default)
 class Roadie(chisel.Application):
-    __slots__ = ('root',)
+    __slots__ = ('site', 'plan', 'root')
 
 
-    def __init__(self, root, static_dir=None):
+    def __init__(self, site, plan, static_dir=None):
         super().__init__()
-        self.root = os.path.realpath(root)
+        self.site = os.path.realpath(site)
+        self.plan = os.path.realpath(plan)
+        self.root = os.path.dirname(self.plan)
 
         # Back-end documentation
         self.add_requests(chisel.create_doc_requests())
 
         # Back-end APIs
-        self.add_request(get_roads)
+        self.add_request(get_road)
+        self.add_request(chisel.Request(
+            get_site, name='getSite', urls=[('GET', SITE_URL)], doc_group='Roadie', doc='Get the road site model\'s file'
+        ))
+        self.add_request(chisel.Request(
+            put_site, name='putSite', urls=[('PUT', SITE_URL)], doc_group='Roadie', doc='Write the road site model\'s file'
+        ))
         self.add_request(chisel.Request(
             get_file, name='getFile', urls=[('GET', url) for url in FILE_URLS], doc_group='Roadie',
-            doc='Get a file of the directory'
+            doc='Get a file of the plan - the road plan model\'s file, an image of its directory, or a file of its work directory'
         ))
         self.add_request(chisel.Request(
             put_file, name='putFile', urls=[('PUT', url) for url in FILE_URLS], doc_group='Roadie',
-            doc='Write a file of the directory - a road site model, a road plan model, or a file of a plan\'s work directory'
+            doc='Write a file of the plan - the road plan model\'s file, its map image, or a file of its work directory'
         ))
 
         # Front-end statics - the application's page is the root URL's
@@ -100,61 +103,57 @@ def _static_files(directory, prefix):
                 yield f'{prefix}{entry.name}', entry.read_bytes()
 
 
-@chisel.action(name='getRoads', types=ROADIE_TYPES)
-def get_roads(ctx, unused_req):
-    root = ctx.app.root
-    roads = {}
-    for file_name in sorted(os.listdir(root)):
-        path = os.path.join(root, file_name)
-        if file_name.startswith('.') or not os.path.isfile(path):
-            continue
-        if file_name.endswith('.site.json'):
-            roads.setdefault(file_name[:-len('.site.json')], {})['site'] = file_name
-        elif file_name.endswith('.json'):
-            with open(path, 'r', encoding='utf-8', errors='replace') as plan_file:
-                if PLAN_TEXT in plan_file.read(PLAN_TEXT_LENGTH):
-                    roads.setdefault(file_name[:-len('.json')], {})['plan'] = file_name
+@chisel.action(name='getRoad', types=ROADIE_TYPES)
+def get_road(ctx, unused_req):
+    app = ctx.app
     return {
-        'directory': root,
-        'roads': [{'name': name, **roads[name]} for name in sorted(roads)]
+        'site': os.path.basename(app.site),
+        'plan': os.path.basename(app.plan),
+        'hasSite': os.path.isfile(app.site),
+        'hasPlan': os.path.isfile(app.plan)
     }
 
 
-# Get a file request's path - None if it isn't a file's path within the directory
-def _file_path(ctx):
+# Get a plan's file request's path - None if it isn't a path of the plan's files. They're the road plan model's file,
+# its work directory's files ("<plan>.work/"), and - to read - its directory's images, or - to write - its map image
+# ("<plan>.png").
+def _file_path(ctx, write):
     names = [ctx.url_args[key] for key in ('name1', 'name2', 'name3') if key in ctx.url_args]
     if any(name.startswith('.') or '/' in name or '\\' in name or '\0' in name for name in names):
         return None
+    plan_name = os.path.basename(ctx.app.plan)
+    plan_base, _ = os.path.splitext(plan_name)
+    extension = os.path.splitext(names[-1])[1].lower()
+    if len(names) > 1:
+        is_file = names[0] == f'{plan_base}.work' and (not write or extension in WRITE_EXTENSIONS)
+    elif write:
+        is_file = names[0] in (plan_name, f'{plan_base}.png')
+    else:
+        is_file = names[0] == plan_name or extension in IMAGE_EXTENSIONS
     path = os.path.realpath(os.path.join(ctx.app.root, *names))
-    if not path.startswith(ctx.app.root + os.sep):
+    if not is_file or not path.startswith(ctx.app.root + os.sep):
         return None
     return path
 
 
-def get_file(environ, unused_start_response):
-    ctx = environ[chisel.Context.ENVIRON_CTX]
-    path = _file_path(ctx)
+# Respond with a file's content - the files change, so they aren't cached
+def _read_file(ctx, path):
     if path is None or not os.path.isfile(path):
         return ctx.response_text(HTTPStatus.NOT_FOUND)
     with open(path, 'rb') as file_:
         content = file_.read()
-
-    # A directory's files change - they aren't cached
     content_type = chisel.StaticRequest.EXT_TO_CONTENT_TYPE.get(os.path.splitext(path)[1].lower(), 'application/octet-stream')
     return ctx.response(HTTPStatus.OK, content_type, [content], headers=[('Cache-Control', 'no-store')])
 
 
-def put_file(environ, unused_start_response):
-    ctx = environ[chisel.Context.ENVIRON_CTX]
+# Write a request's content to a file
+def _write_file(ctx, environ, path):
 
     # A file is written only by the application's own page - not by another site's page
     origin = environ.get('HTTP_ORIGIN')
     if origin is not None and origin != f'{environ["wsgi.url_scheme"]}://{environ.get("HTTP_HOST")}':
         return ctx.response_text(HTTPStatus.FORBIDDEN)
-
-    # The file's path
-    path = _file_path(ctx)
-    if path is None or os.path.splitext(path)[1].lower() not in WRITE_EXTENSIONS or os.path.isdir(path):
+    if path is None or os.path.isdir(path):
         return ctx.response_text(HTTPStatus.BAD_REQUEST)
 
     # Write the file - to another file first, so a failed write leaves the file as it was
@@ -165,3 +164,23 @@ def put_file(environ, unused_start_response):
         file_.write(content)
     os.replace(temp_path, path)
     return ctx.response_text(HTTPStatus.OK)
+
+
+def get_site(environ, unused_start_response):
+    ctx = environ[chisel.Context.ENVIRON_CTX]
+    return _read_file(ctx, ctx.app.site)
+
+
+def put_site(environ, unused_start_response):
+    ctx = environ[chisel.Context.ENVIRON_CTX]
+    return _write_file(ctx, environ, ctx.app.site)
+
+
+def get_file(environ, unused_start_response):
+    ctx = environ[chisel.Context.ENVIRON_CTX]
+    return _read_file(ctx, _file_path(ctx, False))
+
+
+def put_file(environ, unused_start_response):
+    ctx = environ[chisel.Context.ENVIRON_CTX]
+    return _write_file(ctx, environ, _file_path(ctx, True))

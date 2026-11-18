@@ -20,9 +20,21 @@ GHPAGES_SRC :=
 ESLINT_ARGS := --rule '{"id-length": ["error", {"exceptions": ["x", "y", "z"]}]}' bin/ lib/ test/ tools/
 
 
+# The viewer's modules are covered - the planning tools' modules that the application imports (to plan a road in the
+# browser) are covered by the planning tools' tests
+C8_ARGS := --100 --all --src lib/ --src test/
+
+
 # Include javascript-build
 USE_JSDOM := 1
 include Makefile.base
+
+
+# A unit test imports the planning tools' modules - the application's plan page plans a road with them - so the
+# tests need the tools' packages
+_test _cover: ../plan/build/npm.build
+../plan/build/npm.build:
+	@$(MAKE) --no-print-directory -C ../plan build/npm.build
 
 
 # The local web server port

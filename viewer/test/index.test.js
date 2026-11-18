@@ -15,6 +15,14 @@ test('index.html preloads every application module', () => {
     const packageModules = ['parser.js', 'schema.js', 'schemaUtil.js', 'typeModel.js'].map((name) => `schema-markdown/lib/${name}`);
     assert.deepEqual(preloads, [...modules, ...packageModules]);
 
-    // The import map resolves the schema-markdown package
-    assert.match(html, /<script type="importmap">\s*\{"imports": \{"schema-markdown\/": "\.\/schema-markdown\/"\}\}\s*<\/script>/);
+    // The import map resolves the schema-markdown package - and, in the Roadie application, the planning tools' Node
+    // modules and their imports of the viewer's modules ("../../viewer/lib/")
+    const [, importMap] = html.match(/<script type="importmap">([^<]*)<\/script>/);
+    assert.deepEqual(JSON.parse(importMap), {'imports': {
+        'schema-markdown/': './schema-markdown/',
+        'node:buffer': './plan/lib/browser/buffer.js',
+        'node:util': './plan/lib/browser/util.js',
+        'node:zlib': './plan/lib/browser/zlib.js',
+        './viewer/lib/': './lib/'
+    }});
 });

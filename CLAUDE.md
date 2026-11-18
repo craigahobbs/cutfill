@@ -11,19 +11,24 @@ The project is three subprojects, and the top-level makefile delegates to them:
   `make doc`. See [viewer/CLAUDE.md](viewer/CLAUDE.md).
 - **The planning tools** (`plan/`, JavaScript, [javascript-build](https://github.com/craigahobbs/javascript-build#readme)) -
   `plan/bin/plan.js` (`plan/lib/`) and the planning instructions, [plan/PLAN.md](plan/PLAN.md). A road is planned
-  from a road site model (`<plan>.site.json` - the road's start and end points, as latitudes and longitudes, and its
+  from a road site model (a JSON file - the road's start and end points, as latitudes and longitudes, and its
   planning notes): the tools build the site from the USGS 3D Elevation Program's 1 meter lidar terrain, and engineer
   its road options. **Planning a road** (`make plan`, `make update`) follows PLAN.md - when asked to plan or update
   a road, follow PLAN.md exactly. The planning session runs in `plan/`. See [plan/README.md](plan/README.md).
 
 - **The application** (`app/`, Python, [python-build](https://github.com/craigahobbs/python-build#readme)) - the
-  `roadie` package: its command line (`roadie [DIRECTORY]`, `make app DIR=<directory>`) serves the front end (the
-  viewer's application, which `make -C app static` stages in the package) and a
-  [chisel](https://github.com/craigahobbs/chisel#readme) back end (`app/src/roadie/app.py`) that lists a directory's
-  roads (`getRoads`) and reads and writes its files (`/files/...`). The back end is thin - the engineering is the
-  planning tools' JavaScript, which runs in the browser. See [app/README.md](app/README.md).
+  `roadie` package: its command line (`roadie SITE PLAN`, `make app FILE=<site.json> OUTPUT=<plan.json>`) serves the
+  front end (the viewer's application, which `make -C app static` stages in the package) and a
+  [chisel](https://github.com/craigahobbs/chisel#readme) back end (`app/src/roadie/app.py`) for one road: its files'
+  names (`getRoad`), its road site model's file (`/site`), and its plan's files (`/files/...`). The back end is thin -
+  the engineering is the planning tools' JavaScript, which runs in the browser: the viewer's road page (the
+  application's home page) edits the road's site model (a form made from the model's types - `viewer/lib/form.js`)
+  and plans the road with
+  `plan/lib/browser/io.js` (`planRoad` - the `auto` command, with a browser's input and output functions).
+  The tools' modules stay importable in a browser: a Node module they import needs a stand-in in
+  `plan/lib/browser/` and the page's import map (`viewer/index.html`). See [app/README.md](app/README.md).
 
-`example/` is the example - a road site model (`example.site.json`) and the plan a planning session made from it
+`example/` is the example - a road site model (`site.json`) and the plan a planning session made from it
 (`example.json`, and its USGS topographic map image). `index.html` renders this project's README on its web site.
 
 ## Commands
@@ -32,12 +37,12 @@ The project is three subprojects, and the top-level makefile delegates to them:
 make commit                       # the pre-commit gate: the subprojects' tests and lint (at 100% coverage)
 make test [TEST=name]             # the viewer's unit tests (TEST runs one) and the planning tools' unit tests
 make lint                         # ESLint (the viewer and the planning tools)
-make plan FILE=<plan>.site.json   # plan a road (a Claude Code session)
-make auto FILE=<plan>.site.json [OLLAMA_MODEL=<model>]   # plan a road by procedure - the tools, and a model's answers
+make plan FILE=<site.json> OUTPUT=<plan.json>   # plan a road (a Claude Code session)
+make auto FILE=<site.json> OUTPUT=<plan.json> [OLLAMA_MODEL=<model>]   # plan a road by procedure - the tools, and a model's answers
 make evaluate FILE=<plan.json> [DETAIL=1]   # a plan's analysis and cost from the command line
 make doc                          # the road plan model documentation
 make run FILE=<plan.json>         # view a plan in the browser
-make app [DIR=<directory>]        # serve the application - the viewer, with a directory's roads
+make app FILE=<site.json> OUTPUT=<plan.json>   # serve the application - edit a road's site, plan it, and view it
 make site                         # stage the web site (build/gh-pages/): README, example, and viewer/
 ```
 
@@ -72,6 +77,9 @@ Run `make` in `viewer/` or `plan/` for a subproject's own targets (e.g.
   tool's, not an action.
 - The road site model is defined and validated with Schema Markdown, like the road plan model (`plan/lib/site.js`).
 - Keep the README's viewer section and key table in sync with the viewer's controls.
+- A road site model and a road plan model are each a JSON file of any name - there's no file naming convention
+  (no `.site.json`), so the commands that plan a road name both: `FILE` is the road site model, and `OUTPUT` is the
+  road plan model to write.
 - `FILE` and `OUTPUT` paths are relative to the directory `make` runs in - the top-level makefile makes them absolute
   before delegating.
 - Road plan files and their work directories (`*.work/`, git-ignored) usually live outside the repo - they're user

@@ -4,6 +4,7 @@ import {AdaptiveSmoothing, reportBudget} from './smoothing.js';
 import {argsLink, argsParse, argsURL, parseHash} from './args.js';
 import {buildReport, planImageURL} from './report.js';
 import {escapeHtml, round} from './format.js';
+import {formHtml, formPastePoint, formValue} from './form.js';
 import {hitTitle, opCell, paintOps} from './canvas.js';
 import {Explorer} from './explore.js';
 import {PlanData} from './planData.js';
@@ -90,8 +91,14 @@ const cellCostKey = 'roadieCellCost';
 const localPrefix = 'local:';
 
 
-// The URL prefix of the back end's files - its directory's road plans, and their map images
+// The URL prefix of the back end's plan's files - the road plan model's, and its map image's - and the URL of its road
+// site model's file
 const filesPrefix = 'files/';
+const siteURL = 'site';
+
+
+// The Ollama host - its models answer the questions of a road's plan
+const ollamaHost = 'http://127.0.0.1:11434';
 
 
 // Compute the report view width for the window width, in pixels
@@ -153,6 +160,10 @@ export class RoadieApp {
         this.routeCount = 0;
         this.printing = false;
         this.debug = window.location.search.includes('debug');
+
+        // Import the planning tools - the road site's model, and a road's plan in the browser. The tools are the Roadie
+        // application's (the project's web site doesn't have them), and its page's import map has their Node modules.
+        this.importPlan = () => import('../../plan/lib/browser/io.js');
     }
 
 
@@ -342,10 +353,18 @@ export class RoadieApp {
             return;
         }
 
-        // No plan file? Show the home page.
+        // No plan file? Show the road's page (the Roadie application's), or the home page.
         const file = args.file ?? null;
         if (file === null) {
-            this.renderHome(globals);
+            const road = await this.road();
+            if (routeCount !== this.routeCount) {
+                return;
+            }
+            if (road !== null) {
+                this.setPage(new RoadPage(this, globals, road));
+            } else {
+                this.renderHome(globals);
+            }
             return;
         }
 
@@ -424,15 +443,28 @@ export class RoadieApp {
     }
 
 
-    // Get the back end's roads - its directory's road sites and road plans (the Roadie application's "getRoads"). A
-    // page that isn't the back end's - the project's web site's, say - has none.
-    async roadList() {
+    // Get Ollama's models' names - none, if Ollama doesn't answer
+    async modelList() {
         try {
-            const response = await this.window.fetch('getRoads');
-            const {roads} = JSON.parse(await response.text());
-            return roads.filter(({name}) => typeof name === 'string');
+            const response = await this.window.fetch(`${ollamaHost}/api/tags`);
+            const {models} = JSON.parse(await response.text());
+            return models.map(({name}) => name).filter((name) => typeof name === 'string');
         } catch {
             return [];
+        }
+    }
+
+
+    // Get the back end's road - its road site model's file name ("site"), its road plan model's ("plan"), and whether
+    // the road is planned ("hasPlan") - the Roadie application's "getRoad". A page that isn't the back end's - the
+    // project's web site's, say - has none: its road is null.
+    async road() {
+        try {
+            const response = await this.window.fetch('getRoad');
+            const road = JSON.parse(await response.text());
+            return typeof road.site === 'string' && typeof road.plan === 'string' ? road : null;
+        } catch {
+            return null;
         }
     }
 
@@ -452,7 +484,6 @@ export class RoadieApp {
             '<p>Select or drop a road plan model JSON file - and its source map image, to show it in the report. ' +
                 'The files stay on your computer.</p>',
             '</div>',
-            '<div id="roadie-roads"></div>',
             '<div id="roadie-recent"></div>',
             ...(example !== null ? [`<p>${argsLink(globals, 'View the example road plan', {'file': example})}</p>`] : []),
             '<p>To view a road plan model URL, use the "file" argument: <code>#var.vFile=\'plan.json\'</code></p>',
@@ -461,16 +492,6 @@ export class RoadieApp {
         ];
         this.render('Roadie', html.join('\n'));
         this.document.getElementById('roadie-file').addEventListener('change', (event) => this.openFiles(event.target.files));
-        this.roadList().then((roads) => {
-            const element = this.document.getElementById('roadie-roads');
-            if (element !== null && roads.length > 0) {
-                const items = roads.map(({name, plan = null}) => (
-                    `<li><p>${plan !== null ? argsLink(globals, name, {'file': `${filesPrefix}${plan}`}) :
-                        `${escapeHtml(name)} - a road site that isn't planned yet`}</p></li>`
-                ));
-                element.innerHTML = `<h2 id="roads">Roads</h2><ul>${items.join('')}</ul>`;
-            }
-        });
         this.localFileList().then((recent) => {
             const recentPlans = recent.filter(({name}) => name.toLowerCase().endsWith('.json'));
             const element = this.document.getElementById('roadie-recent');
@@ -479,6 +500,180 @@ export class RoadieApp {
                 element.innerHTML = `<h2 id="recent-plans">Recent Plans</h2><ul>${items.join('')}</ul>`;
             }
         });
+    }
+}
+
+
+// The road page - the road of the Roadie application's back end: its road site model is edited, and the road is planned
+// from it in the browser, by the planning tools. The road's site model is the back end's file, and so are the plan's
+// files. "road" is the back end's road - its files' names.
+class RoadPage {
+    constructor(app, globals, road) {
+        this.app = app;
+        this.globals = globals;
+        this.road = road;
+        this.closed = false;
+        this.tools = null;
+        this.site = null;
+        this.planFile = `${filesPrefix}${app.window.encodeURIComponent(road.plan)}`;
+        this.title = `Roadie: ${road.site}`;
+        app.render(this.title, '<h1>Roadie</h1><p class="roadie-loading">Loading the road…</p>');
+        this.load();
+    }
+
+
+    close() {
+        this.closed = true;
+    }
+
+
+    // Load the road - the planning tools, the road's site model, and Ollama's models
+    async load() {
+        const {app, globals, road, title} = this;
+        const {document, window} = app;
+        let response;
+        let models;
+        try {
+            [this.tools, response, models] = await Promise.all([app.importPlan(), window.fetch(siteURL), app.modelList()]);
+        } catch {
+            response = null;
+        }
+        if (this.closed) {
+            return;
+        }
+        if (response === null) {
+            app.render(title, '<h1>Roadie</h1>\n<p><strong>Error:</strong> The road can\'t be loaded - the Roadie application\'s ' +
+                'planning tools, or its back end, didn\'t answer.</p>');
+            return;
+        }
+
+        // The road's site model - a new road has none, and a file that isn't a JSON object is replaced
+        let site = null;
+        if (response.ok) {
+            try {
+                site = JSON.parse(await response.text());
+            } catch {
+                // The file isn't JSON
+            }
+            site = site !== null && typeof site === 'object' && !Array.isArray(site) ? site : null;
+        }
+        const siteNote = !response.ok ? ' This road is new - it has no road site model yet.' :
+            (site === null ? ' <strong>The file isn\'t a road site model - saving the road site replaces it.</strong>' : '');
+        this.site = site ?? {'units': 'feet'};
+        if (this.closed) {
+            return;
+        }
+
+        // The road site's form, and the road's plan
+        const modelOptions = models.map((model) => `<option>${escapeHtml(model)}</option>`);
+        const planLink = argsLink(globals, 'View the road plan', {'file': this.planFile});
+        app.render(title, [
+            '<h1>Roadie</h1>',
+            '<h2 id="site">The road site</h2>',
+            `<p>The road site model, <code>${escapeHtml(road.site)}</code>, is the road's start and end points, and its ` +
+                `planning instructions.${siteNote}</p>`,
+            '<p>A member with a * is required, and each line of the notes is a note. To set a point, copy it from a map and ' +
+                'paste it into its latitude ("46.16755, -119.16811" is a latitude and its longitude).</p>',
+            `<form id="roadie-site" class="roadie-form">\n${formHtml(this.tools.siteTypes, 'RoadSite', this.site)}\n</form>`,
+            '<p><button type="button" id="roadie-site-save" class="roadie-button">Save the road site</button></p>',
+            '<p id="roadie-site-status"></p>',
+            '<h2 id="plan">The road plan</h2>',
+            `<p>The road plan model, <code>${escapeHtml(road.plan)}</code>, is made from the road site model by the planning ` +
+                'tools - they build the site from the USGS\'s lidar terrain, engineer its options, and describe them. A model ' +
+                'is asked only what the site\'s notes ask for, and where the places they name are on the site\'s map.</p>',
+            `<p id="roadie-plan-view">${road.hasPlan === true ? planLink : 'The road isn\'t planned yet.'}</p>`,
+            '<p><label>Model: <select id="roadie-plan-model"><option value="">No model - the site\'s notes aren\'t read</option>' +
+                `${modelOptions.join('')}</select></label></p>`,
+            '<p><button type="button" id="roadie-plan-start" class="roadie-button">Save the road site, and plan the road</button></p>',
+            '<p id="roadie-plan-status" class="roadie-loading"></p>',
+            '<pre id="roadie-plan-log"></pre>',
+            '<hr>',
+            `<p>${argsLink(globals, 'Road plan model documentation', {'doc': true})}</p>`
+        ].join('\n'));
+        const form = document.getElementById('roadie-site');
+        form.addEventListener('paste', (event) => formPastePoint(form, event));
+        form.addEventListener('submit', (event) => event.preventDefault());
+        document.getElementById('roadie-site-save').addEventListener('click', () => this.save());
+        document.getElementById('roadie-plan-start').addEventListener('click', () => this.plan());
+    }
+
+
+    // Save the road site - the form's value, if it's a valid road site model. Returns true if it's saved.
+    async save() {
+        const {app, tools} = this;
+        const {document, window} = app;
+        const statusElement = document.getElementById('roadie-site-status');
+        const site = formValue(tools.siteTypes, 'RoadSite', document.getElementById('roadie-site'), this.site);
+        let {error = null} = tools.validateSite(site);
+        if (error === null) {
+            try {
+                const response = await window.fetch(siteURL, {'method': 'PUT', 'body': `${JSON.stringify(site, null, 4)}\n`});
+                error = response.ok ? null : `Could not save the road site (status ${response.status})`;
+            } catch {
+                error = 'Could not save the road site';
+            }
+        }
+        if (error === null) {
+            this.site = site;
+        }
+        if (!this.closed) {
+            statusElement.innerHTML = error === null ? 'The road site is saved.' : `<strong>Error:</strong> ${escapeHtml(error)}`;
+        }
+        return error === null;
+    }
+
+
+    // Plan the road, from its saved road site - the plan's report is shown as it's made
+    async plan() {
+        const {app, road, tools} = this;
+        const {document, window} = app;
+        const controls = ['roadie-plan-start', 'roadie-plan-model', 'roadie-site-save'].map((id) => document.getElementById(id));
+        const [, select] = controls;
+        const statusElement = document.getElementById('roadie-plan-status');
+        const log = document.getElementById('roadie-plan-log');
+        for (const control of controls) {
+            control.disabled = true;
+        }
+        statusElement.innerHTML = '';
+        log.textContent = '';
+
+        // The plan's status is drawn before the plan goes on
+        const status = (text) => {
+            if (this.closed) {
+                return null;
+            }
+            statusElement.innerHTML = `${escapeHtml(text)}…`;
+            return new Promise((resolve) => {
+                window.setTimeout(resolve, 0);
+            });
+        };
+        const progress = (lines) => {
+            if (!this.closed) {
+                log.textContent += `${lines.join('\n')}\n`;
+            }
+        };
+        let result = {'code': 1, 'lines': ['error: The road site isn\'t saved']};
+        if (await this.save()) {
+            try {
+                const model = select.value !== '' ? select.value : null;
+                result = await tools.planRoad(window, {'site': road.site, 'plan': road.plan}, {model, ollamaHost, progress, status});
+            } catch ({message}) {
+                result = {'code': 1, 'lines': [`error: ${message}`]};
+            }
+        }
+        if (this.closed) {
+            return;
+        }
+
+        // The plan is made, or it failed - its report is the log
+        log.textContent = `${result.lines.join('\n')}\n`;
+        statusElement.innerHTML = result.code === 0 ? 'The road is planned.' : 'The road isn\'t planned.';
+        if (result.code === 0) {
+            document.getElementById('roadie-plan-view').innerHTML = argsLink(this.globals, 'View the road plan', {'file': this.planFile});
+        }
+        for (const control of controls) {
+            control.disabled = false;
+        }
     }
 }
 
