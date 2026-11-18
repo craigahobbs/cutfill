@@ -2,9 +2,9 @@
 
 The Roadie viewer is a web application that views Roadie road plan models - the plan's options, plan view, profile, 3D
 views, cost breakdown, design warnings, and structures, and a full-window 3D explorer. It also holds the road plan
-model itself (its schema, validation, and the earthwork and cost analysis) and the command line behind the project's
-`make evaluate` and `make doc`. See the project's [README](#url=../README.md) for what the viewer shows, how to view a
-plan, and the 3D explorer's keys.
+model itself (its schema, validation, and the earthwork and cost analysis) and a command line that prints a plan's
+analysis and the model documentation. See the project's [README](#url=../README.md) for what the viewer shows, how to view
+a plan, and the 3D explorer's keys.
 
 The viewer is plain JavaScript modules (`index.html`, `app.css`, and `lib/`), served as they are - there's no bundler.
 It replaced the project's original viewer, a MarkdownUp application written in BareScript, for performance: its report
@@ -32,6 +32,7 @@ The source is ES modules in `lib/`, loaded by `index.html`:
 | `app.js` | The application - routing on the URL hash, plan loading (URLs and local files), the local files, and the loaded plan |
 | `homePage.js`, `form.js` | The home page - open or make a plan, and view, edit, run, save, and close the loaded plan - the plan config editor page, and its form (made from the model's types) |
 | `viewPages.js` | The report page and the 3D explorer page |
+| `mapPage.js` | The map page - the loaded plan's site, to draw its config's marks on (its areas to avoid, roads, and places to pass through) |
 | `model.js` | The road plan model and the road site model (a plan's config) - their schema and validation, a plan file's text, and the earthwork, structure, and cost analysis |
 | `report.js`, `tables.js`, `planView.js`, `view3d.js` | The report, its cost and structures tables, the plan and profile views, and the 3D views |
 | `explore.js`, `canvas.js` | The 3D explorer, and the 3D views' drawing operations - painted on a canvas, or converted to SVG markup |
