@@ -151,11 +151,14 @@ function isPlanSite(plan, site) {
 // promise - the page's are drawn before the plan goes on). "files" are the files of the page's earlier plans - their
 // terrain cache and the model's saved answers are kept, so a plan made again doesn't fetch its terrain or ask the
 // model again. Returns the plan's exit code, its report's lines, and the road plan model - its map image is a data
-// URL (null if the plan failed). "signal" is an abort signal that stops the plan (or null) - the plan stops when its
-// current step's computation is done, its result is "stopped", and its work is thrown away: the files are the files
-// before it.
+// URL (null if the plan failed). A plan of the same site keeps its site's data (its terrain, streams, roads, and map),
+// unless "fetch" is true - the USGS's services are asked for it again. "signal" is an abort signal that stops the plan
+// (or null) - the plan stops when its current step's computation is done, its result is "stopped", and its work is
+// thrown away: the files are the files before it.
 export async function planRoad(window, {site, plan = null}, options = {}) {
-    const {model = null, ollamaHost = ollamaHostDefault, progress = null, status = null, files = new Map(), signal = null} = options;
+    const {
+        model = null, ollamaHost = ollamaHostDefault, progress = null, status = null, files = new Map(), signal = null, fetch = false
+    } = options;
 
     // The plan's files - the plan config, the plan, and the files kept from the page's earlier plans
     for (const path of [...files.keys()]) {
@@ -180,7 +183,8 @@ export async function planRoad(window, {site, plan = null}, options = {}) {
     };
     let result;
     try {
-        result = await autoCommand([sitePath, planPath, ...(model !== null ? ['--model', model] : [])], io);
+        const args = [...(model !== null ? ['--model', model] : []), ...(fetch ? ['--fetch'] : [])];
+        result = await autoCommand([sitePath, planPath, ...args], io);
     } catch ({message}) {
         result = {'code': 1, 'lines': [`error: ${message}`]};
     }

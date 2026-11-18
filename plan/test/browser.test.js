@@ -350,12 +350,21 @@ test('planRoad', async () => {
     const elevationFetches = window.fetches.filter((url) => url.endsWith('.tif')).length;
     assert.ok(elevationFetches > 0);
 
-    // The plan made again - its terrain and the model's answers are the files', and its option is kept
+    // The plan made again - its site's data is kept (the USGS isn't asked for it), and the model's answers are the
+    // files'
+    const fetchCount = window.fetches.length;
     const again = await planRoad(window, {site, plan}, {'model': 'test-model', files});
     assert.equal(again.code, 0);
+    assert.ok(again.lines[0].startsWith('Site: the plan\'s site data is kept'));
+    assert.deepEqual(window.fetches.slice(fetchCount), []);
+    assert.equal(again.plan.image, plan.image);
+
+    // The plan made again, with its site's data fetched again - the terrain is the files'
+    const fetched = await planRoad(window, {site, plan}, {'model': 'test-model', files, 'fetch': true});
+    assert.equal(fetched.code, 0);
     assert.equal(window.fetches.filter((url) => url.endsWith('/api/chat')).length, 3);
     assert.equal(window.fetches.filter((url) => url.endsWith('.tif')).length, elevationFetches);
-    assert.ok(again.lines.includes('Kept the plan\'s other features: 1 stream, 1 exclusion area'));
+    assert.ok(fetched.lines.includes('Kept the plan\'s other features: 1 stream, 1 exclusion area'));
 
     // A plan of another site isn't made again - it's a new plan
     const movedEnd = {...site, 'end': {...site.end, 'latitude': site.end.latitude + 0.0001}};

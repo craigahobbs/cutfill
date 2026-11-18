@@ -205,9 +205,11 @@ and criteria), and what can be done with it:
 - **Run Plan** - choose an Ollama model to read its notes (or none - the last model chosen is the
   default). The planning tools run in the page: the run's steps are shown as it goes, with its time,
   and its result and report when it's done. **Stop** stops it, when its current step's work is done -
-  and its work is thrown away. The road options it engineers are
-  the plan's - a plan that's run again keeps its other options and features. **Clear Road Options**
-  clears them: the plan is its config again.
+  and its work is thrown away. The road options it engineers are the plan's - a plan that's run
+  again keeps its other options and features, and its site's data (its terrain, streams, roads, and
+  map), so the USGS isn't asked for it again - unless its points, units, margin, or spacing changed,
+  or "Fetch the site's data from the USGS again" is checked. **Clear Road Options** clears them - the
+  plan keeps its site's data.
 - **Save** the plan to its file - the file it was opened from, or saved to - or **Save As** another,
   to duplicate it (and run it with another config, say). A plan with road options keeps its config
   and its map image, so it's one file - and a plan without road options is its config's file.

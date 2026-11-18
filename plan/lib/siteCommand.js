@@ -15,12 +15,14 @@ import {validateSite} from './site.js';
 
 // The "site" command's usage text lines
 export const siteUsage = [
-    'usage: plan site <site.json> <plan.json>',
+    'usage: plan site <site.json> <plan.json> [--fetch]',
     '',
     '  Create a road plan model\'s site from a road site model - its topography, from the USGS 3D Elevation Program\'s',
     '  1 meter elevation models, its georeference, its start and end points, its streams, roads, and exclusion areas,',
     '  and its topographic map image ("<plan>.png"). An existing plan\'s options are kept, and the features that were',
-    '  added to it (the "feature" and "draws" commands\').'
+    '  added to it (the "feature" and "draws" commands\'). If the existing plan\'s site is the site - the same points,',
+    '  units, margin, and spacing - its site\'s data (its terrain, streams, roads, trails, and map) is kept, and the',
+    '  USGS\'s services aren\'t asked for it again, unless "--fetch" is given.'
 ];
 
 
@@ -35,10 +37,12 @@ const elevationDigits = {'feet': 1, 'meters': 2};
 // The "site" command - "io" is the tools' input and output functions. Returns the command's exit code and its
 // output text lines, or null if its arguments are invalid.
 export async function siteCommand(args, io) {
-    if (args.length !== 2 || args.some((arg) => arg.startsWith('-'))) {
+    const isFetch = args.includes('--fetch');
+    const positionals = args.filter((arg) => arg !== '--fetch');
+    if (positionals.length !== 2 || positionals.some((arg) => arg.startsWith('-'))) {
         return null;
     }
-    const [sitePath, planPath] = args;
+    const [sitePath, planPath] = positionals;
     const error = (lines) => ({'code': 1, 'lines': lines});
 
     // Load and validate the road site model
@@ -71,8 +75,13 @@ export async function siteCommand(args, io) {
         }
     }
 
-    // The topography - the site's elevation model tiles are cached in the plan's work directory - and the streams
+    // The plan's site data is kept, if its site is the site - unless it's fetched again
     const layout = siteLayout(site);
+    if (!isFetch && isPlanSite(plan, site)) {
+        return keepSite(io, planPath, plan, site, layout);
+    }
+
+    // The topography - the site's elevation model tiles are cached in the plan's work directory - and the streams
     const planBase = planPath.replace(/\.json$/i, '');
     const directory = `${planBase}.work/terrain`;
     const box = layoutBox(layout);
@@ -216,15 +225,59 @@ export async function siteCommand(args, io) {
     if (image !== null) {
         lines.push(`Topographic map image: ${imagePath}`);
     }
-    lines.push(...warnings);
-    const topo = planTopo(plan);
-    for (const [name, point] of [['start', start], ['end', end]]) {
-        const ground = planElevation(topo, point.x, point.y);
-        lines.push(`${name}: "${point.label}" (${point.x}, ${point.y}) at ${latLongText(layoutLatLong(layout, point.x, point.y))}, ` +
-            `ground ${ground.toFixed(1)}${nearestText(features, units, point.x, point.y)}`);
-    }
-    lines.push(`Wrote ${planPath}`);
+    lines.push(...warnings, ...pointLines(plan, layout), `Wrote ${planPath}`);
     return {'code': 0, lines};
+}
+
+
+// Report a plan's start and end points - their latitudes and longitudes, their ground elevations, and the features
+// nearest them
+function pointLines(plan, layout) {
+    const topo = planTopo(plan);
+    return [['start', plan.start], ['end', plan.end]].map(([name, point]) => {
+        const ground = planElevation(topo, point.x, point.y);
+        return `${name}: "${point.label}" (${point.x}, ${point.y}) at ${latLongText(layoutLatLong(layout, point.x, point.y))}, ` +
+            `ground ${ground.toFixed(1)}${nearestText(plan.topography.features, plan.units, point.x, point.y)}`;
+    });
+}
+
+
+// Is a plan's site the site - the same points, units, margin, and spacing? Its site's data is the site's, then.
+function isPlanSite(plan, site) {
+    const planSite = plan.site ?? null;
+    const isSamePoint = (point1, point2) => point1.latitude === point2.latitude && point1.longitude === point2.longitude;
+    return planSite !== null && 'topography' in plan && 'georeference' in plan && planSite.units === site.units &&
+        isSamePoint(planSite.start, site.start) && isSamePoint(planSite.end, site.end) && planSite.margin === site.margin &&
+        planSite.spacing === site.spacing;
+}
+
+
+// Keep a plan's site data - its terrain, streams, roads, trails, and map - for the site: its title, points' labels,
+// exclusion areas, criteria, and cost rates are the site's. Returns the command's result.
+function keepSite(io, planPath, plan, site, layout) {
+    // The site's exclusion areas replace the plan's site's
+    const exclusions = exclusionFeatures(layout, site);
+    const exclusionNames = new Set([...exclusionFeatures(layout, plan.site), ...exclusions].map(({name}) => name));
+    const features = (plan.topography.features ?? []).filter(({type, name}) => type !== 'exclusion' || !exclusionNames.has(name));
+    const keptPlan = orderPlan({
+        ...plan,
+        'title': site.title,
+        'topography': {...plan.topography, 'features': [...features, ...exclusions]},
+        'start': layout.start,
+        'end': layout.end,
+        ...('criteria' in site ? {'criteria': site.criteria} : {}),
+        ...('costRates' in site ? {'costRates': site.costRates} : {}),
+        'options': plan.options ?? [],
+        site
+    });
+    io.writeFile(planPath, planText(keptPlan));
+    return {'code': 0, 'lines': [
+        'Site: the plan\'s site data is kept - its terrain, streams, roads, trails, and map (its site has the same points, ' +
+            'units, margin, and spacing - fetch them again with --fetch)',
+        `Features: ${featureCount(exclusions, 'exclusion area')} from the site`,
+        ...pointLines(keptPlan, layout),
+        `Wrote ${planPath}`
+    ]};
 }
 
 

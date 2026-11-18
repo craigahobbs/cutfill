@@ -29,7 +29,7 @@ export const autoSteps = [
 
 // The "auto" command's usage text lines
 export const autoUsage = [
-    'usage: plan auto <site.json> <plan.json> [--model MODEL] [--fresh] [options]',
+    'usage: plan auto <site.json> <plan.json> [--model MODEL] [--fresh] [--fetch] [options]',
     '',
     '  Plan a road by procedure: create the plan\'s site, engineer its standard options (and add the unmapped draws they',
     '  cross, as streams), keep the best options, and set the descriptions - their facts. With a model (an Ollama model -',
@@ -42,6 +42,7 @@ export const autoUsage = [
     '  --model MODEL          the Ollama model to ask (default is none - the site\'s notes aren\'t read). The Ollama host',
     '                         is the environment\'s "OLLAMA_HOST" (default is "http://127.0.0.1:11434").',
     '  --fresh                ask the model again - don\'t use the saved answers',
+    '  --fetch                fetch the site\'s data from the USGS again - an existing plan\'s, if it\'s the site\'s, is kept',
     '  -w, --width WIDTH      the road width (default is the notes\', or 14 feet / 4.3 meters)',
     '  -s, --surface SURFACE  the road surface - native, gravel, asphalt, or concrete (default is the notes\', or gravel)'
 ];
@@ -51,6 +52,7 @@ export const autoUsage = [
 const commandOptions = {
     'model': {'type': 'string'},
     'fresh': {'type': 'boolean', 'default': false},
+    'fetch': {'type': 'boolean', 'default': false},
     'width': {'type': 'string', 'short': 'w'},
     'surface': {'type': 'string', 'short': 's'}
 };
@@ -150,7 +152,7 @@ export async function autoCommand(args, io) {
 
     // Create the plan's site
     await status('site', 'Creating the site - its terrain, streams, roads, and map are the USGS\'s');
-    const site = await siteCommand([sitePath, planPath], io);
+    const site = await siteCommand([sitePath, planPath, ...(values.fetch ? ['--fetch'] : [])], io);
     if (site.code !== 0) {
         return site;
     }

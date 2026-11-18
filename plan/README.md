@@ -36,7 +36,10 @@ they find each corridor's least-cost road, report its cost score, draft the desc
 log the commands that changed it (`<plan>.work/commands.txt`).
 
 A road site model (a plan config - a JSON file, of any name) is a road's start and end points, as latitudes and
-longitudes, and its planning instructions - the plan keeps it (its `site` member). `site` finds the USGS 3D Elevation Program's 1 meter elevation models of the site (lidar
+longitudes, and its planning instructions - the plan keeps it (its `site` member). Run on a plan of the same site
+(the same points, units, margin, and spacing), `site` keeps the plan's site data - its terrain, streams, roads,
+trails, and map - and only updates its title, labels, exclusion areas, criteria, and cost rates (`--fetch` fetches it
+again). Otherwise, `site` finds the USGS 3D Elevation Program's 1 meter elevation models of the site (lidar
 ground elevations), reads the site's part of them (it's cached in the plan's work directory,
 `<plan>.work/terrain/`), and grids them in the plan's coordinates - a transverse Mercator projection centered on
 the site. The newest survey's elevations are used, and an older survey's where the newer have none. The site's

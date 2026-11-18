@@ -7,7 +7,7 @@ project's [README](../README.md).
 
 ```sh
 make static              # stage the front end (the viewer and the planning tools) in the package (src/roadie/static/)
-make run [ARGS=...]      # run the application - "roadie [-p PORT] [-n] [-q]"
+make run [ARGS=...]      # run the application - "roadie [-p PORT] [-n] [-q]" (it logs the requests that fail)
 make commit              # the pre-commit gate: test, lint, and cover (100% required)
 ```
 
@@ -36,8 +36,8 @@ The members the form doesn't edit - the exclusion areas - are kept as they are. 
 The home page shows the loaded plan - its config - and its actions: view it (its road options' report), edit its
 config, run it (its steps - the planning tools' `autoSteps` - and its time are shown as it goes, and its result and
 report when it's done; it's stopped with an abort signal, when its current step's work is done, and its work is thrown away; the last
-model chosen is remembered), clear its road
-options, save it (to its file, or another - the browser's save dialog, or a download), and close it (the user is
+model chosen is remembered; a plan's site's data is kept, unless the site changed or it's fetched again), clear its
+road options (its site's data is kept), save it (to its file, or another - the browser's save dialog, or a download), and close it (the user is
 asked first, if it has changes that aren't saved). A plan with road options is one file: it keeps its config and its
 map image (a data URL). The recent files are listed - a file is opened, or removed (but for the loaded plan's road
 options' file).

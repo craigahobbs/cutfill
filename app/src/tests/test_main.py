@@ -1,4 +1,5 @@
 from io import StringIO
+import logging
 import unittest
 import unittest.mock
 
@@ -42,14 +43,21 @@ class TestMain(unittest.TestCase):
             application_wrap = serve_args[0]
             self.assertDictEqual(serve_kwargs, {'host': '127.0.0.1', 'port': 8080})
             self.assertEqual(stdout.getvalue(), 'roadie: Serving at http://127.0.0.1:8080/ ...\n')
+            self.assertEqual(logging.getLogger('waitress.queue').level, logging.ERROR)
 
-            # A request is logged
+            # A request that succeeds isn't logged
             statuses = []
             environ = {'REQUEST_METHOD': 'GET', 'PATH_INFO': '/doc/', 'QUERY_STRING': '', 'wsgi.url_scheme': 'http'}
             response = application_wrap(environ, lambda status, headers: statuses.append(status))
             self.assertListEqual(statuses, ['200 OK'])
             self.assertIn(b'<html', b''.join(response))
-            self.assertTrue(stdout.getvalue().endswith('roadie: 200 GET /doc/ \n'))
+            self.assertEqual(stdout.getvalue(), 'roadie: Serving at http://127.0.0.1:8080/ ...\n')
+
+            # A request that fails is logged
+            environ = {'REQUEST_METHOD': 'GET', 'PATH_INFO': '/unknown', 'QUERY_STRING': 'a=1', 'wsgi.url_scheme': 'http'}
+            application_wrap(environ, lambda status, headers: statuses.append(status))
+            self.assertListEqual(statuses, ['200 OK', '404 Not Found'])
+            self.assertEqual(stdout.getvalue(), 'roadie: Serving at http://127.0.0.1:8080/ ...\nroadie: 404 GET /unknown a=1\n')
             self.assertEqual(stderr.getvalue(), '')
 
 

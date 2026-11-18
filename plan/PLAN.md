@@ -30,7 +30,7 @@ given there, with its full path, so it runs from any directory; don't change dir
 
 | Command | Purpose |
 | --- | --- |
-| `plan.js site SITE.json PLAN.json` | Create the plan's site: its topography grid (USGS lidar terrain), start and end points, streams, roads, trails, exclusion areas, and topographic map image |
+| `plan.js site SITE.json PLAN.json` | Create the plan's site: its topography grid (USGS lidar terrain), start and end points, streams, roads, trails, exclusion areas, and topographic map image. Run again on a plan of the same site (the same points, units, margin, and spacing), it keeps the plan's site data - `--fetch` fetches it again |
 | `plan.js plot PLAN.json OUT.png [--box X1,Y1,X2,Y2] [--map]` | Plot the plan's terrain (shaded, with contours), features, and options, with the plan's coordinates along its sides - with `--box`, a part of the plan, for a closer look, and with `--map`, the plan's topographic map (its buildings and labels) in place of its terrain, with the coordinates' grid |
 | `plan.js locate PLAN.json [--xy] POINT...` | Convert latitudes and longitudes (`LATITUDE,LONGITUDE`) to the plan's coordinates - or, with `--xy`, the plan's coordinates (`X,Y`) to latitudes and longitudes - with the ground elevation there, and the nearest road and stream |
 | `plan.js feature PLAN.json TYPE [-n NAME] X,Y X,Y...` | Add a topographic feature - a `stream`, `road`, or `trail` line, or a `rock` or `exclusion` area polygon - or, with `--remove NAME`, remove the features of a name |

@@ -1,6 +1,7 @@
 import {
     analyzeOption, centerlineAt, culvertDiameter, defaultRates, elevation, featureIndexes, gradient, metersPerFoot, orderPlan, outsideBox,
-    planCriteria, planRates, planText, planTopo, pointInPolygons, sampleAt, segmentIntersect, unitLength, unitScale, validatePlan
+    planCriteria, planRates, planText, planTopo, pointInPolygons, sampleAt, segmentIntersect, unitLength, unitScale, validatePlan,
+    validateSitePlan
 } from '../lib/model.js';
 import {planComplex, planExistingRoad, planSimple} from './planFixtures.js';
 import assert from 'node:assert/strict';
@@ -995,4 +996,19 @@ test('planText', () => {
 
     // The plan isn't changed
     assert.deepEqual(plan.topography.elevations, [[100, 101.5, 103], [99.25, 100, 101]]);
+});
+
+
+test('validateSitePlan', () => {
+    // A site's plan has no road options yet - or no options member - and a plan with road options is a plan
+    const plan = fixturePlan();
+    const {options, ...site} = plan;
+    assert.deepEqual(validateSitePlan(site), {'plan': {...validatePlan(plan).plan, 'options': []}});
+    assert.deepEqual(validateSitePlan({...site, 'options': []}).plan.options, []);
+    assert.deepEqual(validateSitePlan(plan).plan.options.length, options.length);
+
+    // A site's plan that isn't valid, and one that isn't an object
+    assert.equal(validateSitePlan({...site, 'units': 'yards'}).error,
+        'Invalid value "yards" (type "string") for member "units", expected type "Units"');
+    assert.equal(validateSitePlan(null).error, 'Invalid value null (type "object"), expected type "RoadPlan"');
 });

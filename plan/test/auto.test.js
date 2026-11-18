@@ -391,7 +391,7 @@ test('auto, failures', async () => {
 test('auto, usage', async () => {
     const usage = `${autoUsage.join('\n')}\n`;
     assert.ok(autoUsage.every((line) => line.length <= 120));
-    assert.equal(autoUsage[0], 'usage: plan auto <site.json> <plan.json> [--model MODEL] [--fresh] [options]');
+    assert.equal(autoUsage[0], 'usage: plan auto <site.json> <plan.json> [--model MODEL] [--fresh] [--fetch] [options]');
     for (const args of [
         [], ['site.json'], ['site.json', 'road.json', 'other.json'], ['site.json', 'road.json', '--model', ''],
         ['site.json', 'road.json', '-w', 'wide'], ['site.json', 'road.json', '-w', '0'], ['site.json', 'road.json', '-s', 'mud'],

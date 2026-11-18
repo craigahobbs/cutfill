@@ -73,10 +73,12 @@ async function flushUntil(condition) {
 }
 
 
-// View the loaded plan - its home page's "View Plan" button
+// View the loaded plan - its home page's "View Plan" link, which opens in a new tab (here, the same tab)
 async function viewLoaded(browser) {
-    await flushUntil(() => browser.document.getElementById('roadie-view') !== null);
-    fire(browser, browser.document.getElementById('roadie-view'), 'click');
+    await flushUntil(() => browser.document.querySelector('a#roadie-view') !== null);
+    const link = browser.document.getElementById('roadie-view');
+    assert.deepEqual([link.target, link.rel], ['_blank', 'noopener']);
+    browser.window.location.hash = link.getAttribute('href');
     await flushUntil(() => browser.document.title !== 'Roadie');
 }
 
@@ -196,11 +198,12 @@ async function startToolsApp(browser, results = []) {
     app.importPlan = () => Promise.resolve({
         'autoSteps': toolSteps,
         'siteDefaults': (site) => ({'margin': Math.round(site.end.latitude * 1000), 'spacing': 5}),
-        'planRoad': async (window, {site, plan}, {model, ollamaHost, status, files, signal}) => {
+        'planRoad': async (window, {site, plan}, {model, ollamaHost, status, files, signal, fetch}) => {
             calls.push({
                 'isWindow': window === browser.window, site, plan, model, ollamaHost, 'isFiles': files === app.runFiles,
                 'isSignal': signal instanceof browser.window.AbortSignal
             });
+            Object.defineProperty(calls.at(-1), 'fetch', {'value': fetch});
             Object.defineProperty(calls.at(-1), 'signal', {'value': signal});
             await status('Creating the <site>', 'site');
             await status('Engineering the options', 'options');
@@ -232,7 +235,7 @@ function loadedElement(browser) {
 
 // The loaded plan's actions' text - and whether they're disabled
 function loadedActions(browser) {
-    return [...loadedElement(browser).querySelectorAll('.roadie-actions button')].map((element) => (
+    return [...loadedElement(browser).querySelectorAll('.roadie-actions a, .roadie-actions button')].map((element) => (
         `${element.textContent}${element.disabled ? ' (disabled)' : ''}`
     ));
 }
@@ -586,7 +589,7 @@ test('editing a plan\'s config, and running it again', async (context) => {
     click(browser, 'roadie-edit');
     await flush();
     assert.equal(window.location.hash, "#var.vEdit='loaded'");
-    assert.equal(document.title, 'Edit the Plan Config');
+    assert.equal(document.title, 'Edit Plan');
     assert.equal(document.querySelector('[data-member="title"]').value, 'Hill Road');
     document.querySelector('[data-member="notes"]').value = 'A paved road.';
     click(browser, 'roadie-edit-done');
@@ -611,23 +614,44 @@ test('editing a plan\'s config, and running it again', async (context) => {
 
 
 test('clearing a plan\'s road options, and closing it', async (context) => {
-    // Clear the road options - the plan is its plan config
-    const {browser, app} = await startRunApp(context);
+    // Clear the road options - the plan keeps its site's data, so a run doesn't fetch it again
+    const {browser, app, calls} = await startRunApp(context, {'results': [{'code': 0, 'lines': ['Wrote plan.json'], 'plan': sitePlan}]});
     const {document, window} = browser;
+    assert.equal(document.getElementById('roadie-run-fetch').checked, false);
     click(browser, 'roadie-clear');
-    await flush();
-    assert.deepEqual(app.loaded, {...loadedConfig, 'saved': false});
-    const noOptions = 'The plan has no road options yet - run the plan to engineer them.';
-    assert.ok(loadedElement(browser).textContent.includes(noOptions));
+    await flushUntil(() => document.getElementById('roadie-clear') === null);
+    assert.deepEqual(app.loaded, {...loadedConfig, 'file': 'hill.json', 'saved': false});
+    assert.ok(loadedElement(browser).textContent.includes('The plan has no road options - run the plan to engineer them. Its ' +
+        'site\'s data (its terrain, streams, roads, and map) is kept, so a run doesn\'t fetch it from the USGS again.'));
     assert.deepEqual(loadedActions(browser), ['View Plan (disabled)', 'Edit Plan', 'Save', 'Save As…', 'Close', 'Run Plan']);
     assert.equal(document.getElementById('roadie-run-progress').hidden, true);
+    const cleared = JSON.parse(await browser.indexedDB.records('files').find(({name}) => name === 'hill.json').blob.text());
+    assert.deepEqual([cleared.options, 'description' in cleared, cleared.topography.spacing], [[], false, sitePlan.topography.spacing]);
+
+    // Save it - its file is its site's data, without road options
+    const writes = [];
+    window.showSaveFilePicker = () => Promise.resolve(fakeHandle('hill.json', writes));
+    click(browser, 'roadie-save');
+    await flushUntil(() => writes.length === 2);
+    const savedPlan = JSON.parse(await writes[0][1].text());
+    assert.deepEqual([savedPlan.options, savedPlan.site, 'topography' in savedPlan], [[], siteConfig, true]);
+
+    // Run it - its site's data is the run's, and it's fetched again only if it's asked to be
+    await flushUntil(() => document.getElementById('roadie-run')?.disabled === false);
+    document.getElementById('roadie-run-fetch').checked = true;
+    click(browser, 'roadie-run');
+    assert.equal(document.getElementById('roadie-run-fetch').disabled, true);
+    await runTimeouts(browser);
+    await runDone(browser);
+    assert.deepEqual([calls[1].plan.options, calls[1].plan.topography.spacing, calls[1].fetch], [[], sitePlan.topography.spacing, true]);
+    assert.equal(calls[0].fetch, false);
 
     // Close it - its changes aren't saved, so the user is asked first
     const confirms = [];
     const answers = [false, true];
     window.confirm = (message) => confirms.push(message) && answers.shift();
     click(browser, 'roadie-close');
-    assert.deepEqual(app.loaded, {...loadedConfig, 'saved': false});
+    assert.deepEqual(app.loaded, {...loadedConfig, 'file': 'hill.json', 'saved': false});
     click(browser, 'roadie-close');
     await flush();
     assert.deepEqual(confirms, Array(2).fill('The plan has changes that aren\'t saved. Close it anyway?'));
@@ -743,11 +767,11 @@ test('opening a file that isn\'t a plan', async (context) => {
     // the loaded plan is kept
     const browser = loadedBrowser(context, loadedConfig);
     const {app} = await startToolsApp(browser);
-    const invalidPlan = JSON.stringify({...fixturePlan(), 'options': []});
+    const invalidPlan = JSON.stringify({...fixturePlan(), 'units': 'yards'});
     for (const [name, text, message] of [
         ['text.json', 'Not JSON', 'Could not load "text.json" - it isn\'t a JSON file'],
-        ['plan.json', invalidPlan, 'The road plan "plan.json" is invalid: Invalid value [] (type "object") for member "options", ' +
-            'expected type "array" [len > 0]'],
+        ['plan.json', invalidPlan, 'The road plan "plan.json" is invalid: Invalid value "yards" (type "string") for member ' +
+            '"units", expected type "Units"'],
         ['site.json', '{"title": "Hill"}', 'The plan config "site.json" is invalid: Required member "units" missing'],
         ['null.json', 'null', 'The plan config "null.json" is invalid: Invalid value null (type "object"), expected type "RoadSite"']
     ]) {
@@ -777,6 +801,15 @@ test('the loaded plan, kept in local storage', async (context) => {
         assert.equal(app.loaded, null, value);
         assert.equal(loadedElement(browser).innerHTML, '');
     }
+
+    // A loaded plan whose file isn't a plan - it's its plan config
+    const indexedDB = new FakeIndexedDB();
+    const opener = fakeBrowser(context, {indexedDB, storage});
+    await startToolsApp(opener);
+    await selectFiles(opener, [localFile(opener, 'bad.json', JSON.stringify({...fixturePlan(), 'units': 'yards'}))]);
+    const badBrowser = loadedBrowser(context, {...loadedConfig, 'file': 'bad.json'}, {indexedDB});
+    await startToolsApp(badBrowser);
+    assert.ok(loadedElement(badBrowser).textContent.includes('The plan has no road options yet - run the plan to engineer them.'));
 
     // A loaded plan whose road options are gone from the database - it's its plan config, or there's none
     const loaded = {'name': 'gone.json', 'file': 'gone.json', 'site': siteConfig, 'changed': false, 'saved': true};
@@ -962,8 +995,8 @@ test('the plan config editor', async (context) => {
     // There's no loaded plan config to edit
     const empty = fakeBrowser(context, {storage, 'hash': "#var.vEdit='loaded'"});
     await startToolsApp(empty);
-    assert.equal(empty.document.title, 'Edit the Plan Config');
-    assert.equal(empty.main.innerHTML, '<h1>Edit the Plan Config</h1>\n<p>There\'s no loaded plan config to edit.</p>\n' +
+    assert.equal(empty.document.title, 'Edit Plan');
+    assert.equal(empty.main.innerHTML, '<h1>Edit Plan</h1>\n<p>There\'s no loaded plan config to edit.</p>\n' +
         '<p><a href="#var=">Back</a></p>');
 });
 

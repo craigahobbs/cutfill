@@ -11,14 +11,15 @@ const item = testItem('CO_New_2020', 'x47y443', '2022-02-10');
 const mapBytes = Uint8Array.from([137, 80, 78, 71]);
 
 
-// Run the "site" command for a site and the tools' input and output function arguments (testIo) - returns the
-// functions object, with the command's exit "code"
+// Run the "site" command for a site and the tools' input and output function arguments (testIo), and the command's
+// other arguments - returns the functions object, with the command's exit "code"
 async function runSite(
-    site, {files = {}, images = {[item.downloadURL]: testImage()}, pages = testPages({'items': [item]}), mapImage = mapBytes} = {},
+    site,
+    {files = {}, images = {[item.downloadURL]: testImage()}, pages = testPages({'items': [item]}), mapImage = mapBytes, args = []} = {},
     planPath = 'plans/road.json'
 ) {
     const io = testIo({'files': {...files, 'site.json': JSON.stringify(site)}, images, pages, mapImage});
-    io.code = await cliMain(['site', 'site.json', planPath], io);
+    io.code = await cliMain(['site', 'site.json', planPath, ...args], io);
     return io;
 }
 
@@ -395,6 +396,69 @@ test('site, an existing plan', async () => {
 });
 
 
+test('site, an existing plan of the same site', async () => {
+    // Plan the site, with an exclusion area, then add a feature and an option to the plan
+    const layout = siteLayout(coarseSite());
+    const area = (x, y) => [[x, y], [x + 20, y], [x + 20, y + 20]].map(([areaX, areaY]) => {
+        const [latitude, longitude] = layoutLatLong(layout, areaX, areaY);
+        return {latitude, longitude};
+    });
+    const first = await runSite(coarseSite({'exclusions': [{'name': 'Barn', 'points': area(50, 50)}, {'points': area(100, 100)}]}));
+    const plan = JSON.parse(first.files['plans/road.json']);
+    const pond = [{'x': 200, 'y': 200}, {'x': 220, 'y': 200}, {'x': 220, 'y': 220}];
+    plan.topography.features.push({'type': 'exclusion', 'name': 'Pond', 'points': pond});
+    plan.options = [{'name': 'Road', 'section': {'width': 4}, 'alignment': [{'x': 20, 'y': 20}, {'x': 318.87, 'y': 242.07}]}];
+    const files = {...first.files, 'plans/road.json': JSON.stringify(plan)};
+
+    // The same site, with another title, labels, criteria, and exclusion area - the plan's site data is kept, and
+    // the USGS isn't asked for it
+    const site = coarseSite({
+        'title': 'Same Site', 'start': {'latitude': 40, 'longitude': -105.28, 'label': 'Gate'}, 'criteria': {'maxGrade': 9},
+        'costRates': {'gravel': 20},
+        'exclusions': [{'name': 'Shed', 'points': area(150, 150)}]
+    });
+    const io = await runSite(site, {files});
+    assert.equal(io.code, 0);
+    assert.deepEqual(io.urls, []);
+    assert.deepEqual(io.opened, []);
+    assert.equal(io.output.join(''), `\
+Site: the plan's site data is kept - its terrain, streams, roads, trails, and map (its site has the same points, units, margin, \
+and spacing - fetch them again with --fetch)
+Features: 1 exclusion area from the site
+start: "Gate" (20, 20) at 40.00000, -105.28000, ground 1679.7
+end: "End" (318.87, 242.07) at 40.00200, -105.27650, ground 1720.7
+Wrote plans/road.json
+`);
+    const kept = JSON.parse(io.files['plans/road.json']);
+    assert.deepEqual([kept.title, kept.start.label, kept.criteria, kept.costRates, kept.site, kept.options], [
+        'Same Site', 'Gate', {'maxGrade': 9}, {'gravel': 20}, site, plan.options
+    ]);
+    assert.deepEqual(
+        [kept.georeference, kept.topography.elevations, kept.image], [plan.georeference, plan.topography.elevations, plan.image]
+    );
+
+    // The site's exclusion areas replace the plan's site's - the plan's other exclusion areas are kept
+    assert.deepEqual(kept.topography.features.map(({type, name}) => `${type} ${name}`), ['exclusion Pond', 'exclusion Shed']);
+
+    // A plan without options
+    delete plan.options;
+    const noOptions = await runSite(site, {'files': {...files, 'plans/road.json': JSON.stringify(plan)}});
+    assert.deepEqual(JSON.parse(noOptions.files['plans/road.json']).options, []);
+
+    // The site's data is fetched again
+    const fetched = await runSite(site, {files, 'args': ['--fetch']});
+    assert.equal(fetched.code, 0);
+    assert.equal(fetched.urls.length, 9);
+    assert.equal(fetched.output.join('').split('\n')[0], 'Grid: 8 x 7 at 50 meters spacing (350 x 300 meters)');
+
+    // Another margin, spacing, or units - the site's data is fetched
+    for (const members of [{'margin': 30}, {'spacing': 25}, {'units': 'feet', 'margin': 60, 'spacing': 150}]) {
+        const other = await runSite(coarseSite(members), {files});
+        assert.equal(other.urls.length, 9, JSON.stringify(members));
+    }
+});
+
+
 test('site, an existing plan of another site', async () => {
     const first = await runSite(coarseSite());
     const message = 'error: The road plan "plans/road.json" isn\'t a plan of this site - its georeference\'s center isn\'t the site\'s. ' +
@@ -466,12 +530,14 @@ test('site, a site without elevation models', async () => {
 
 test('site, usage', async () => {
     const usage = `\
-usage: plan site <site.json> <plan.json>
+usage: plan site <site.json> <plan.json> [--fetch]
 
   Create a road plan model's site from a road site model - its topography, from the USGS 3D Elevation Program's
   1 meter elevation models, its georeference, its start and end points, its streams, roads, and exclusion areas,
   and its topographic map image ("<plan>.png"). An existing plan's options are kept, and the features that were
-  added to it (the "feature" and "draws" commands').
+  added to it (the "feature" and "draws" commands'). If the existing plan's site is the site - the same points,
+  units, margin, and spacing - its site's data (its terrain, streams, roads, trails, and map) is kept, and the
+  USGS's services aren't asked for it again, unless "--fetch" is given.
 `;
     for (const args of [[], ['site.json'], ['site.json', 'road.json', 'extra'], ['-x', 'road.json'], ['site.json', '--plan']]) {
         const io = testIo();
