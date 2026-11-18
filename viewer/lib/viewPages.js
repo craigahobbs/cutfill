@@ -50,12 +50,18 @@ function paintCanvas(canvas, drawing, ratio, fixedHeight) {
 }
 
 
+// Find a mouse event's point in a canvas 3D drawing's coordinates - the canvas has a 1 pixel border
+function drawingPoint(canvas, drawing, event) {
+    const rect = canvas.getBoundingClientRect();
+    const scale = drawing.width / rect.width;
+    return [(event.clientX - rect.left - 1) * scale, (event.clientY - rect.top - 1) * scale];
+}
+
+
 // Show the title (tooltip) of a canvas 3D drawing's shape under the mouse
 function showCanvasTitle(canvas, drawing, event) {
     if (drawing !== null) {
-        const rect = canvas.getBoundingClientRect();
-        const scale = drawing.width / rect.width;
-        const title = hitTitle(drawing.ops, (event.clientX - rect.left - 1) * scale, (event.clientY - rect.top - 1) * scale);
+        const title = hitTitle(drawing.ops, ...drawingPoint(canvas, drawing, event));
         if ((canvas.title || null) !== title) {
             canvas.title = title ?? '';
         }
@@ -63,7 +69,8 @@ function showCanvasTitle(canvas, drawing, event) {
 }
 
 
-// The delay after the last key press before the 3D explorer draws its still view, in milliseconds
+// The delay after the 3D explorer's view stops changing before it draws its still view and puts the view in the URL, in
+// milliseconds
 const refineDelay = 250;
 
 
@@ -209,26 +216,88 @@ export class ReportPage {
 }
 
 
-// The 3D explorer page - drawn on a canvas, redrawn once per animation frame as the keys change the view. Smooth terrain
-// is drawn as finely as fits the moving view's frame time budget, then, once the keys stop, as finely as fits the still
-// view's budget (smoothing.js). The road segments' tooltips (the SVG drawing's titles) are found by hit-testing the
-// drawing operations.
+// The 3D explorer's controls, for its help - [input, action]
+const exploreHelp = [
+    ['Drag', 'move'],
+    ['Right-drag or Shift+drag', 'rotate and tilt'],
+    ['Wheel or pinch', 'zoom'],
+    ['Double-click', 'center there and zoom in (with Shift, out)'],
+    ['Arrow, +, and \u2212 keys', 'move and zoom'],
+    ['Esc', 'back to the report']
+];
+
+
+// The local storage key of whether the 3D explorer's help is hidden
+export const helpHiddenKey = 'roadieExploreHelpHidden';
+
+
+// The 3D explorer's zoom per pixel of a wheel's scrolling, and of a trackpad's pinch (a wheel event with the control key),
+// and a wheel's line, in pixels
+const wheelZoom = 0.002;
+const pinchZoom = 0.01;
+const wheelLine = 16;
+
+
+// The 3D explorer page - drawn on a canvas, redrawn once per animation frame as the mouse (or the keys, or the controls)
+// change the view. Smooth terrain is drawn as finely as fits the moving view's frame time budget, then, once the view
+// stops, as finely as fits the still view's budget (smoothing.js), and the view is put in the page's URL (so it's
+// reloaded, or linked). The road segments' tooltips (the SVG drawing's titles) are found by hit-testing the drawing
+// operations.
 export class ExplorePage {
     constructor(app, data, globals, args) {
         this.app = app;
         this.explorer = new Explorer(data, globals, args);
+        this.url = this.explorer.viewURL();
         this.frameId = null;
         this.refineId = null;
         this.drawing = null;
+        this.pointer = null;
         app.document.title = `${data.plan.title} - 3D`;
         app.document.body.classList.toggle('roadie-explore', true);
         app.window.scrollTo(0, 0);
+        const helpHidden = app.storageGet(helpHiddenKey) === true;
+        const helpItems = exploreHelp.map(([input, action]) => `<li><strong>${input}</strong> - ${action}</li>`);
         app.main.innerHTML = '<div class="roadie-explorer"><canvas role="img"></canvas>' +
-            `<a class="roadie-explorer-back" href="${escapeHtml(this.explorer.backURL())}">Back to the report</a></div>`;
-        this.canvas = app.main.querySelector('canvas');
+            `<a class="roadie-explorer-back" href="${escapeHtml(this.explorer.backURL())}">Back to the report</a>` +
+            '<div class="roadie-explorer-tools">' +
+            '<button type="button" data-command="in" title="Zoom in" aria-label="Zoom in">+</button>' +
+            '<button type="button" data-command="out" title="Zoom out" aria-label="Zoom out">&minus;</button>' +
+            '<button type="button" data-command="north" title="Face north">North</button>' +
+            '<button type="button" data-command="top" title="View from above">Top</button>' +
+            '<button type="button" data-command="reset" title="View the whole site">Reset</button>' +
+            '<label title="Vertical exaggeration">Exaggeration <input type="range" min="1" max="5" step="0.25"></label>' +
+            '<button type="button" data-command="help" title="Show or hide the controls" aria-label="Controls" ' +
+            `aria-controls="roadie-explorer-help" aria-expanded="${!helpHidden}">?</button></div>` +
+            `<ul id="roadie-explorer-help" class="roadie-explorer-help"${helpHidden ? ' hidden' : ''}>${helpItems.join('')}</ul></div>`;
+        this.root = app.main.firstElementChild;
+        this.canvas = this.root.querySelector('canvas');
         this.canvas.setAttribute('style', exploreStyle);
-        this.back = app.main.querySelector('a');
-        this.canvas.addEventListener('mousemove', (event) => showCanvasTitle(this.canvas, this.drawing, event));
+        this.back = this.root.querySelector('a');
+        this.exaggeration = this.root.querySelector('input');
+        this.help = this.root.querySelector('ul');
+        this.helpButton = this.root.querySelector('button[data-command="help"]');
+
+        // The mouse's (or pen's, or a finger's) drags, its wheel, and its double-clicks - and the controls
+        const {canvas} = this;
+        canvas.addEventListener('pointerdown', (event) => this.pointerDown(event));
+        canvas.addEventListener('pointermove', (event) => this.pointerMove(event));
+        canvas.addEventListener('pointerup', (event) => this.pointerUp(event));
+        canvas.addEventListener('pointercancel', (event) => this.pointerUp(event));
+        canvas.addEventListener('wheel', (event) => this.wheel(event), {'passive': false});
+        canvas.addEventListener('dblclick', (event) => {
+            const [x, y] = drawingPoint(canvas, this.drawing, event);
+            this.update(() => this.explorer.centerAt(x, y, event.shiftKey ? 0.5 : 2));
+        });
+        canvas.addEventListener('contextmenu', (event) => event.preventDefault());
+        this.root.querySelector('.roadie-explorer-tools').addEventListener('click', (event) => {
+            const button = event.target.closest('button');
+            if (button !== null) {
+                this.command(button.dataset.command);
+            }
+        });
+        this.exaggeration.addEventListener('input', () => {
+            this.update(() => this.explorer.setExaggeration(parseFloat(this.exaggeration.value)));
+        });
         this.draw(false);
     }
 
@@ -239,21 +308,97 @@ export class ExplorePage {
     }
 
 
+    // Change the view - "change" changes the explorer's view (for the window's size) and returns true if it changed
+    update(change) {
+        this.explorer.updateView(...this.size());
+        if (change()) {
+            this.scheduleDraw();
+        }
+    }
+
+
+    // A pointer is down - the main button drags the view, and the right button (or the main button with shift or
+    // control) rotates and tilts it. Another pointer's drag (a second finger's) is ignored.
+    pointerDown(event) {
+        const {pointer} = this;
+        if ((pointer !== null && pointer.id !== event.pointerId) || (event.button !== 0 && event.button !== 2)) {
+            return;
+        }
+        const orbit = event.button === 2 || event.shiftKey || event.ctrlKey;
+        this.pointer = {'id': event.pointerId, 'start': drawingPoint(this.canvas, this.drawing, event)};
+        this.canvas.setPointerCapture?.(event.pointerId);
+        this.canvas.title = '';
+        this.root.classList.add('roadie-explorer-dragging');
+        this.explorer.updateView(...this.size());
+        this.explorer.dragStart(orbit ? 'orbit' : 'move');
+    }
+
+
+    // A pointer moved - a drag changes the view, and otherwise the mouse shows the road's tooltips. A drag whose buttons
+    // are up (its pointer up was missed) is ended.
+    pointerMove(event) {
+        const {pointer} = this;
+        if (pointer === null) {
+            showCanvasTitle(this.canvas, this.drawing, event);
+        } else if (event.pointerId === pointer.id) {
+            if (event.buttons === 0) {
+                this.pointerUp(event);
+            } else {
+                const [x, y] = drawingPoint(this.canvas, this.drawing, event);
+                this.update(() => this.explorer.dragMove(x - pointer.start[0], y - pointer.start[1]));
+            }
+        }
+    }
+
+
+    pointerUp(event) {
+        if (this.pointer?.id === event.pointerId) {
+            this.pointer = null;
+            this.root.classList.remove('roadie-explorer-dragging');
+            this.update(() => this.explorer.dragEnd());
+        }
+    }
+
+
+    // The wheel (or a trackpad's pinch) zooms around the mouse
+    wheel(event) {
+        event.preventDefault();
+        const [x, y] = drawingPoint(this.canvas, this.drawing, event);
+        const pixels = event.deltaY * (event.deltaMode === 1 ? wheelLine : 1);
+        const factor = Math.exp(-pixels * (event.ctrlKey ? pinchZoom : wheelZoom));
+        this.update(() => this.explorer.zoomAt(x, y, factor));
+    }
+
+
+    // A control's command - the help's shows or hides it, and the others change the view (see Explorer.command)
+    command(name) {
+        if (name === 'help') {
+            const {help} = this;
+            help.hidden = !help.hidden;
+            this.helpButton.setAttribute('aria-expanded', `${!help.hidden}`);
+            this.app.storageSet(helpHiddenKey, help.hidden);
+        } else {
+            this.update(() => this.explorer.command(name));
+        }
+    }
+
+
     // Draw the view - "still" draws the smooth terrain for the still view's frame time budget
     draw(still) {
         this.frameId = null;
-        const {app, canvas} = this;
+        const {app, canvas, explorer} = this;
         const {smoothing, window} = app;
         const timeBegin = performance.now();
         const [width, height] = this.size();
         const points = smoothing.points(still);
-        const drawing = this.explorer.render(width, height, {...smoothLimitsCanvas, points});
+        const drawing = explorer.render(width, height, {...smoothLimitsCanvas, points});
         this.drawing = drawing;
         const timeBuilt = performance.now();
         canvas.setAttribute('aria-label', drawing.label);
         paintCanvas(canvas, drawing, window.devicePixelRatio || 1, true);
         const timePainted = performance.now();
-        this.back.href = this.explorer.backURL();
+        this.back.href = explorer.backURL();
+        this.exaggeration.value = `${explorer.state.exaggeration}`;
         canvas.dataset.frame = `${parseInt(canvas.dataset.frame ?? '0', 10) + 1}`;
 
         // Measure the frame - through the next animation frame, so the canvas's rasterization counts
@@ -269,13 +414,19 @@ export class ExplorePage {
                 `${(timeBuilt - timeBegin).toFixed(1)} ms, painted in ${(timePainted - timeBuilt).toFixed(1)} ms, frame`, timeBegin);
         });
 
-        // Once the keys stop, draw the still view, if its larger budget draws the terrain more finely
+        // Once the view stops changing, put it in the URL (replacing it, so the browser's back button returns to the
+        // report), and draw the still view, if its larger budget draws the terrain more finely
         window.clearTimeout(this.refineId);
         this.refineId = null;
-        if (!still && drawing.pointLimited) {
+        if (!still) {
             this.refineId = window.setTimeout(() => {
                 this.refineId = null;
-                if (smoothing.points(true) > points) {
+                const url = explorer.viewURL();
+                if (url !== this.url) {
+                    this.url = url;
+                    window.history.replaceState(null, '', url);
+                }
+                if (drawing.pointLimited && smoothing.points(true) > points) {
                     this.draw(true);
                 }
             }, refineDelay);
@@ -298,8 +449,8 @@ export class ExplorePage {
 
 
     keyDown(event) {
-        const [width, height] = this.size();
-        const result = this.explorer.keyDown(event, width, height);
+        this.explorer.updateView(...this.size());
+        const result = this.explorer.keyDown(event);
         if (result === 'back') {
             this.app.window.location.hash = this.explorer.backURL();
         } else if (result === 'render') {

@@ -1,7 +1,8 @@
 import {analyzeOption, elevation, planTopo, validatePlan} from '../lib/model.js';
 import {complexPlan, countOf, ridgesPlan, simplePlan} from './viewFixtures.js';
 import {
-    finishedRows, maxZoom, project, projection, reportViews, smoothLimitsCanvas, unproject, view3D, view3DParts, visibleCells
+    finishedRows, groundPoint, maxZoom, project, projection, reportViews, smoothLimitsCanvas, unproject, view3D, view3DParts,
+    visibleCells
 } from '../lib/view3d.js';
 import assert from 'node:assert/strict';
 import {fixturePlan} from './fixture.js';
@@ -190,6 +191,46 @@ test('unproject', () => {
     const top = projection(topo, {'azimuth': 0, 'tilt': 90, 'exaggeration': 1}, 100, 100);
     assert.deepEqual(round6(unproject(top, topo, 50, 50)), [20, 20]);
     assert.deepEqual(round6(unproject(top, topo, 50 + 10 * top.scale, 50 - 5 * top.scale)), [30, 25]);
+});
+
+
+test('groundPoint', () => {
+    const {topo} = scene(fixturePlan());
+    const view = projection(topo, {...baseArgs, 'fill': true}, 800, 600);
+
+    // The ground point seen at a pixel is on the pixel's line of sight, on the ground - and the line of sight is above
+    // the ground from the viewer to it (the hills hide what's behind them)
+    for (const [pxValue, pyValue] of [[400, 300], [200, 450], [600, 200], [380, 230], [250, 350]]) {
+        const point = groundPoint(view, topo, pxValue, pyValue);
+        assert.deepEqual(round6(project(view, ...point).slice(0, 2)), [pxValue, pyValue]);
+        assert.ok(Math.abs(elevation(topo, point[0], point[1]) - point[2]) < 1e-6);
+        const [, , depth] = project(view, ...point);
+        for (const [x, y, z] of Array.from({'length': 200}, (unused, ix) => [
+            point[0] - (ix + 1) * view.sinAz * view.cosTilt, point[1] - (ix + 1) * view.cosAz * view.cosTilt,
+            point[2] + (ix + 1) * view.sinTilt / view.exaggeration
+        ])) {
+            const ground = elevation(topo, x, y);
+            assert.ok(project(view, x, y, z)[2] < depth);
+            assert.ok(ground === null || ground < z);
+        }
+    }
+
+    // A pixel whose line of sight misses the topography sees no ground
+    assert.equal(groundPoint(view, topo, 5, 5), null);
+    assert.equal(groundPoint(view, topo, 400, -1000), null);
+
+    // A line of sight into the topography's side sees its edge - a low view, facing north, below the ground's south edge
+    const low = projection(topo, {'azimuth': 0, 'tilt': 5, 'exaggeration': 1, 'fill': true}, 800, 600);
+    const [edgeX, edgeY] = project(low, 100, 0, elevation(topo, 100, 0) - 5);
+    const edge = groundPoint(low, topo, edgeX, edgeY);
+    assert.deepEqual(round6(project(low, ...edge).slice(0, 2)), round6([edgeX, edgeY]));
+    assert.ok(edge[1] < topo.spacing * 0.5);
+    assert.ok(edge[2] < elevation(topo, edge[0], edge[1]));
+
+    // A top view's ground point is a plan view's
+    const top = projection(topo, {'azimuth': 0, 'tilt': 90, 'exaggeration': 1}, 400, 300);
+    const [topX, topY] = project(top, 150, 120, 0);
+    assert.deepEqual(round6(groundPoint(top, topo, topX, topY)), round6([150, 120, elevation(topo, 150, 120)]));
 });
 
 

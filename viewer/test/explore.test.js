@@ -1,8 +1,9 @@
 import {planData, simplePlan} from './viewFixtures.js';
-import {projection, smoothLimitsCanvas, view3DParts} from '../lib/view3d.js';
+import {project, projection, smoothLimitsCanvas, view3DParts} from '../lib/view3d.js';
 import {Explorer} from '../lib/explore.js';
 import {argsParse} from '../lib/args.js';
 import assert from 'node:assert/strict';
+import {elevation} from '../lib/model.js';
 import {exploreStyle} from '../lib/draw.js';
 import {fixturePlan} from './fixture.js';
 import {opsToSvg} from '../lib/canvas.js';
@@ -14,73 +15,76 @@ const textAttr = 'font-family="sans-serif" text-anchor="start" dominant-baseline
 const textStroke = 'stroke="white" stroke-width="3" paint-order="stroke"';
 
 
-// The keyboard help lines
-const helpLines = [
-    'Arrows or W A S D - move',
-    '+ / - - zoom in / out',
-    'Q / E or Shift+Left / Right - rotate',
-    'Shift+Up / Down - tilt (view from above / from the side)',
-    'R / F or Page Up / Down - raise / lower',
-    '[ / ] - less / more vertical exaggeration',
-    'T - top view, N - face north, 0 - reset',
-    'H - hide this help, Esc - back to the report'
-];
-
-
-// Create a plan's 3D explorer
+// Create a plan's 3D explorer, and draw it at 800 by 600 pixels
 function explore(planValue, globals = {'vFile': 'plans/fixture.json', 'vExplore': true}) {
-    return new Explorer(planData(planValue), globals, argsParse(globals));
+    const explorer = new Explorer(planData(planValue), globals, argsParse(globals));
+    explorer.render(800, 600);
+    return explorer;
 }
 
 
-// Press a key
-function press(explorer, code, key = '', shiftKey = false) {
-    return explorer.keyDown({code, key, shiftKey, 'ctrlKey': false, 'metaKey': false, 'altKey': false});
+// The explorer's view state - [x, y, z, azimuth, tilt, zoom], with the view center to a hundredth
+function viewState(explorer) {
+    const {state} = explorer;
+    const center = [state.x, state.y, state.z].map((value) => (value !== null ? Math.round(value * 100) / 100 : null));
+    return [...center, state.azimuth, state.tilt, state.zoom];
 }
 
 
-// Press keys and get the explorer's view state values after each
-function pressAll(explorer, names, keys) {
-    return keys.map(([code, key, shiftKey]) => {
-        assert.equal(press(explorer, code, key, shiftKey), 'render');
-        return names.map((name) => explorer.state[name]);
-    });
+// Project a ground point to the explorer's view - [px, py]
+function groundPixel(explorer, x, y) {
+    return project(explorer.view, x, y, elevation(explorer.data.topo, x, y)).slice(0, 2);
+}
+
+
+// Assert that pixels are within a twentieth of a pixel of the expected pixels
+function assertPixel(actual, expected) {
+    assert.ok(
+        Math.abs(actual[0] - expected[0]) < 0.05 && Math.abs(actual[1] - expected[1]) < 0.05,
+        `${actual} is not ${expected}`
+    );
 }
 
 
 test('Explorer, the view arguments', () => {
     // The default view
-    let explorer = explore(fixturePlan());
+    let explorer = new Explorer(planData(fixturePlan()), {'vFile': 'plans/fixture.json'}, argsParse({'vFile': 'plans/fixture.json'}));
     assert.equal(explorer.ixOption, 0);
     assert.equal(explorer.view, null);
-    assert.deepEqual(explorer.state, {
-        'help': true, 'azimuth': 30, 'tilt': 35, 'exaggeration': 1.5, 'zoom': 1, 'x': null, 'y': null, 'z': null
-    });
+    assert.equal(explorer.drag, null);
+    assert.deepEqual(explorer.state, {'azimuth': 30, 'tilt': 35, 'exaggeration': 1.5, 'zoom': 1, 'x': null, 'y': null, 'z': null});
+    assert.deepEqual(explorer.reset, explorer.state);
     assert.equal(explorer.backURL(), "#var.vFile='plans%2Ffixture.json'");
+    assert.equal(explorer.viewURL(), "#var.vExplore=true&var.vFile='plans%2Ffixture.json'");
 
-    // The view arguments - the report link keeps the plan and its option, but not the view
+    // The view arguments - the report link keeps the plan and its option, but not the view, and the explorer's URL keeps
+    // its view. The reset view is the default view.
     const globals = {
         'vFile': 'plans/fixture.json', 'vExplore': true, 'vOption': 1, 'vAzimuth': 120, 'vTilt': 50, 'vExaggeration': 2, 'vZoom': 2,
         'vX': 100, 'vY': 50, 'vZ': 510
     };
-    explorer = explore(fixturePlan(), globals);
+    explorer = new Explorer(planData(fixturePlan()), globals, argsParse(globals));
     assert.equal(explorer.ixOption, 1);
-    assert.deepEqual(explorer.state, {
-        'help': true, 'azimuth': 120, 'tilt': 50, 'exaggeration': 2, 'zoom': 2, 'x': 100, 'y': 50, 'z': 510
-    });
+    assert.deepEqual(explorer.state, {'azimuth': 120, 'tilt': 50, 'exaggeration': 2, 'zoom': 2, 'x': 100, 'y': 50, 'z': 510});
+    assert.deepEqual(explorer.reset, {'azimuth': 30, 'tilt': 35, 'exaggeration': 1.5, 'zoom': 1, 'x': null, 'y': null, 'z': null});
     assert.equal(explorer.backURL(), "#var.vFile='plans%2Ffixture.json'&var.vOption=1");
+    assert.equal(
+        explorer.viewURL(),
+        "#var.vAzimuth=120&var.vExaggeration=2&var.vExplore=true&var.vFile='plans%2Ffixture.json'&var.vOption=1&var.vTilt=50&" +
+            'var.vX=100&var.vY=50&var.vZ=510&var.vZoom=2'
+    );
     assert.equal(explorer.analysis.name, 'Bridge - East');
 
     // An option index beyond the options is the last option, and a negative index is the first
-    assert.equal(explore(fixturePlan(), {'vOption': 5}).ixOption, 1);
-    assert.equal(explore(fixturePlan(), {'vOption': -1}).ixOption, 0);
-    assert.equal(explore(fixturePlan(), {}).backURL(), '#var=');
+    assert.equal(new Explorer(planData(fixturePlan()), {}, argsParse({'vOption': 5})).ixOption, 1);
+    assert.equal(new Explorer(planData(fixturePlan()), {}, argsParse({'vOption': -1})).ixOption, 0);
+    assert.equal(new Explorer(planData(fixturePlan()), {}, argsParse({})).backURL(), '#var=');
 });
 
 
 test('Explorer.renderSvg', () => {
     const globals = {'vFile': 'plans/fixture.json', 'vExplore': true, 'vOption': 1, 'vAzimuth': 120, 'vZoom': 2, 'vX': 100, 'vY': 50};
-    const explorer = explore(fixturePlan(), globals);
+    const explorer = new Explorer(planData(fixturePlan()), globals, argsParse(globals));
     const svg = explorer.renderSvg(800, 600);
 
     // The drawing fills the width and height, without margins
@@ -99,32 +103,12 @@ test('Explorer.renderSvg', () => {
     const parts = view3DParts(data.plan, data.topo, data.rows(1), 1, data.analysis(1), view);
     assert.equal(parts.smooth, 3);
 
-    // The overlays - the report link, the keyboard help, and the view status (the view center is on the ground)
-    const helpTexts = helpLines.map((line, ixLine) => (
-        `<text x="16" y="${427 + 18 * ixLine}" font-size="12" ${textAttr} fill="#222" ${textStroke}>${line}</text>`
-    ));
+    // The overlays - the report link and the view status (the view center is on the ground)
     const status = `<text x="12" y="586" font-size="12" ${textAttr} fill="#222" ${textStroke}>Center x 100, y 50, z 506 ft - zoom 2x, ` +
         'rotation 120, tilt 35, exaggeration 1.5x</text>';
     const backLink = '<a href="#var.vFile=&#039;plans%2Ffixture.json&#039;&amp;var.vOption=1">' +
         `<text x="12" y="20" font-size="14" ${textAttr} fill="#1f4e8c" ${textStroke} font-weight="bold">Back to the report</text></a>`;
-    assert.equal(
-        svg,
-        `${svgOpen}${opsToSvg(parts.ops)}${backLink}` +
-            `<rect x="8" y="414" width="380" height="152" rx="4" fill="white" fill-opacity="0.75"/>${helpTexts.join('')}${status}</svg>`
-    );
-
-    // Without the help, there's a line on how to show it
-    assert.equal(press(explorer, 'KeyH'), 'render');
-    assert.equal(explorer.state.help, false);
-    assert.equal(
-        explorer.renderSvg(800, 600),
-        `${svgOpen}${opsToSvg(parts.ops)}${backLink}` +
-            '<rect x="8" y="540" width="380" height="26" rx="4" fill="white" fill-opacity="0.75"/>' +
-            `<text x="16" y="553" font-size="12" ${textAttr} fill="#222" ${textStroke}>H - keyboard help</text>${status}</svg>`
-    );
-    assert.equal(press(explorer, 'Slash', '?'), 'render');
-    assert.equal(explorer.state.help, true);
-    assert.equal(explorer.renderSvg(800, 600), svg);
+    assert.equal(svg, `${svgOpen}${opsToSvg(parts.ops)}${backLink}${status}</svg>`);
 
     // The drawing with other terrain limits
     const limited = explorer.renderSvg(800, 600, {...smoothLimitsCanvas, 'points': 300});
@@ -150,43 +134,32 @@ test('Explorer.render', () => {
     );
     assert.equal(drawing.ops.filter((op) => op.t === 0).length, 16 * 16);
 
-    // The drawing's operations, then the overlays' - the keyboard help and the view status, in meters (the report link is left
-    // to the page)
-    assert.equal(drawing.ops.length, parts.ops.length + 10);
-    assert.deepEqual(drawing.ops.slice(0, -10).map((op) => op.t), parts.ops.map((op) => op.t));
-    assert.deepEqual(drawing.ops.slice(-10), [
-        {'t': 5, 'x': 8, 'y': 114, 'width': 380, 'height': 152, 'rx': 4, 'f': 'white', 'o': 0.75},
-        ...helpLines.map((text, ixLine) => (
-            {'t': 3, text, 'x': 16, 'y': 127 + 18 * ixLine, 'size': 12, 'anchor': 'start', 'f': '#222', 'bold': false}
-        )),
-        {
-            't': 3,
-            'text': 'Center x 20, y 20, z 107 m - zoom 1x, rotation 30, tilt 35, exaggeration 1.5x',
-            'x': 12,
-            'y': 286,
-            'size': 12,
-            'anchor': 'start',
-            'f': '#222',
-            'bold': false
-        }
-    ]);
-
-    // Without the help
-    press(explorer, 'KeyH');
-    assert.deepEqual(explorer.render(400, 300).ops.slice(-3, -1), [
-        {'t': 5, 'x': 8, 'y': 240, 'width': 380, 'height': 26, 'rx': 4, 'f': 'white', 'o': 0.75},
-        {'t': 3, 'text': 'H - keyboard help', 'x': 16, 'y': 253, 'size': 12, 'anchor': 'start', 'f': '#222', 'bold': false}
-    ]);
+    // The drawing's operations, then the view status, in meters (the report link and the controls are left to the page)
+    assert.equal(drawing.ops.length, parts.ops.length + 1);
+    assert.deepEqual(drawing.ops.slice(0, -1).map((op) => op.t), parts.ops.map((op) => op.t));
+    assert.deepEqual(drawing.ops.at(-1), {
+        't': 3,
+        'text': 'Center x 20, y 20, z 107 m - zoom 1x, rotation 30, tilt 35, exaggeration 1.5x',
+        'x': 12,
+        'y': 286,
+        'size': 12,
+        'anchor': 'start',
+        'f': '#222',
+        'bold': false
+    });
 
     // The view status - the zoom and exaggeration to two decimal places
-    pressAll(explorer, [], [['Equal', '+'], ['BracketLeft', '['], ['KeyQ'], ['ArrowUp', '', true], ['KeyD'], ['KeyR']]);
+    explorer.command('in');
+    explorer.setExaggeration(1.25);
+    explorer.dragStart('orbit');
+    explorer.dragMove(-20, 15);
     assert.equal(
         explorer.render(400, 300).ops.at(-1).text,
-        'Center x 26, y 18, z 111 m - zoom 1.41x, rotation 20, tilt 40, exaggeration 1.25x'
+        'Center x 20, y 20, z 107 m - zoom 1.41x, rotation 21, tilt 39.5, exaggeration 1.25x'
     );
 
     // The canvas terrain limits - the cells are at least 3 pixels, or as small as the point limit allows
-    press(explorer, 'Home');
+    explorer.command('reset');
     let canvas = explorer.render(400, 300, smoothLimitsCanvas);
     assert.deepEqual([canvas.smooth, canvas.step, canvas.pointLimited], [8, 1, false]);
     canvas = explorer.render(400, 300, {...smoothLimitsCanvas, 'points': 400});
@@ -194,141 +167,243 @@ test('Explorer.render', () => {
 });
 
 
-test('Explorer.keyDown, moving', () => {
+test('Explorer, dragging to move', () => {
     const explorer = explore(fixturePlan());
-    explorer.render(800, 600);
-    const {scale} = explorer.view;
-    assert.equal(Math.round(100 / scale * 10) / 10, 67.2);
-
-    // Facing north, the view center moves an eighth of the view's width east (right), north (forward), west, and south - on
-    // the unmoved view's center elevation (above the ground, to fit the marker poles)
-    assert.equal(press(explorer, 'KeyN'), 'render');
     assert.equal(Math.round(explorer.view.zc * 100) / 100, 532.74);
-    const position = ['x', 'y', 'z'];
-    assert.deepEqual(pressAll(explorer, position, [['ArrowRight'], ['ArrowUp'], ['ArrowLeft'], ['ArrowDown']]), [
-        [267.2, 150, 532.7], [267.2, 217.2, 532.7], [200, 217.2, 532.7], [200, 150, 532.7]
-    ]);
-    assert.deepEqual(pressAll(explorer, position, [['KeyD'], ['KeyW'], ['KeyA'], ['KeyS']]), [
-        [267.2, 150, 532.7], [267.2, 217.2, 532.7], [200, 217.2, 532.7], [200, 150, 532.7]
-    ]);
 
-    // The view is updated, so the next key moves from the moved view
-    assert.deepEqual([explorer.view.xc, explorer.view.yc, explorer.view.zc], [200, 150, 532.7]);
+    // The dragged ground point follows the mouse - the view center keeps its elevation as it moves (it's above the ground,
+    // to fit the marker poles)
+    const start = groundPixel(explorer, 150, 120);
+    explorer.dragStart('move');
+    assert.equal(explorer.dragMove(50, -30), true);
+    assertPixel(groundPixel(explorer, 150, 120), [start[0] + 50, start[1] - 30]);
+    assert.deepEqual(viewState(explorer), [153.3, 136.35, 532.74, 30, 35, 1]);
 
-    // The view center is raised and lowered an eighth of the view's height (in exaggerated elevation)
-    assert.equal(Math.round(75 / (scale * 1.5) * 10) / 10, 33.6);
-    assert.deepEqual(pressAll(explorer, position, [['KeyR'], ['PageUp'], ['KeyF'], ['PageDown'], ['KeyF']]), [
-        [200, 150, 566.3], [200, 150, 599.9], [200, 150, 566.3], [200, 150, 532.7], [200, 150, 499.1]
-    ]);
+    // A drag moves from where it started, not from its last move
+    assert.equal(explorer.dragMove(-100, 40), true);
+    assertPixel(groundPixel(explorer, 150, 120), [start[0] - 100, start[1] + 40]);
+    assert.equal(explorer.dragMove(50, -30), true);
+    assert.deepEqual(viewState(explorer), [153.3, 136.35, 532.74, 30, 35, 1]);
+
+    // The drag's end moves the view center along its line of sight to the ground - the view doesn't change
+    const centerZ = elevation(explorer.data.topo, 169.04, 163.61);
+    assert.equal(explorer.dragEnd(), true);
+    assert.equal(explorer.drag, null);
+    assert.deepEqual(viewState(explorer), [169.04, 163.61, 518.05, 30, 35, 1]);
+    assert.ok(Math.abs(centerZ - 518.05) < 0.1);
+    assertPixel(groundPixel(explorer, 150, 120), [start[0] + 50, start[1] - 30]);
+
+    // Without a drag, a drag's move and end do nothing
+    assert.equal(explorer.dragMove(10, 10), false);
+    assert.equal(explorer.dragEnd(), false);
+
+    // A drag that doesn't move leaves the grounded view as it is
+    explorer.dragStart('move');
+    assert.equal(explorer.dragMove(0, 0), true);
+    assert.equal(explorer.dragEnd(), false);
+    assert.deepEqual(viewState(explorer), [169.04, 163.61, 518.05, 30, 35, 1]);
+
+    // A zoomed view, from above, facing east - the dragged point still follows the mouse
+    Object.assign(explorer.state, {'azimuth': 90, 'tilt': 90, 'zoom': 4});
+    explorer.updateView();
+    const zoomed = groundPixel(explorer, 180, 150);
+    explorer.dragStart('move');
+    explorer.dragMove(-30, 20);
+    assertPixel(groundPixel(explorer, 180, 150), [zoomed[0] - 30, zoomed[1] + 20]);
+    assert.equal(explorer.dragEnd(), true);
+    assert.deepEqual(viewState(explorer), [173.41, 157.06, 516.4, 90, 90, 4]);
 
     // The view center stays within the topography (400 x 300 feet)
-    assert.deepEqual(pressAll(explorer, position, [['KeyD'], ['KeyD'], ['KeyD'], ['KeyD'], ['KeyW'], ['KeyW'], ['KeyW']]).slice(1), [
-        [334.4, 150, 499.1], [400, 150, 499.1], [400, 150, 499.1], [400, 217.2, 499.1], [400, 284.4, 499.1], [400, 300, 499.1]
-    ]);
-    press(explorer, 'Home');
-    assert.deepEqual(pressAll(explorer, position, [['KeyN'], ['KeyA'], ['KeyA'], ['KeyA'], ['KeyS'], ['KeyS'], ['KeyS']]).slice(3), [
-        [0, 150, 532.7], [0, 82.8, 532.7], [0, 15.6, 532.7], [0, 0, 532.7]
-    ]);
-
-    // Facing east, forward is east and right is south
-    press(explorer, 'Home');
-    assert.deepEqual(pressAll(explorer, ['azimuth'], [['KeyN'], ...Array.from({'length': 9}, () => ['KeyE'])]).slice(-2), [[80], [90]]);
-    assert.deepEqual(pressAll(explorer, position, [['KeyW'], ['KeyD']]), [[267.2, 150, 532.7], [267.2, 82.8, 532.7]]);
-
-    // A zoomed view moves less
-    press(explorer, 'Home');
-    assert.deepEqual(pressAll(explorer, position, [['KeyN'], ['Equal', '+'], ['Equal', '+'], ['KeyD']]).at(-1), [233.6, 150, 532.7]);
+    explorer.dragStart('move');
+    explorer.dragMove(-5000, -5000);
+    assert.deepEqual(viewState(explorer).slice(0, 2), [0, 0]);
+    explorer.dragMove(5000, 5000);
+    assert.deepEqual(viewState(explorer).slice(0, 2), [400, 300]);
 });
 
 
-test('Explorer.keyDown, zooming, rotating, tilting, and exaggerating', () => {
+test('Explorer, dragging to rotate and tilt', () => {
     const explorer = explore(fixturePlan());
-    explorer.render(800, 600);
 
-    // Zoom in and out by the square root of two - from 1 to 64
-    assert.deepEqual(pressAll(explorer, ['zoom'], [['Equal', '+'], ['Equal', '='], ['Minus', '-'], ['Minus', '_'], ['Minus', '-']]), [
-        [1.414], [2], [1.414], [1], [1]
-    ]);
-    assert.deepEqual(pressAll(explorer, ['zoom'], Array.from({'length': 13}, () => ['NumpadAdd', '+'])).flat(), [
-        1.414, 2, 2.828, 4, 5.657, 8, 11.314, 16, 22.627, 32, 45.255, 64, 64
-    ]);
-    assert.equal(explorer.view.zoom, 64);
-    assert.deepEqual(pressAll(explorer, ['zoom'], [['Minus', '-']]), [[45.255]]);
+    // A drag across the view's width turns it half around, and down its height tilts it 90 degrees - around the view's
+    // center, which doesn't move
+    explorer.dragStart('orbit');
+    assert.equal(explorer.dragMove(200, 60), true);
+    assert.deepEqual(viewState(explorer), [null, null, null, 75, 44, 1]);
+    assert.deepEqual([explorer.view.width, explorer.view.height], [800, 600]);
+    assert.equal(explorer.dragMove(-200, -60), true);
+    assert.deepEqual(viewState(explorer), [null, null, null, 345, 26, 1]);
 
-    // A zoom between steps zooms to the nearest step's next step
-    const between = explore(fixturePlan(), {'vZoom': 3});
-    between.render(800, 600);
-    assert.deepEqual(pressAll(between, ['zoom'], [['Equal', '+'], ['Home'], ['Minus', '-']]), [[4], [3], [2]]);
+    // The rotation is from 0 to 360 degrees, and the tilt is from 5 to 90 degrees
+    assert.equal(explorer.dragMove(-1000, -1000), true);
+    assert.deepEqual(viewState(explorer), [null, null, null, 165, 5, 1]);
+    assert.equal(explorer.dragMove(1000, 1000), true);
+    assert.deepEqual(viewState(explorer), [null, null, null, 255, 90, 1]);
+    assert.equal(explorer.dragMove(330 * 800 / 180, 0), true);
+    assert.deepEqual(viewState(explorer), [null, null, null, 0, 35, 1]);
 
-    // Rotate 10 degrees left and right - Q and E, or shift and the left and right arrows
-    press(explorer, 'Home');
-    assert.deepEqual(
-        pressAll(explorer, ['azimuth'], [['KeyQ'], ['ArrowLeft', '', true], ['KeyE'], ['ArrowRight', '', true], ['ArrowRight', '', true]]),
-        [[20], [10], [20], [30], [40]]
-    );
-    assert.deepEqual(pressAll(explorer, ['azimuth'], [['KeyN'], ['KeyQ'], ['KeyQ'], ['KeyE'], ['KeyE'], ['KeyE']]), [
-        [0], [350], [340], [350], [0], [10]
-    ]);
-    assert.equal(Math.round(explorer.view.sinAz * 1e6) / 1e6, Math.round(Math.sin(10 * Math.PI / 180) * 1e6) / 1e6);
+    // The rotation is to a tenth of a degree, after it's wrapped
+    assert.equal(explorer.dragMove(1676, 0), true);
+    assert.equal(explorer.state.azimuth, 47.1);
+    assert.equal(explorer.dragMove(330 * 800 / 180, 0), true);
 
-    // Tilt 5 degrees up and down with shift and the up and down arrows - from 5 to 90 degrees
-    const tiltUp = ['ArrowUp', '', true];
-    const tiltDown = ['ArrowDown', '', true];
-    assert.deepEqual(pressAll(explorer, ['tilt'], [tiltUp, tiltUp, tiltDown]), [[40], [45], [40]]);
-    assert.deepEqual(pressAll(explorer, ['tilt'], [['KeyT'], tiltUp, tiltDown]), [[90], [90], [85]]);
-    assert.deepEqual(pressAll(explorer, ['tilt'], Array.from({'length': 17}, () => tiltDown)).flat().slice(-3), [10, 5, 5]);
-
-    // The shifted arrows don't move the view
-    assert.deepEqual([explorer.state.x, explorer.state.y, explorer.state.z], [null, null, null]);
-
-    // The vertical exaggeration - a quarter less or more, from 1 to 5
-    assert.deepEqual(pressAll(explorer, ['exaggeration'], [['BracketLeft', '['], ['BracketLeft', '['], ['BracketLeft', '[']]), [
-        [1.25], [1], [1]
-    ]);
-    assert.deepEqual(pressAll(explorer, ['exaggeration'], Array.from({'length': 17}, () => ['BracketRight', ']'])).flat().slice(-3), [
-        4.75, 5, 5
-    ]);
-    assert.equal(explorer.view.exaggeration, 5);
+    // The drag's end doesn't change the view
+    assert.equal(explorer.dragEnd(), false);
+    assert.deepEqual(viewState(explorer), [null, null, null, 0, 35, 1]);
+    assert.equal(explorer.view.cosAz, 1);
 });
 
 
-test('Explorer.keyDown, the other keys', () => {
-    const globals = {'vFile': 'plans/fixture.json', 'vExplore': true, 'vAzimuth': 120, 'vTilt': 50, 'vZoom': 2, 'vX': 100, 'vY': 50};
+test('Explorer.ground', () => {
+    const explorer = explore(fixturePlan());
+
+    // The default view's center is above the ground - it's moved along its line of sight to the ground
+    const ground = groundPixel(explorer, 230, 160);
+    assert.equal(explorer.ground(), true);
+    assert.deepEqual(viewState(explorer), [215.24, 176.4, 518.51, 30, 35, 1]);
+    assertPixel(groundPixel(explorer, 230, 160), ground);
+    assert.equal(explorer.ground(), false);
+
+    // A view whose center's line of sight misses the topography isn't moved
+    Object.assign(explorer.state, {'x': 0, 'y': 0, 'z': 800, 'azimuth': 210});
+    explorer.updateView();
+    assert.equal(explorer.ground(), false);
+    assert.deepEqual(viewState(explorer), [0, 0, 800, 210, 35, 1]);
+});
+
+
+test('Explorer.zoomAt', () => {
+    const explorer = explore(fixturePlan());
+
+    // The ground point under the mouse stays under it
+    const mouse = groundPixel(explorer, 280, 200);
+    assert.equal(explorer.zoomAt(...mouse, 1.5), true);
+    assertPixel(groundPixel(explorer, 280, 200), mouse);
+    assert.deepEqual(viewState(explorer), [235.89, 182.65, 527.18, 30, 35, 1.5]);
+    assert.equal(explorer.zoomAt(...mouse, 3), true);
+    assertPixel(groundPixel(explorer, 280, 200), mouse);
+    assert.deepEqual(viewState(explorer), [264.88, 193.49, 537.38, 30, 35, 4.5]);
+
+    // The zoom is from 1 to 64 - a zoom at its limit doesn't change the view
+    assert.equal(explorer.zoomAt(...mouse, 100), true);
+    assertPixel(groundPixel(explorer, 280, 200), mouse);
+    assert.equal(explorer.state.zoom, 64);
+    assert.equal(explorer.zoomAt(...mouse, 2), false);
+    assert.equal(explorer.zoomAt(...mouse, 0.001), true);
+    assertPixel(groundPixel(explorer, 280, 200), mouse);
+    assert.equal(explorer.state.zoom, 1);
+    assert.equal(explorer.zoomAt(...mouse, 0.5), false);
+});
+
+
+test('Explorer.centerAt', () => {
+    const explorer = explore(fixturePlan());
+
+    // Center the view on the ground under a point, and zoom in
+    const point = groundPixel(explorer, 280, 200);
+    assert.equal(explorer.centerAt(...point, 2), true);
+    const [x, y, z] = viewState(explorer);
+    assert.deepEqual([x, y].map(Math.round), [280, 200]);
+    assert.ok(Math.abs(z - elevation(explorer.data.topo, x, y)) < 0.01);
+    assert.deepEqual(viewState(explorer).slice(3), [30, 35, 2]);
+    assertPixel(groundPixel(explorer, x, y), [400, 300]);
+
+    // Zoom out - not past the whole site
+    assert.equal(explorer.centerAt(400, 300, 0.25), true);
+    assert.deepEqual(viewState(explorer).slice(3), [30, 35, 1]);
+
+    // A point off the topography doesn't change the view
+    const state = {...explorer.state};
+    assert.equal(explorer.centerAt(5, 5, 2), false);
+    assert.deepEqual(explorer.state, state);
+});
+
+
+test('Explorer.command and Explorer.setExaggeration', () => {
+    const globals = {'vFile': 'plans/fixture.json', 'vExplore': true, 'vAzimuth': 120, 'vTilt': 50, 'vZoom': 3, 'vX': 100, 'vY': 50};
     const explorer = explore(fixturePlan(), globals);
-    explorer.render(800, 600);
-    const initial = {...explorer.state};
 
-    // Reset the view to the initial view - 0 or Home. The help stays as it is (hidden, then shown). The top view's scale
-    // fits the site in the view's height, so it moves 43.7 feet (and is raised 21.8 feet from the ground, at 506 feet)
-    const names = Object.keys(initial);
-    const changes = [['KeyT'], ['KeyN'], ['KeyD'], ['KeyR'], ['Equal', '+'], ['BracketRight', ']'], ['KeyH']];
-    assert.equal(names[0], 'help');
-    assert.deepEqual(
-        pressAll(explorer, names, changes).at(-1),
-        [false, 0, 90, 1.75, 2.828, 143.7, 50, 527.8]
-    );
-    assert.deepEqual(pressAll(explorer, names, [['Digit0', '0']]), [[false, ...Object.values(initial).slice(1)]]);
-    pressAll(explorer, names, changes);
-    assert.deepEqual(pressAll(explorer, names, [['Home']]), [Object.values(initial)]);
-    assert.deepEqual(explorer.view, projection(explorer.data.topo, {...initial, 'fill': true, 'smooth': true}, 800, 600));
+    // Zoom in and out by the square root of two - from the nearest step, and from 1 to 64
+    assert.equal(explorer.command('in'), true);
+    assert.equal(explorer.state.zoom, 4);
+    assert.equal(explorer.command('out'), true);
+    assert.equal(explorer.state.zoom, 2.828);
+    for (const [command, count, zoom] of [['out', 3, 1], ['in', 12, 64]]) {
+        for (let ix = 0; ix < count; ix++) {
+            assert.equal(explorer.command(command), true);
+        }
+        assert.equal(explorer.state.zoom, zoom);
+        assert.equal(explorer.command(command), false);
+    }
+    assert.equal(explorer.view.zoom, 64);
 
-    // The view is updated for the key's width and height
-    assert.equal(explorer.keyDown({'code': 'KeyN', 'key': 'n'}, 400, 300), 'render');
-    assert.deepEqual([explorer.view.width, explorer.view.height, explorer.width, explorer.height], [400, 300, 400, 300]);
-    assert.equal(press(explorer, 'KeyE'), 'render');
-    assert.deepEqual([explorer.view.width, explorer.view.height], [400, 300]);
+    // Face north, and view from above
+    assert.equal(explorer.command('north'), true);
+    assert.equal(explorer.command('north'), false);
+    assert.equal(explorer.command('top'), true);
+    assert.equal(explorer.command('top'), false);
+    assert.deepEqual(viewState(explorer), [100, 50, null, 0, 90, 64]);
+
+    // The vertical exaggeration - from 1 to 5
+    assert.equal(explorer.setExaggeration(2.5), true);
+    assert.equal(explorer.view.exaggeration, 2.5);
+    assert.equal(explorer.setExaggeration(2.5), false);
+    assert.equal(explorer.setExaggeration(10), true);
+    assert.equal(explorer.state.exaggeration, 5);
+    assert.equal(explorer.setExaggeration(0), true);
+    assert.equal(explorer.state.exaggeration, 1);
+    assert.equal(explorer.setExaggeration(Number.NaN), false);
+    assert.equal(explorer.state.exaggeration, 1);
+
+    // Reset - the whole site, from the default direction
+    assert.equal(explorer.command('reset'), true);
+    assert.deepEqual(explorer.state, explorer.reset);
+    assert.deepEqual(explorer.view, projection(explorer.data.topo, {...explorer.reset, 'fill': true, 'smooth': true}, 800, 600));
+    assert.equal(explorer.command('reset'), false);
+
+    // An unknown command does nothing
+    assert.equal(explorer.command('other'), false);
+});
+
+
+test('Explorer.keyDown', () => {
+    const explorer = explore(fixturePlan());
+    const press = (code, key = '', modifiers = {}) => explorer.keyDown({code, key, ...modifiers});
+    explorer.command('north');
+    explorer.ground();
+    assert.deepEqual(viewState(explorer), [200, 186.71, 515.6, 0, 35, 1]);
+
+    // The arrows move the view an eighth of its width (right and left) or height (forward and back) - then its center is
+    // moved to the ground
+    assert.equal(Math.round(100 / explorer.view.scale * 100) / 100, 67.24);
+    assert.equal(press('ArrowRight'), 'render');
+    assert.deepEqual(viewState(explorer).slice(0, 3), [267.24, 149.85, 532.81]);
+    assert.equal(press('ArrowLeft'), 'render');
+    assert.deepEqual(viewState(explorer).slice(0, 3), [200, 186.71, 515.6]);
+    assert.equal(press('ArrowUp'), 'render');
+    assert.deepEqual(viewState(explorer).slice(0, 3), [200, 256.64, 524]);
+    assert.equal(press('ArrowDown'), 'render');
+    assert.deepEqual(viewState(explorer).slice(0, 3), [200, 186.71, 515.6]);
+
+    // + and - zoom in and out
+    assert.equal(press('Equal', '+'), 'render');
+    assert.equal(press('Equal', '='), 'render');
+    assert.equal(explorer.state.zoom, 2);
+    assert.equal(press('Minus', '-'), 'render');
+    assert.equal(press('Minus', '_'), 'render');
+    assert.equal(explorer.state.zoom, 1);
 
     // Escape returns to the report
-    assert.equal(press(explorer, 'Escape'), 'back');
+    assert.equal(press('Escape', 'Escape'), 'back');
 
     // Other keys, and keys with the control, command, or option key, do nothing
     const state = {...explorer.state};
-    for (const [code, key] of [['KeyX', 'x'], ['Space', ' '], ['Enter', 'Enter'], ['Digit1', '1'], ['End', 'End']]) {
-        assert.equal(press(explorer, code, key), null);
+    for (const [code, key] of [['KeyQ', 'q'], ['KeyH', 'h'], ['Space', ' '], ['Digit0', '0'], ['Home', 'Home']]) {
+        assert.equal(press(code, key), null);
     }
     for (const modifier of ['ctrlKey', 'metaKey', 'altKey']) {
-        for (const [code, key] of [['KeyQ', 'q'], ['Escape', 'Escape'], ['Equal', '+'], ['ArrowLeft', 'ArrowLeft']]) {
-            assert.equal(explorer.keyDown({code, key, 'shiftKey': false, [modifier]: true}), null);
+        for (const [code, key] of [['Escape', 'Escape'], ['Equal', '+'], ['ArrowLeft', 'ArrowLeft']]) {
+            assert.equal(press(code, key, {[modifier]: true}), null);
         }
     }
     assert.deepEqual(explorer.state, state);

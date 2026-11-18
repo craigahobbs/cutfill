@@ -1,11 +1,11 @@
 import {fakeBrowser, fakeContext, fire, flush, startApp} from './appHelpers.js';
+import {groundPoint, project, smoothLimitsCanvas} from '../lib/view3d.js';
 import {Explorer} from '../lib/explore.js';
 import {PlanData} from '../lib/planData.js';
 import {argsParse} from '../lib/args.js';
 import assert from 'node:assert/strict';
 import {fixturePlan} from './fixture.js';
 import {paintOps} from '../lib/canvas.js';
-import {smoothLimitsCanvas} from '../lib/view3d.js';
 import test from 'node:test';
 import {validatePlan} from '../lib/model.js';
 
@@ -14,12 +14,13 @@ import {validatePlan} from '../lib/model.js';
 const exploreHash = "#var.vFile='plans/fixture.json'&var.vExplore=true";
 
 
-// Create a browser at the fixture plan's 3D explorer - "cellCost" is the measured terrain cell cost in local storage
-function exploreBrowser(testContext, {cellCost = '1', search = '', hash = exploreHash} = {}) {
+// Create a browser at the fixture plan's 3D explorer - "cellCost" is the measured terrain cell cost in local storage, and
+// "storage" is more local storage
+function exploreBrowser(testContext, {cellCost = '1', search = '', hash = exploreHash, storage = {}} = {}) {
     return fakeBrowser(testContext, {
         search, hash,
         'files': {'plans/fixture.json': JSON.stringify(fixturePlan())},
-        'storage': cellCost !== null ? {'roadieCellCost': cellCost} : {}
+        'storage': {...(cellCost !== null ? {'roadieCellCost': cellCost} : {}), ...storage}
     });
 }
 
@@ -60,17 +61,24 @@ function keyDown(browser, code, key = '', modifiers = {}) {
 }
 
 
-// The keyboard help lines
-const helpLines = [
-    'Arrows or W A S D - move',
-    '+ / - - zoom in / out',
-    'Q / E or Shift+Left / Right - rotate',
-    'Shift+Up / Down - tilt (view from above / from the side)',
-    'R / F or Page Up / Down - raise / lower',
-    '[ / ] - less / more vertical exaggeration',
-    'T - top view, N - face north, 0 - reset',
-    'H - hide this help, Esc - back to the report'
-];
+// Show a 3D explorer page's canvas at its size, at the top left of the window
+function showCanvas(canvas) {
+    canvas.getBoundingClientRect = () => ({'left': 0, 'top': 0, 'width': canvas.width, 'height': canvas.height});
+}
+
+
+// The explorer's ground point under a page point - the canvas has a 1 pixel border
+function pageGround(app, x, y) {
+    const {explorer} = app.page;
+    return groundPoint(explorer.view, explorer.data.topo, x - 1, y - 1);
+}
+
+
+// Assert that a world point is within a twentieth of a pixel of a page point
+function assertAt(app, point, x, y) {
+    const [px, py] = project(app.page.explorer.view, ...point);
+    assert.ok(Math.abs(px - (x - 1)) < 0.05 && Math.abs(py - (y - 1)) < 0.05, `${px},${py} is not ${x - 1},${y - 1}`);
+}
 
 
 test('the 3D explorer page', async (context) => {
@@ -84,8 +92,12 @@ test('the 3D explorer page', async (context) => {
     assert.deepEqual(browser.logs, []);
     assert.equal(app.page.explorer.data.file, 'plans/fixture.json');
 
-    // The page is a canvas that fills the window, less the page's margins, and a link back to the report
-    assert.deepEqual([...main.querySelectorAll('*')].map((element) => element.tagName), ['DIV', 'CANVAS', 'A']);
+    // The page is a canvas that fills the window, less the page's margins, a link back to the report, the controls, and
+    // their help
+    assert.deepEqual([...main.querySelectorAll('*')].map((element) => element.tagName), [
+        'DIV', 'CANVAS', 'A', 'DIV', 'BUTTON', 'BUTTON', 'BUTTON', 'BUTTON', 'BUTTON', 'LABEL', 'INPUT', 'BUTTON', 'UL',
+        ...Array.from({'length': 6}, () => ['LI', 'STRONG']).flat()
+    ]);
     assert.equal(main.firstElementChild.className, 'roadie-explorer');
     const canvas = main.querySelector('canvas');
     assert.equal(canvas.getAttribute('role'), 'img');
@@ -101,6 +113,27 @@ test('the 3D explorer page', async (context) => {
         main.querySelector('a').outerHTML,
         '<a class="roadie-explorer-back" href="#var.vFile=\'plans%2Ffixture.json\'">Back to the report</a>'
     );
+
+    // The controls - zoom in and out, face north, view from above, view the whole site, the vertical exaggeration, and
+    // the help, which is shown
+    assert.deepEqual(
+        [...main.querySelectorAll('.roadie-explorer-tools button')].map((button) => [button.dataset.command, button.textContent]),
+        [['in', '+'], ['out', '\u2212'], ['north', 'North'], ['top', 'Top'], ['reset', 'Reset'], ['help', '?']]
+    );
+    const input = main.querySelector('input');
+    assert.deepEqual([input.type, input.min, input.max, input.step, input.value], ['range', '1', '5', '0.25', '1.5']);
+    assert.equal(main.querySelector('label').textContent, 'Exaggeration ');
+    const help = main.querySelector('ul');
+    assert.equal(help.hidden, false);
+    assert.equal(main.querySelector('button[data-command="help"]').getAttribute('aria-expanded'), 'true');
+    assert.deepEqual([...help.querySelectorAll('li')].map((item) => item.textContent), [
+        'Drag - move',
+        'Right-drag or Shift+drag - rotate and tilt',
+        'Wheel or pinch - zoom',
+        'Double-click - center there and zoom in (with Shift, out)',
+        'Arrow, +, and \u2212 keys - move and zoom',
+        'Esc - back to the report'
+    ]);
 
     // The canvas is painted with the view's drawing - with the terrain points that fit a moving view's time budget (100
     // milliseconds) at the measured cell cost (1 millisecond)
@@ -129,31 +162,16 @@ test('the 3D explorer page', async (context) => {
         ['stroke']
     ]);
 
-    // The drawing ends with the keyboard help panel and the view's status
-    assert.deepEqual(canvas.calls.slice(-52, -39), [
-        ['beginPath'],
-        ['roundRect', 8, 534, 380, 152, 4],
-        ['globalAlpha', 0.75],
-        ['fillStyle', 'white'],
-        ['fill'],
-        ['globalAlpha', 1],
-        ['font', '12px sans-serif'],
-        ['textAlign', 'left'],
-        ['textBaseline', 'middle'],
-        ['strokeText', 'Arrows or W A S D - move', 16, 547],
-        ['fillStyle', '#222'],
-        ['fillText', 'Arrows or W A S D - move', 16, 547],
-        ['font', '12px sans-serif']
-    ]);
+    // The drawing ends with the view's status
     assert.deepEqual(canvas.calls.slice(-5), [
-        ['font', '12px sans-serif'],
         ['textAlign', 'left'],
         ['textBaseline', 'middle'],
         ['strokeText', 'Center x 200, y 150, z 533 ft - zoom 1x, rotation 30, tilt 35, exaggeration 1.5x', 12, 706],
+        ['fillStyle', '#222'],
         ['fillText', 'Center x 200, y 150, z 533 ft - zoom 1x, rotation 30, tilt 35, exaggeration 1.5x', 12, 706]
     ]);
     assert.deepEqual(paintedText(canvas), [
-        '2+00', 'Road', 'End', 'N', ...helpLines, 'Center x 200, y 150, z 533 ft - zoom 1x, rotation 30, tilt 35, exaggeration 1.5x'
+        '2+00', 'Road', 'End', 'N', 'Center x 200, y 150, z 533 ft - zoom 1x, rotation 30, tilt 35, exaggeration 1.5x'
     ]);
 
     // The frame is measured in the next animation frame, and the still view is drawn a quarter second later
@@ -245,55 +263,36 @@ test('the 3D explorer page keys', async (context) => {
     assert.equal(clock.frames.size, 0);
 
     // A key changes the view - the view is drawn in the next animation frame, once for all of the keys before it
-    assert.equal(keyDown(browser, 'KeyQ', 'q'), true);
+    assert.equal(keyDown(browser, 'Equal', '+'), true);
     assert.equal(clock.frames.size, 1);
-    assert.equal(keyDown(browser, 'KeyQ', 'q'), true);
-    assert.equal(keyDown(browser, 'ArrowUp', 'ArrowUp', {'shiftKey': true}), true);
+    assert.equal(keyDown(browser, 'Equal', '='), true);
+    assert.equal(keyDown(browser, 'ArrowRight', 'ArrowRight'), true);
     assert.equal(clock.frames.size, 1);
     assert.equal(paintCount(canvas), 1);
     assert.equal(canvas.dataset.frame, '1');
     clock.runFrame();
     assert.equal(paintCount(canvas), 2);
     assert.equal(canvas.dataset.frame, '2');
-    assert.equal(viewStatus(canvas), 'Center x 200, y 150, z 533 ft - zoom 1x, rotation 10, tilt 40, exaggeration 1.5x');
+    assert.equal(viewStatus(canvas), 'Center x 239, y 149, z 524 ft - zoom 2x, rotation 30, tilt 35, exaggeration 1.5x');
 
     // Other keys, and keys with a control, command, or option key, are left alone
     assert.equal(keyDown(browser, 'KeyZ', 'z'), false);
-    assert.equal(keyDown(browser, 'KeyQ', 'q', {'ctrlKey': true}), false);
-    assert.equal(keyDown(browser, 'KeyQ', 'q', {'metaKey': true}), false);
-    assert.equal(keyDown(browser, 'KeyQ', 'q', {'altKey': true}), false);
+    assert.equal(keyDown(browser, 'KeyQ', 'q'), false);
+    assert.equal(keyDown(browser, 'ArrowLeft', 'ArrowLeft', {'ctrlKey': true}), false);
+    assert.equal(keyDown(browser, 'ArrowLeft', 'ArrowLeft', {'metaKey': true}), false);
+    assert.equal(keyDown(browser, 'ArrowLeft', 'ArrowLeft', {'altKey': true}), false);
     assert.equal(clock.frames.size, 1);
     clock.runFrame();
     assert.equal(paintCount(canvas), 2);
 
-    // Zoom in, move right, and raise the view
-    assert.equal(keyDown(browser, 'Equal', '='), true);
-    assert.equal(keyDown(browser, 'KeyD', 'd'), true);
-    assert.equal(keyDown(browser, 'PageUp', 'PageUp'), true);
+    // Zoom out, and move back
+    assert.equal(keyDown(browser, 'Minus', '-'), true);
+    assert.equal(keyDown(browser, 'ArrowDown', 'ArrowDown'), true);
     clock.runFrame();
     assert.equal(paintCount(canvas), 3);
-    assert.equal(viewStatus(canvas), 'Center x 251, y 141, z 558 ft - zoom 1.41x, rotation 10, tilt 40, exaggeration 1.5x');
+    assert.equal(viewStatus(canvas), 'Center x 220, y 116, z 513 ft - zoom 1.41x, rotation 30, tilt 35, exaggeration 1.5x');
     assert.equal(canvas.getAttribute('aria-label'), '3D view of the Direct road plan option');
     assert.equal(main.querySelector('a').getAttribute('href'), "#var.vFile='plans%2Ffixture.json'");
-
-    // Hide the keyboard help
-    assert.deepEqual(paintedText(canvas).slice(-9, -1), helpLines);
-    assert.deepEqual(canvas.calls.findLast(([name]) => name === 'roundRect'), ['roundRect', 8, 534, 380, 152, 4]);
-    assert.equal(keyDown(browser, 'KeyH', 'h'), true);
-    clock.runFrame();
-    assert.deepEqual(paintedText(canvas).slice(-2), [
-        'H - keyboard help', 'Center x 251, y 141, z 558 ft - zoom 1.41x, rotation 10, tilt 40, exaggeration 1.5x'
-    ]);
-    assert.deepEqual(canvas.calls.findLast(([name]) => name === 'roundRect'), ['roundRect', 8, 660, 380, 26, 4]);
-
-    // Reset the view - the help stays hidden
-    assert.equal(keyDown(browser, 'Digit0', '0'), true);
-    clock.runFrame();
-    assert.equal(paintCount(canvas), 5);
-    assert.deepEqual(paintedText(canvas), [
-        '2+00', 'Road', 'End', 'N', 'H - keyboard help',
-        'Center x 200, y 150, z 533 ft - zoom 1x, rotation 30, tilt 35, exaggeration 1.5x'
-    ]);
 });
 
 
@@ -303,26 +302,28 @@ test('the 3D explorer page leaves the keys of focused inputs alone', async (cont
     await startApp(browser);
     clock.runFrame();
 
-    // An input, a text area, a select, and editable content
+    // An input (the exaggeration's, say), a text area, a select, and editable content
     const editable = document.createElement('div');
     editable.tabIndex = 0;
     Object.defineProperty(editable, 'isContentEditable', {'value': true});
-    const inputs = ['input', 'textarea', 'select'].map((tagName) => document.createElement(tagName));
-    for (const element of [...inputs, editable]) {
+    const inputs = ['textarea', 'select'].map((tagName) => document.createElement(tagName));
+    for (const element of [main.querySelector('input'), ...inputs, editable]) {
         document.body.append(element);
         element.focus();
         assert.equal(document.activeElement, element);
-        assert.equal(keyDown(browser, 'KeyQ', 'q'), false);
+        assert.equal(keyDown(browser, 'ArrowRight', 'ArrowRight'), false);
         assert.equal(keyDown(browser, 'Escape', 'Escape'), false);
         assert.equal(clock.frames.size, 0);
         assert.equal(browser.window.location.hash, exploreHash);
         element.remove();
     }
 
-    // The focused link back to the report doesn't take the keys
-    main.querySelector('a').focus();
-    assert.equal(document.activeElement, main.querySelector('a'));
-    assert.equal(keyDown(browser, 'KeyQ', 'q'), true);
+    // The focused link back to the report, and the focused controls, don't take the keys
+    for (const element of [main.querySelector('a'), main.querySelector('button')]) {
+        element.focus();
+        assert.equal(document.activeElement, element);
+        assert.equal(keyDown(browser, 'ArrowRight', 'ArrowRight'), true);
+    }
     assert.equal(clock.frames.size, 1);
 });
 
@@ -339,7 +340,7 @@ test('the 3D explorer page draws its still view', async (context) => {
     clock.time = 30;
     clock.runFrame();
     assert.deepEqual(browser.logs.slice(1), [
-        'Roadie: 3D explorer moving frame - 531 operations, 80 cells, step 4, smooth 1 (85 point limit) - built in 0.0 ms, ' +
+        'Roadie: 3D explorer moving frame - 522 operations, 80 cells, step 4, smooth 1 (85 point limit) - built in 0.0 ms, ' +
             'painted in 0.0 ms, frame in 30.0 ms'
     ]);
     assert.equal(window.localStorage.getItem('roadieCellCost'), '1');
@@ -358,48 +359,48 @@ test('the 3D explorer page draws its still view', async (context) => {
     clock.time = 900;
     clock.runFrame();
     assert.deepEqual(browser.logs.slice(2), [
-        'Roadie: 3D explorer still frame - 786 operations, 300 cells, step 2, smooth 1 (425 point limit) - built in 0.0 ms, ' +
+        'Roadie: 3D explorer still frame - 777 operations, 300 cells, step 2, smooth 1 (425 point limit) - built in 0.0 ms, ' +
             'painted in 0.0 ms, frame in 650.0 ms'
     ]);
     assert.equal(window.localStorage.getItem('roadieCellCost'), '0.5906499999999999');
 
     // A key draws the moving view - with its raised point limit
-    assert.equal(keyDown(browser, 'KeyE', 'e'), true);
+    assert.equal(keyDown(browser, 'ArrowRight', 'ArrowRight'), true);
     clock.runFrame();
     assert.equal(paintCount(canvas), 3);
     clock.runFrame();
     assert.deepEqual(browser.logs.slice(3), [
-        'Roadie: 3D explorer moving frame - 531 operations, 80 cells, step 4, smooth 1 (121 point limit) - built in 0.0 ms, ' +
+        'Roadie: 3D explorer moving frame - 522 operations, 80 cells, step 4, smooth 1 (121 point limit) - built in 0.0 ms, ' +
             'painted in 0.0 ms, frame in 0.0 ms'
     ]);
     assert.deepEqual([...clock.timeouts.values()].map(({time}) => time), [1150]);
 
     // Another key, before the still view is drawn, puts it off - the last frame was fast, so this one has more points
     clock.time = 1000;
-    assert.equal(keyDown(browser, 'KeyE', 'e'), true);
+    assert.equal(keyDown(browser, 'ArrowRight', 'ArrowRight'), true);
     assert.equal(clock.timeouts.size, 0);
     clock.runFrame();
     assert.equal(paintCount(canvas), 4);
     assert.deepEqual([...clock.timeouts.values()].map(({time}) => time), [1250]);
     clock.runFrame();
     assert.deepEqual(browser.logs.slice(4), [
-        'Roadie: 3D explorer moving frame - 604 operations, 140 cells, step 3, smooth 1 (206 point limit) - built in 0.0 ms, ' +
+        'Roadie: 3D explorer moving frame - 572 operations, 129 cells, step 3, smooth 1 (206 point limit) - built in 0.0 ms, ' +
             'painted in 0.0 ms, frame in 0.0 ms'
     ]);
     clock.runTimeout();
     assert.equal(paintCount(canvas), 5);
-    assert.equal(viewStatus(canvas), 'Center x 200, y 150, z 533 ft - zoom 1x, rotation 50, tilt 35, exaggeration 1.5x');
+    assert.equal(viewStatus(canvas), 'Center x 322, y 91, z 528 ft - zoom 1x, rotation 30, tilt 35, exaggeration 1.5x');
 
     // A very slow still frame lowers the still view's point limit
     clock.time = 101250;
     clock.runFrame();
     assert.deepEqual(browser.logs.slice(5), [
-        'Roadie: 3D explorer still frame - 786 operations, 300 cells, step 2, smooth 1 (425 point limit) - built in 0.0 ms, ' +
+        'Roadie: 3D explorer still frame - 733 operations, 272 cells, step 2, smooth 1 (425 point limit) - built in 0.0 ms, ' +
             'painted in 0.0 ms, frame in 100000.0 ms'
     ]);
 
     // The still view isn't drawn when its point limit isn't more than the moving view's (294 points, after its fast frames)
-    assert.equal(keyDown(browser, 'KeyE', 'e'), true);
+    assert.equal(keyDown(browser, 'ArrowRight', 'ArrowRight'), true);
     clock.runFrame();
     assert.equal(paintCount(canvas), 6);
     assert.equal(clock.timeouts.size, 1);
@@ -409,7 +410,7 @@ test('the 3D explorer page draws its still view', async (context) => {
     assert.equal(clock.timeouts.size, 0);
     clock.runFrame();
     assert.deepEqual(browser.logs.slice(6), [
-        'Roadie: 3D explorer moving frame - 604 operations, 140 cells, step 3, smooth 1 (294 point limit) - built in 0.0 ms, ' +
+        'Roadie: 3D explorer moving frame - 500 operations, 104 cells, step 3, smooth 1 (294 point limit) - built in 0.0 ms, ' +
             'painted in 0.0 ms, frame in 250.0 ms'
     ]);
 });
@@ -417,36 +418,32 @@ test('the 3D explorer page draws its still view', async (context) => {
 
 test('the 3D explorer page draws all of the terrain when it fits the time budget', async (context) => {
     // No measured cell cost - the still view has the points for every grid cell, smoothed - and a fast computer's cell
-    // cost - the moving view does, too
-    for (const [cellCost, expectedLogs, expectedTimeouts] of [
+    // cost - the moving view does, too, so the still view isn't drawn
+    for (const [cellCost, expectedLogs] of [
         [
             null,
             [
-                'Roadie: 3D explorer moving frame - 43756 operations, 43200 cells, step 1, smooth 6 (53125 point limit) - ' +
+                'Roadie: 3D explorer moving frame - 43747 operations, 43200 cells, step 1, smooth 6 (53125 point limit) - ' +
                     'built in 0.0 ms, painted in 0.0 ms, frame in 0.0 ms',
-                'Roadie: 3D explorer still frame - 59356 operations, 58800 cells, step 1, smooth 7 - ' +
+                'Roadie: 3D explorer still frame - 59347 operations, 58800 cells, step 1, smooth 7 - ' +
                     'built in 0.0 ms, painted in 0.0 ms, frame in 0.0 ms'
-            ],
-            1
+            ]
         ],
         [
             '0.0001',
             [
-                'Roadie: 3D explorer moving frame - 59356 operations, 58800 cells, step 1, smooth 7 - ' +
+                'Roadie: 3D explorer moving frame - 59347 operations, 58800 cells, step 1, smooth 7 - ' +
                     'built in 0.0 ms, painted in 0.0 ms, frame in 0.0 ms'
-            ],
-            0
+            ]
         ]
     ]) {
         const browser = exploreBrowser(context, {cellCost, 'search': '?debug'});
         const {clock} = browser;
         await startApp(browser);
         clock.runFrame();
-        assert.equal(clock.timeouts.size, expectedTimeouts);
-        if (expectedTimeouts > 0) {
-            clock.runTimeout();
-            clock.runFrame();
-        }
+        assert.equal(clock.timeouts.size, 1);
+        clock.runTimeout();
+        clock.runFrame();
         assert.deepEqual(browser.logs.slice(1), expectedLogs);
         assert.equal(clock.timeouts.size, 0);
         assert.equal(clock.frames.size, 0);
@@ -463,7 +460,7 @@ test('the 3D explorer page titles', async (context) => {
     // The canvas is shown at its size, at the top left of the window, with a 1 pixel border
     canvas.getBoundingClientRect = () => ({'left': 0, 'top': 0, 'width': 976, 'height': 720});
     const mouseMove = (x, y) => {
-        fire(browser, canvas, 'mousemove', {'clientX': x + 1, 'clientY': y + 1});
+        fire(browser, canvas, 'pointermove', {'pointerId': 1, 'clientX': x + 1, 'clientY': y + 1});
         return canvas.title;
     };
 
@@ -487,7 +484,7 @@ test('the 3D explorer page is left', async (context) => {
     // The frame is measured, and a key is pressed
     clock.time = 30;
     clock.runFrame();
-    assert.equal(keyDown(browser, 'KeyQ', 'q'), true);
+    assert.equal(keyDown(browser, 'ArrowRight', 'ArrowRight'), true);
     assert.equal(clock.frames.size, 1);
     assert.equal(clock.timeouts.size, 0);
     assert.equal(window.localStorage.getItem('roadieCellCost'), '1');
@@ -516,7 +513,7 @@ test('the 3D explorer page is left', async (context) => {
     clock.runFrame();
     assert.deepEqual(browser.logs.slice(-2), [
         'Roadie: render in 0.0 ms',
-        'Roadie: 3D explorer moving frame - 531 operations, 80 cells, step 4, smooth 1 (121 point limit) - built in 0.0 ms, ' +
+        'Roadie: 3D explorer moving frame - 522 operations, 80 cells, step 4, smooth 1 (121 point limit) - built in 0.0 ms, ' +
             'painted in 0.0 ms, frame in 0.0 ms'
     ]);
     assert.equal(clock.timeouts.size, 1);
@@ -526,4 +523,263 @@ test('the 3D explorer page is left', async (context) => {
     assert.equal(document.body.className, '');
     assert.equal(clock.timeouts.size, 0);
     assert.equal(clock.frames.size, 0);
+});
+
+
+test('the 3D explorer page drags', async (context) => {
+    const browser = exploreBrowser(context);
+    const {clock, main} = browser;
+    const app = await startApp(browser);
+    const canvas = main.querySelector('canvas');
+    const root = main.firstElementChild;
+    showCanvas(canvas);
+    const captures = [];
+    canvas.setPointerCapture = (pointerId) => captures.push(pointerId);
+    clock.runFrame();
+    const pointer = (type, x, y, properties = {}) => fire(browser, canvas, type, {
+        'pointerId': 1, 'button': 0, 'buttons': type === 'pointerup' ? 0 : 1, 'clientX': x, 'clientY': y, ...properties
+    });
+
+    // Without a drag, the mouse shows the road's tooltips
+    pointer('pointermove', 538, 376, {'buttons': 0});
+    assert.equal(canvas.title, '2+40: grade 523.0, ground 519.8, fill 3.2');
+
+    // A drag moves the view - the ground point under the mouse follows it, and the view is drawn once per animation
+    // frame. The road's tooltip is cleared.
+    const ground = pageGround(app, 500, 400);
+    pointer('pointerdown', 500, 400);
+    assert.deepEqual(captures, [1]);
+    assert.equal(root.className, 'roadie-explorer roadie-explorer-dragging');
+    assert.equal(canvas.title, '');
+    assert.equal(clock.frames.size, 0);
+    pointer('pointermove', 520, 380);
+    pointer('pointermove', 560, 370);
+    assert.equal(clock.frames.size, 1);
+    clock.runFrame();
+    assert.equal(paintCount(canvas), 2);
+    assertAt(app, ground, 560, 370);
+    assert.equal(viewStatus(canvas), 'Center x 157, y 142, z 533 ft - zoom 1x, rotation 30, tilt 35, exaggeration 1.5x');
+
+    // The drag's end moves the view center along its line of sight to the ground - the view doesn't change
+    pointer('pointerup', 560, 370);
+    assert.equal(root.className, 'roadie-explorer');
+    clock.runFrame();
+    assert.equal(paintCount(canvas), 3);
+    assertAt(app, ground, 560, 370);
+    const grounded = 'Center x 172, y 169, z 518 ft - zoom 1x, rotation 30, tilt 35, exaggeration 1.5x';
+    assert.equal(viewStatus(canvas), grounded);
+
+    // Without a drag, a pointer up does nothing
+    pointer('pointerup', 560, 370);
+    assert.equal(clock.frames.size, 1);
+    clock.runFrame();
+    assert.equal(paintCount(canvas), 3);
+
+    // A drag with the right button rotates and tilts the view around its center - so does a drag with shift or control.
+    // A drag across the view's width turns it half around, and down its height tilts it 90 degrees.
+    for (const [properties, expected] of [
+        [{'button': 2}, 'rotation 40, tilt 44'],
+        [{'shiftKey': true}, 'rotation 50, tilt 53'],
+        [{'ctrlKey': true}, 'rotation 60, tilt 62']
+    ]) {
+        pointer('pointerdown', 400, 300, properties);
+        pointer('pointermove', 400 + 976 / 18, 300 + 72, properties);
+        clock.runFrame();
+        assert.equal(viewStatus(canvas), `Center x 172, y 169, z 518 ft - zoom 1x, ${expected}, exaggeration 1.5x`);
+        pointer('pointerup', 400, 300);
+        clock.runFrame();
+    }
+
+    // Another pointer's drag (a second finger's) is ignored, as is the middle button
+    pointer('pointerdown', 400, 300);
+    pointer('pointerdown', 300, 200, {'pointerId': 2});
+    pointer('pointermove', 350, 250, {'pointerId': 2});
+    pointer('pointerup', 350, 250, {'pointerId': 2});
+    assert.equal(root.className, 'roadie-explorer roadie-explorer-dragging');
+    pointer('pointerup', 400, 300);
+    clock.runFrame();
+    pointer('pointerdown', 400, 300, {'button': 1});
+    assert.equal(root.className, 'roadie-explorer');
+    assert.deepEqual(captures, [1, 1, 1, 1, 1]);
+
+    // A drag whose pointer up is missed (its buttons are up) is ended by its next move, and a canceled drag is ended
+    pointer('pointerdown', 400, 300);
+    pointer('pointermove', 450, 300, {'buttons': 0});
+    assert.equal(root.className, 'roadie-explorer');
+    pointer('pointerdown', 400, 300);
+    pointer('pointercancel', 400, 300);
+    assert.equal(root.className, 'roadie-explorer');
+    assert.equal(clock.frames.size, 0);
+
+    // The canvas has no context menu (the right button drags)
+    assert.equal(fire(browser, canvas, 'contextmenu').defaultPrevented, true);
+});
+
+
+test('the 3D explorer page wheel and double-clicks', async (context) => {
+    const browser = exploreBrowser(context);
+    const {clock, main} = browser;
+    const app = await startApp(browser);
+    const canvas = main.querySelector('canvas');
+    showCanvas(canvas);
+    clock.runFrame();
+
+    // The wheel zooms around the mouse - the ground point under it stays under it
+    const ground = pageGround(app, 600, 300);
+    const wheel = fire(browser, canvas, 'wheel', {'clientX': 600, 'clientY': 300, 'deltaY': -100, 'deltaMode': 0});
+    assert.equal(wheel.defaultPrevented, true);
+    clock.runFrame();
+    assertAt(app, ground, 600, 300);
+    assert.equal(viewStatus(canvas), 'Center x 226, y 173, z 522 ft - zoom 1.22x, rotation 30, tilt 35, exaggeration 1.5x');
+
+    // A wheel's lines are 16 pixels, and a trackpad's pinch (the wheel with the control key) zooms faster
+    fire(browser, canvas, 'wheel', {'clientX': 600, 'clientY': 300, 'deltaY': -3, 'deltaMode': 1});
+    clock.runFrame();
+    assertAt(app, ground, 600, 300);
+    assert.equal(app.page.explorer.state.zoom, 1.344);
+    fire(browser, canvas, 'wheel', {'clientX': 600, 'clientY': 300, 'deltaY': -10, 'deltaMode': 0, 'ctrlKey': true});
+    clock.runFrame();
+    assertAt(app, ground, 600, 300);
+    assert.equal(app.page.explorer.state.zoom, 1.485);
+
+    // A zoom out past the whole site stops at it - then the wheel doesn't change the view
+    fire(browser, canvas, 'wheel', {'clientX': 600, 'clientY': 300, 'deltaY': 1000, 'deltaMode': 0});
+    clock.runFrame();
+    assert.equal(app.page.explorer.state.zoom, 1);
+    const paints = paintCount(canvas);
+    fire(browser, canvas, 'wheel', {'clientX': 600, 'clientY': 300, 'deltaY': 100, 'deltaMode': 0});
+    assert.equal(clock.frames.size, 1);
+    clock.runFrame();
+    assert.equal(paintCount(canvas), paints);
+
+    // A double-click centers the view on the ground there, and zooms in - with shift, out
+    const point = pageGround(app, 300, 450);
+    fire(browser, canvas, 'dblclick', {'clientX': 300, 'clientY': 450});
+    clock.runFrame();
+    assertAt(app, point, 489, 361);
+    assert.equal(app.page.explorer.state.zoom, 2);
+    fire(browser, canvas, 'dblclick', {'clientX': 489, 'clientY': 361, 'shiftKey': true});
+    clock.runFrame();
+    assertAt(app, point, 489, 361);
+    assert.equal(app.page.explorer.state.zoom, 1);
+
+    // A double-click off the site doesn't change the view
+    fire(browser, canvas, 'dblclick', {'clientX': 5, 'clientY': 5});
+    assert.equal(clock.frames.size, 1);
+    clock.runFrame();
+    assert.equal(clock.frames.size, 0);
+});
+
+
+test('the 3D explorer page controls', async (context) => {
+    const browser = exploreBrowser(context);
+    const {clock, main, window} = browser;
+    await startApp(browser);
+    const canvas = main.querySelector('canvas');
+    clock.runFrame();
+    const click = (command) => fire(browser, main.querySelector(`button[data-command="${command}"]`), 'click');
+
+    // Zoom in and out, face north, view from above, and view the whole site
+    for (const [command, status] of [
+        ['in', 'Center x 200, y 150, z 533 ft - zoom 1.41x, rotation 30, tilt 35, exaggeration 1.5x'],
+        ['in', 'Center x 200, y 150, z 533 ft - zoom 2x, rotation 30, tilt 35, exaggeration 1.5x'],
+        ['out', 'Center x 200, y 150, z 533 ft - zoom 1.41x, rotation 30, tilt 35, exaggeration 1.5x'],
+        ['north', 'Center x 200, y 150, z 533 ft - zoom 1.41x, rotation 0, tilt 35, exaggeration 1.5x'],
+        ['top', 'Center x 200, y 150, z 533 ft - zoom 1.41x, rotation 0, tilt 90, exaggeration 1.5x']
+    ]) {
+        click(command);
+        clock.runFrame();
+        assert.equal(viewStatus(canvas), status);
+    }
+
+    // The vertical exaggeration
+    const input = main.querySelector('input');
+    input.value = '3';
+    fire(browser, input, 'input');
+    clock.runFrame();
+    assert.equal(viewStatus(canvas), 'Center x 200, y 150, z 531 ft - zoom 1.41x, rotation 0, tilt 90, exaggeration 3x');
+    assert.equal(input.value, '3');
+
+    // Reset - the exaggeration's control is reset, too
+    click('reset');
+    clock.runFrame();
+    assert.equal(viewStatus(canvas), 'Center x 200, y 150, z 533 ft - zoom 1x, rotation 30, tilt 35, exaggeration 1.5x');
+    assert.equal(input.value, '1.5');
+
+    // A control that doesn't change the view doesn't draw it, and a click between the controls does nothing
+    const paints = paintCount(canvas);
+    click('reset');
+    click('out');
+    fire(browser, main.querySelector('label'), 'click');
+    clock.runFrame();
+    assert.equal(paintCount(canvas), paints);
+
+    // Hide and show the help - whether it's hidden is kept in local storage
+    const help = main.querySelector('ul');
+    const helpButton = main.querySelector('button[data-command="help"]');
+    click('help');
+    assert.equal(help.hidden, true);
+    assert.equal(helpButton.getAttribute('aria-expanded'), 'false');
+    assert.equal(window.localStorage.getItem('roadieExploreHelpHidden'), 'true');
+    click('help');
+    assert.equal(help.hidden, false);
+    assert.equal(helpButton.getAttribute('aria-expanded'), 'true');
+    assert.equal(window.localStorage.getItem('roadieExploreHelpHidden'), 'false');
+    assert.equal(clock.frames.size, 0);
+    assert.equal(paintCount(canvas), paints);
+});
+
+
+test('the 3D explorer page help is hidden', async (context) => {
+    const browser = exploreBrowser(context, {'storage': {'roadieExploreHelpHidden': 'true'}});
+    const {main} = browser;
+    await startApp(browser);
+    assert.equal(main.querySelector('ul').hidden, true);
+    assert.equal(main.querySelector('button[data-command="help"]').getAttribute('aria-expanded'), 'false');
+});
+
+
+test('the 3D explorer page URL', async (context) => {
+    const browser = exploreBrowser(context);
+    const {clock, document, main, window} = browser;
+    const app = await startApp(browser);
+    const {page} = app;
+    const {length} = window.history;
+    clock.runFrame();
+
+    // The view that hasn't changed leaves the URL as it is
+    clock.runTimeout();
+    assert.equal(window.location.hash, exploreHash);
+
+    // Once a changed view stops changing, it's put in the URL - replacing it, without leaving the explorer
+    assert.equal(keyDown(browser, 'ArrowRight', 'ArrowRight'), true);
+    assert.equal(keyDown(browser, 'Equal', '+'), true);
+    clock.runFrame();
+    assert.equal(window.location.hash, exploreHash);
+    clock.runTimeout();
+    assert.equal(
+        window.location.hash,
+        "#var.vExplore=true&var.vFile='plans%2Ffixture.json'&var.vX=263.14&var.vY=123.92&var.vZ=528.55&var.vZoom=1.414"
+    );
+    assert.equal(window.history.length, length);
+    await flush();
+    assert.equal(app.page, page);
+    assert.equal(document.title, 'Fixture Plan - 3D');
+
+    // A view that's changed back leaves the URL as it is
+    clock.runFrame();
+    main.querySelector('button[data-command="in"]').click();
+    main.querySelector('button[data-command="out"]').click();
+    clock.runFrame();
+    const {hash} = window.location;
+    clock.runTimeout();
+    assert.equal(window.location.hash, hash);
+
+    // The URL's view is the explorer's when it's loaded
+    const reloaded = exploreBrowser(context, {hash});
+    const reloadedApp = await startApp(reloaded);
+    assert.deepEqual(
+        reloadedApp.page.explorer.state,
+        {'azimuth': 30, 'tilt': 35, 'exaggeration': 1.5, 'zoom': 1.414, 'x': 263.14, 'y': 123.92, 'z': 528.55}
+    );
 });

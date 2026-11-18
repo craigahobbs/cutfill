@@ -71,7 +71,7 @@ test('buildReport, a meters plan without descriptions, warnings, structures, or 
         '<h3 id="profile">Profile</h3>',
         '<svg: Profile of the Flat road plan option>',
         '<h3 id="3d-views">3D Views</h3>',
-        `<p><a href="${exploreURL}">Explore the plan in 3D</a> (full window, with keyboard controls)</p>`,
+        `<p><a href="${exploreURL}">Explore the plan in 3D</a> (full window, with mouse controls)</p>`,
         '<p><strong>View 1 of 1: Overview</strong> - the whole site, looking north (0°) from 55° above the horizon. ' +
             `The road runs left to right from its start to its end. <a href="${exploreURL}">Explore this view</a></p>`,
         '<svg: 3D view of the Flat road plan option>',
@@ -147,7 +147,7 @@ test('buildReport, a feet plan with descriptions, warnings, structures, and a ma
         '<h3 id="profile">Profile</h3>',
         '<svg: Profile of the Main road plan option>',
         '<h3 id="3d-views">3D Views</h3>',
-        `<p><a href="${exploreURL}">Explore the plan in 3D</a> (full window, with keyboard controls)</p>`,
+        `<p><a href="${exploreURL}">Explore the plan in 3D</a> (full window, with mouse controls)</p>`,
         '<p><strong>View 1 of 1: Overview</strong> - the whole site, looking north (359°) from 55° above the horizon. ' +
             `The road runs left to right from its start to its end. <a href="${exploreURL}">Explore this view</a></p>`,
         '<svg: 3D view of the Main road plan option>',

@@ -226,6 +226,50 @@ export function unproject(view, topo, pxValue, pyValue) {
 }
 
 
+// The maximum number of steps along a view pixel's line of sight in search of the ground, and the number of bisections
+// between the steps
+const groundSteps = 4096;
+const groundBisections = 32;
+
+
+// Find the ground point ([x, y, z]) seen at a view pixel - the first point of its line of sight, from the viewer, at or
+// below the ground - or null if its line of sight misses the topography. The point is on the line of sight, so it
+// projects to the pixel. The line of sight is stepped down from the topography's highest elevation to its lowest, by
+// half its grid spacing across the ground, then the ground is found between the steps by bisection.
+export function groundPoint(view, topo, pxValue, pyValue) {
+    const {minZ, maxZ, spacing} = topo;
+    const reach = (maxZ - minZ) * view.exaggeration * view.cosTilt / view.sinTilt;
+    const steps = Math.min(groundSteps, Math.max(1, Math.ceil(reach / (spacing * 0.5))));
+    const sightAt = (z) => {
+        const [x, y] = unprojectZ(view, pxValue, pyValue, z);
+        const ground = elevation(topo, x, y);
+        return [x, y, z, ground === null ? null : ground - z];
+    };
+    let above = null;
+    for (let ixStep = 0; ixStep <= steps; ixStep++) {
+        const sight = sightAt(maxZ - (maxZ - minZ) * ixStep / steps);
+        if (sight[3] === null) {
+            above = null;
+        } else if (sight[3] < 0) {
+            above = sight;
+        } else {
+            // The ground is between the point above it and this point (at the topography's edge, it's this point)
+            let below = sight;
+            for (let ixBisect = 0; above !== null && ixBisect < groundBisections; ixBisect++) {
+                const middle = sightAt((above[2] + below[2]) * 0.5);
+                if (middle[3] < 0) {
+                    above = middle;
+                } else {
+                    below = middle;
+                }
+            }
+            return below.slice(0, 3);
+        }
+    }
+    return null;
+}
+
+
 // Project a world point to the view - returns [px, py, depth] (larger depth is farther away)
 export function project(view, x, y, z) {
     const x0 = x - view.xc;
