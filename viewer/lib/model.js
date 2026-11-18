@@ -554,6 +554,20 @@ export function planText(plan) {
 }
 
 
+// An option that stands in for a site's plan's options, to validate the site's plan
+const siteOption = {'name': 'Site', 'section': {'width': 1}, 'alignment': [{'x': 0, 'y': 0}, {'x': 1, 'y': 0}]};
+
+
+// Validate a site's plan - a road plan model that may have no road options yet (or no options member). Returns an
+// object with "plan" on success - its options are an empty array, if it has none - or "error" on failure.
+export function validateSitePlan(planValue) {
+    const options = planValue !== null && typeof planValue === 'object' ? planValue.options : null;
+    const isSite = options === undefined || (Array.isArray(options) && options.length === 0);
+    const validated = validatePlan(isSite ? {...planValue, 'options': [siteOption]} : planValue);
+    return isSite && !('error' in validated) ? {'plan': {...validated.plan, 'options': []}} : validated;
+}
+
+
 // Validate a road site model (a plan config) - returns an object with "site" on success, or "error" on failure
 export function validateSite(siteValue) {
     let site;

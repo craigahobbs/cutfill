@@ -3,7 +3,9 @@
 import {AdaptiveSmoothing, reportBudget} from './smoothing.js';
 import {argsLink, argsParse, argsURL, parseHash} from './args.js';
 import {buildReport, planImageURL} from './report.js';
-import {defaultRates, orderPlan, planCriteria, planText, roadieTypes, validatePlan, validateSite} from './model.js';
+import {
+    defaultRates, orderPlan, planCriteria, planText, roadieTypes, validatePlan, validateSite, validateSitePlan
+} from './model.js';
 import {escapeHtml, number, round, unitLabel} from './format.js';
 import {formHtml, formPastePoint, formPlaceholders, formValue} from './form.js';
 import {hitTitle, opCell, paintOps} from './canvas.js';
@@ -485,7 +487,7 @@ export class RoadieApp {
             return `Could not load "${name}" - it isn't a JSON file`;
         }
         if (value !== null && typeof value === 'object' && 'topography' in value) {
-            const validated = validatePlan(value);
+            const validated = validateSitePlan(value);
             if ('error' in validated) {
                 return `The road plan "${name}" is invalid: ${validated.error}`;
             }
@@ -688,14 +690,22 @@ class HomePage {
     }
 
 
-    // The loaded plan's road options - its PlanData, or null
-    async planData() {
+    // The loaded plan's road plan model - its site's data, and its road options (an empty array if it has none) - or
+    // null if it has neither
+    async planValue() {
         const {file} = this.app.loaded;
-        if (file === null) {
+        const blob = file !== null ? await this.app.localFile(file) : null;
+        try {
+            return validateSitePlan(JSON.parse(await blob.text())).plan ?? null;
+        } catch {
             return null;
         }
-        const data = await this.app.loadPlan(`${localPrefix}${file}`);
-        return 'message' in data ? null : data;
+    }
+
+
+    // The loaded plan's road options - its PlanData (the plan has road options)
+    planData() {
+        return this.app.loadPlan(`${localPrefix}${this.app.loaded.file}`);
     }
 
 
@@ -708,32 +718,40 @@ class HomePage {
             element.innerHTML = '';
             return;
         }
-        const data = await this.planData();
+        const value = await this.planValue();
+        const data = (value?.options.length ?? 0) > 0 ? await this.planData() : null;
         if (this.closed) {
             return;
         }
         const {site} = loaded;
-        if (data === null && site === null) {
+        if (value === null && site === null) {
             app.setLoaded(null);
             element.innerHTML = '';
             return;
         }
 
-        // The plan's title, its file, and its actions - its road options are viewed with "View Plan"
+        // The plan's title, its file, and its actions - its road options are viewed with "View Plan", in a new tab
         const button = (id, text, isDisabled = false) => (
             `<button type="button" id="${id}" class="roadie-button"${isDisabled ? ' disabled' : ''}>${escapeHtml(text)}</button>`
         );
+        const viewURL = argsURL(globals, {'file': `${localPrefix}${loaded.file}`});
+        const viewHtml = data !== null ?
+            `<a id="roadie-view" class="roadie-button" href="${escapeHtml(viewURL)}" target="_blank" rel="noopener">View Plan</a>` :
+            button('roadie-view', 'View Plan', true);
         const html = [
-            `<h2 id="loaded">${escapeHtml(site?.title ?? data.plan.title)}</h2>`,
+            `<h2 id="loaded">${escapeHtml(site?.title ?? value.title)}</h2>`,
             `<p class="roadie-loaded-kind">${loaded.name !== null ? `<code>${escapeHtml(loaded.name)}</code>` : 'A new plan'}` +
                 `${loaded.saved === false ? ' <span class="roadie-unsaved">Not saved</span>' : ''}</p>`,
             '<p class="roadie-actions">' +
-                `${button('roadie-view', 'View Plan', data === null)}${button('roadie-edit', 'Edit Plan', site === null)}` +
+                `${viewHtml}${button('roadie-edit', 'Edit Plan', site === null)}` +
                 `${button('roadie-save', 'Save')}${button('roadie-save-as', 'Save As…')}${button('roadie-close', 'Close')}</p>`,
             '<p id="roadie-save-status"></p>'
         ];
-        if (data === null) {
+        if (value === null) {
             html.push('<p>The plan has no road options yet - run the plan to engineer them.</p>');
+        } else if (data === null) {
+            html.push('<p>The plan has no road options - run the plan to engineer them. Its site\'s data (its terrain, streams, ' +
+                'roads, and map) is kept, so a run doesn\'t fetch it from the USGS again.</p>');
         } else if (loaded.changed) {
             html.push('<p class="roadie-notice">The plan was edited since its road options were engineered - run the plan to ' +
                 'engineer them again.</p>');
@@ -756,6 +774,9 @@ class HomePage {
                     'aren\'t read</option></select></label>' +
                     `${button('roadie-run', 'Run Plan', true)}${data !== null ? button('roadie-clear', 'Clear Road Options') : ''}` +
                     '</p>',
+                ...(value !== null ? ['<p><label><input type="checkbox" id="roadie-run-fetch"> Fetch the site\'s data from the USGS ' +
+                    'again - its terrain, streams, roads, and map (a site with other points, units, margin, or spacing is fetched ' +
+                    'anyway)</label></p>'] : []),
                 '<p id="roadie-run-message"></p>',
                 `<div id="roadie-run-progress"${this.runResult === null ? ' hidden' : ''}>${this.runResultHtml()}</div>`
             );
@@ -765,9 +786,6 @@ class HomePage {
         // The actions
         const {document, window} = app;
         const on = (id, listener) => document.getElementById(id)?.addEventListener('click', listener);
-        on('roadie-view', () => {
-            window.location.hash = argsURL(globals, {'file': `${localPrefix}${loaded.file}`});
-        });
         on('roadie-edit', () => {
             window.location.hash = argsURL(globals, {'edit': 'loaded'});
         });
@@ -781,11 +799,13 @@ class HomePage {
                 this.renderRecent();
             }
         });
-        on('roadie-clear', () => {
-            app.setLoaded({...loaded, 'file': null, 'changed': false, 'saved': false});
+        on('roadie-clear', async () => {
+            // The plan's road options and their description are cleared - its site's data is kept
+            const cleared = Object.fromEntries(Object.entries(value).filter(([member]) => member !== 'description'));
+            await app.storeLocal(loaded.file, new window.Blob([planText({...cleared, 'options': []})], {'type': 'application/json'}));
+            app.setLoaded({...loaded, 'changed': false, 'saved': false});
             this.runResult = null;
-            this.renderLoaded();
-            this.renderRecent();
+            await this.renderLoaded();
         });
         if (site !== null) {
             on('roadie-run', () => this.run());
@@ -851,7 +871,11 @@ class HomePage {
         const {loaded} = app;
         const select = document.getElementById('roadie-run-model');
         const model = select.value !== '' ? select.value : null;
-        const controls = [select, ...document.querySelectorAll('#roadie-loaded button, #roadie-open, #roadie-new, #roadie-recent button')];
+        const fetchElement = document.getElementById('roadie-run-fetch');
+        const fetch = fetchElement?.checked ?? false;
+        const controls = [select, ...document.querySelectorAll(
+            '#roadie-loaded button, #roadie-run-fetch, #roadie-open, #roadie-new, #roadie-recent button'
+        )];
         for (const control of controls) {
             control.disabled = true;
         }
@@ -914,11 +938,11 @@ class HomePage {
                 window.setTimeout(resolve, 0);
             });
         };
-        const data = await this.planData();
+        const plan = await this.planValue();
         let result;
         try {
-            result = await tools.planRoad(window, {'site': loaded.site, 'plan': data?.plan ?? null}, {
-                model, ollamaHost, status, 'files': app.runFiles, 'signal': controller.signal
+            result = await tools.planRoad(window, {'site': loaded.site, plan}, {
+                model, ollamaHost, status, 'files': app.runFiles, 'signal': controller.signal, fetch
             });
         } catch ({message}) {
             result = {'code': 1, 'lines': [`error: ${message}`], 'plan': null};
@@ -951,11 +975,12 @@ class HomePage {
         const {loaded} = app;
         const statusElement = document.getElementById('roadie-save-status');
 
-        // The plan's file text - its road options' plan, with its plan config, or its plan config
-        const data = await this.planData();
+        // The plan's file text - its road plan model (its site's data, and its road options), with its config, or its
+        // config
+        const value = await this.planValue();
         let text;
-        if (data !== null) {
-            text = planText(loaded.site !== null ? orderPlan({...data.plan, 'site': loaded.site}) : data.plan);
+        if (value !== null) {
+            text = planText(loaded.site !== null ? orderPlan({...value, 'site': loaded.site}) : value);
         } else {
             text = `${JSON.stringify(loaded.site, null, 4)}\n`;
         }
@@ -1054,7 +1079,7 @@ class EditPage {
         this.closed = false;
         this.siteDefaults = null;
         const {loaded} = app;
-        const title = this.isNew ? 'New Plan' : 'Edit the Plan Config';
+        const title = this.isNew ? 'New Plan' : 'Edit Plan';
         if (!this.isNew && (loaded?.site ?? null) === null) {
             app.render(title, `<h1>${title}</h1>\n<p>There's no loaded plan config to edit.</p>\n` +
                 `<p>${argsLink(globals, 'Back')}</p>`);
