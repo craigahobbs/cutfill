@@ -1,8 +1,10 @@
 // app.js - the SageRoad viewer web application - its pages' routing, its local files, and its loaded plan
 
+import {DownloadPage, ModelsPage} from './modelsPage.js';
 import {EditPage, HomePage} from './homePage.js';
 import {ExplorePage, ReportPage, cellCostKey} from './viewPages.js';
 import {argsParse, argsURL, localPrefix, parseHash} from './args.js';
+import {ollamaModels, ollamaPull} from './models.js';
 import {validatePlan, validateSite, validateSitePlan} from './model.js';
 import {AdaptiveSmoothing} from './smoothing.js';
 import {MapPage} from './mapPage.js';
@@ -80,6 +82,10 @@ export class SageRoadApp {
         this.openError = null;
         this.loadedValue = undefined;
         this.fileHandle = null;
+        // Ollama's model downloads, and the window's fetch function
+        this.downloads = new Map();
+        this.downloadError = null;
+        this.fetchFn = (url, options) => window.fetch(url, options);
     }
 
 
@@ -99,6 +105,12 @@ export class SageRoadApp {
         });
         window.addEventListener('afterprint', () => {
             this.printing = false;
+        });
+        // Leaving the page stops the model downloads - the browser asks first
+        window.addEventListener('beforeunload', (event) => {
+            if (this.downloads.size > 0) {
+                event.preventDefault();
+            }
         });
         this.document.addEventListener('keydown', (event) => {
             // The keys of a focused input are its own
@@ -302,6 +314,15 @@ export class SageRoadApp {
             return;
         }
 
+        // Ollama's models, or the models to download?
+        if (args.download) {
+            this.setPage(new DownloadPage(this, globals, args));
+            return;
+        } else if (args.models) {
+            this.setPage(new ModelsPage(this, globals));
+            return;
+        }
+
         // The plan config editor, or its marks' map?
         if ((args.edit ?? null) !== null) {
             this.setPage(new EditPage(this, globals, args.edit));
@@ -393,15 +414,40 @@ export class SageRoadApp {
     }
 
 
-    // Get the names of the models of an Ollama host (the planning tools' default) - none, if Ollama doesn't answer
-    async modelList(ollamaHost) {
-        try {
-            const response = await this.window.fetch(`${ollamaHost}/api/tags`);
-            const {models} = JSON.parse(await response.text());
-            return models.map(({name}) => name).filter((name) => typeof name === 'string');
-        } catch {
-            return [];
+    // Get Ollama's models (models.js's "ollamaModels") - null if Ollama doesn't answer
+    modelList() {
+        return ollamaModels(this.fetchFn);
+    }
+
+
+    // Download an Ollama model, if it isn't downloading - the page is told when the downloads change ("downloadsChanged" -
+    // its argument is true if a download ended), and a download that fails is the next models page's error
+    async downloadModel(id) {
+        if (this.downloads.has(id)) {
+            return;
         }
+        const controller = new this.window.AbortController();
+        const download = {id, 'status': 'starting', 'completed': 0, 'total': null, controller};
+        this.downloads.set(id, download);
+        this.page?.downloadsChanged?.(false);
+        try {
+            await ollamaPull(this.fetchFn, id, controller.signal, ({status, completed, total}) => {
+                Object.assign(download, {status, completed, total});
+                this.page?.downloadsChanged?.(false);
+            });
+        } catch ({message}) {
+            if (!controller.signal.aborted) {
+                this.downloadError = `Could not download the model "${id}" - ${message}`;
+            }
+        }
+        this.downloads.delete(id);
+        this.page?.downloadsChanged?.(true);
+    }
+
+
+    // Stop a model download
+    stopDownload(id) {
+        this.downloads.get(id)?.controller.abort();
     }
 
 

@@ -46,6 +46,11 @@ make run FILE=<plan.json>    # view a plan in the browser
   is dropped). The report and the 3D explorer are `viewPages.js`'s. The home page links to an example plan if the
   page's `sageroad` element has a `data-example` attribute (the plan's URL) - the project's web site adds it (the
   top-level makefile's `site`).
+- Ollama's model pages (`modelsPage.js` - `#var.vModels=true`, its models, and `#var.vDownload=true`, the models to
+  download) ask Ollama itself, on this computer (`models.js` - its host is the planning tools', too). A model's download
+  is the application's (`SageRoadApp.downloadModel` - its progress is the page's `downloadsChanged`), so it goes on while
+  another page is shown, but not if the page is closed or reloaded. The run's model list has only the models that answer
+  questions (their capabilities have "completion"), and says why a plan's notes can't be read, or won't be.
 - ESLint's `id-length` rule allows the coordinate names `x`, `y`, and `z` (`ESLINT_ARGS` in the makefile) - other names
   are two characters or longer.
 - Optimizations must leave the output byte-identical - compare `tools/render.js` output (the report and `--explore`)

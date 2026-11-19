@@ -19,7 +19,13 @@ test('sageRoadArguments', () => {
             ['explore', 'bool', false, true],
             ['doc', 'bool', false, true],
             ['edit', 'string', null, true],
-            ['map', 'bool', false, true]
+            ['map', 'bool', false, true],
+            ['models', 'bool', false, true],
+            ['download', 'bool', false, true],
+            ['recent', 'int', 6, true],
+            ['compatible', 'bool', true, true],
+            ['modelType', 'string', 'Local', true],
+            ['modelSort', 'string', 'Modified', true]
         ]
     );
 });
@@ -96,7 +102,7 @@ test('argsParse validates types and applies defaults', () => {
     const args = argsParse({'vFile': 'a.json', 'vOption': 1.5, 'vTilt': 50, 'vExplore': 1, 'vX': 'bad'});
     assert.deepEqual(args, {
         'file': 'a.json', 'option': 0, 'azimuth': 30, 'tilt': 50, 'exaggeration': 1.5, 'zoom': 1, 'explore': true, 'doc': false,
-        'map': false
+        'map': false, 'models': false, 'download': false, 'recent': 6, 'compatible': true, 'modelType': 'Local', 'modelSort': 'Modified'
     });
 
     // The MarkdownUp viewer's "smooth" argument is ignored, and dropped from links
@@ -106,8 +112,10 @@ test('argsParse validates types and applies defaults', () => {
 
 test('argsParse', () => {
     // The defaults
-    assert.deepEqual(argsParse({}),
-        {'option': 0, 'azimuth': 30, 'tilt': 35, 'exaggeration': 1.5, 'zoom': 1, 'explore': false, 'doc': false, 'map': false});
+    assert.deepEqual(argsParse({}), {
+            'option': 0, 'azimuth': 30, 'tilt': 35, 'exaggeration': 1.5, 'zoom': 1, 'explore': false, 'doc': false, 'map': false,
+            'models': false, 'download': false, 'recent': 6, 'compatible': true, 'modelType': 'Local', 'modelSort': 'Modified'
+        });
 
     // Valid values
     assert.deepEqual(
@@ -117,14 +125,18 @@ test('argsParse', () => {
         }),
         {
             'file': 'plans/a.json', 'option': 3, 'azimuth': 120.5, 'tilt': 60, 'exaggeration': 2.5, 'zoom': 4, 'x': 1.5, 'y': -2, 'z': 0,
-            'explore': true, 'doc': false, 'map': false
+            'explore': true, 'doc': false, 'map': false, 'models': false, 'download': false, 'recent': 6, 'compatible': true,
+            'modelType': 'Local', 'modelSort': 'Modified'
         }
     );
 
     // Invalid values - a number file, a string option, non-boolean and non-0/1 flags, a null azimuth, and a boolean zoom
     assert.deepEqual(
         argsParse({'vFile': 5, 'vOption': '1', 'vExplore': 'yes', 'vDoc': 2, 'vAzimuth': null, 'vZoom': true}),
-        {'option': 0, 'azimuth': 30, 'tilt': 35, 'exaggeration': 1.5, 'zoom': 1, 'explore': false, 'doc': false, 'map': false}
+        {
+            'option': 0, 'azimuth': 30, 'tilt': 35, 'exaggeration': 1.5, 'zoom': 1, 'explore': false, 'doc': false, 'map': false,
+            'models': false, 'download': false, 'recent': 6, 'compatible': true, 'modelType': 'Local', 'modelSort': 'Modified'
+        }
     );
 });
 

@@ -15,7 +15,8 @@ The project's `make run` runs it.
 
 The back end (`src/sageroad/app.py`) is a [chisel](https://github.com/craigahobbs/chisel#readme) application, served
 by [waitress](https://github.com/Pylons/waitress#readme) to this computer only (`127.0.0.1`). For now, it's only the
-front end's statics (and chisel's API documentation, `/doc/`) - the front end does the rest in the browser.
+front end's statics, the computer's system information (`getSystemInfo` - its memory, and whether it runs MLX models,
+which a browser can't know), and chisel's API documentation (`/doc/`) - the front end does the rest in the browser.
 
 The front end is the package's `static` directory - `make static` copies the viewer's staged application there, with
 the planning tools' modules (`plan/lib/`). It's committed, so the package builds from the repository without Node.js.
@@ -29,9 +30,16 @@ sageroad-venv/bin/pip install sageroad
 ```
 
 The app adds the front end's files at creation (package resources), and the page loads nothing from the internet but
-the USGS's site data - the application runs offline otherwise. The tests stage the front end first, so the pre-commit
-gate keeps the committed copy the sources', and they check that the package has every module the page imports (and
-no others), and that the front end's only web addresses are the USGS's, Ollama's (on this computer), and text.
+the USGS's site data and the list of Ollama's models to download (ollama-chat's) - the application runs offline
+otherwise. The tests stage the front end first, so the pre-commit gate keeps the committed copy the sources', and they
+check that the package has every module the page imports (and no others), and that the front end's only web addresses
+are the USGS's, the model list's, Ollama's (on this computer), and text.
+
+The page asks Ollama itself - the back end isn't a part of it. Its model pages (`#var.vModels=true`, and
+`#var.vDownload=true`) list Ollama's models, delete them, and download them (a download is the page's request - it
+stops if the page is closed or reloaded), and list the models to download - by default, as ollama-chat's do, the
+models modified in the last 6 months that the computer runs (its system information's - a local model needs about a
+byte of memory a parameter), the most recently modified first, and of them, the local models.
 
 The application's home page opens a plan - with the browser's open dialog (its file handle is kept, so the plan is
 saved to its file) or file input, or dropped on the page - or makes a new one (`#var.vEdit='new'`). The files stay on

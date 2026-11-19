@@ -20,13 +20,16 @@ The project is three subprojects, and the top-level makefile delegates to them:
   `sageroad` package: its command line (`sageroad`, `make run`) serves the front end - the viewer's application and the
   planning tools, which `make -C app static` stages in the package - with a
   [chisel](https://github.com/craigahobbs/chisel#readme) back end (`app/src/sageroad/app.py`) that's only the front
-  end's statics, for now. The front end does the work in the browser: its home page opens a plan (file dialog) or
+  end's statics and the computer's system information (`getSystemInfo` - its memory, and whether it runs MLX models,
+  which a browser can't know), for now. The front end does the work in the browser: its home page opens a plan (file dialog) or
   makes a new one (a config form made from the model's types - `viewer/lib/form.js`), shows the loaded plan - its
   config, and its road options - runs it with `plan/lib/browser/io.js` (`planRoad` - the run's procedure, `autoPlan`,
   with a browser's input and output functions), and saves it to a file. A plan is its config (a road site model) and, once
   it's run, its road options (a road plan model with the config as its `site` member) - a plan without road options
   is its config's file. The tools' modules stay importable in a browser: a Node module they import needs a stand-in in
-  `plan/lib/browser/` and the page's import map (`viewer/index.html`). See [app/README.md](app/README.md).
+  `plan/lib/browser/` and the page's import map (`viewer/index.html`). The page asks Ollama (on this computer) itself -
+  its model pages (`viewer/lib/modelsPage.js`, `#var.vModels=true`) list, download, and delete its models
+  (`viewer/lib/models.js`), and a run asks a model its questions. See [app/README.md](app/README.md).
 
 `example/` is the example - a plan config (`site.json`, with its marks) and the plan the application made from it
 (`example.json` - one file, with its USGS topographic map image), and the README's screenshot of its report's 3D
@@ -87,7 +90,8 @@ Run `make` in `viewer/` or `plan/` for a subproject's own targets (e.g.
 - The application's front end (`app/src/sageroad/static/`) is generated (`make -C app static`) and committed, so the
   package builds from the repository without Node.js - commit it with the viewer and planning tool changes that
   regenerate it (`make commit` does), and don't edit it by hand. The front end loads nothing from the internet but
-  the USGS's services (an app test checks). The package's readme (its PyPI page) is the README, by a link
+  the USGS's services and the list of Ollama's models to download (ollama-chat's, on craigahobbs.github.io - an app
+  test checks). The package's readme (its PyPI page) is the README, by a link
   (`app/PYPI.md` - setuptools reads only the package directory's files), so the README's links are all absolute.
 - Road plan files and their work directories (`*.work/`, git-ignored) usually live outside the repo - they're user
   data, so don't add them to the repo or the web site.

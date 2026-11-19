@@ -3,6 +3,7 @@ import os
 import posixpath
 import re
 import unittest
+import unittest.mock
 
 from sageroad.app import SageRoad
 
@@ -109,12 +110,13 @@ class TestApp(unittest.TestCase):
 
 
     def test_statics_offline(self):
-        # The front end loads nothing from the internet but the USGS's services (a site's data) - its other web addresses
-        # are Ollama's (on this computer), and text: XML namespaces, and documentation links
+        # The front end loads nothing from the internet but the USGS's services (a site's data) and the list of Ollama's
+        # models to download (Ollama Chat's, on craigahobbs.github.io) - its other web addresses are Ollama's (on this
+        # computer), and text: XML namespaces, and documentation and Ollama's library's links
         allowed = (
             'https://tnmaccess.nationalmap.gov/', 'https://hydro.nationalmap.gov/', 'https://carto.nationalmap.gov/',
             'https://basemap.nationalmap.gov/', 'http://127.0.0.1:11434', 'http://${', 'http://www.w3.org/2000/svg',
-            'https://github.com/craigahobbs/', 'https://craigahobbs.github.io/'
+            'https://github.com/craigahobbs/', 'https://craigahobbs.github.io/', 'https://ollama.com/'
         )
         app = SageRoad()
         found = set()
@@ -131,3 +133,49 @@ class TestApp(unittest.TestCase):
         with create_test_files([(('static', 'index.html'), b'<!DOCTYPE html>')]) as temp_dir:
             app = SageRoad(os.path.join(temp_dir, 'missing'))
             self.assertListEqual([request.name for request in app.requests.values() if request.doc_group == 'Statics'], [])
+
+
+    def test_get_system_info(self):
+        # This computer's memory, and whether it runs MLX models
+        app = SageRoad()
+        status, headers, content = app.request('GET', '/getSystemInfo')
+        self.assertEqual(status, '200 OK')
+        self.assertListEqual(headers, [('Content-Type', 'application/json')])
+        response = json.loads(content.decode('utf-8'))
+        self.assertListEqual(sorted(response), ['memory', 'mlx'])
+        self.assertGreater(response['memory'], 0)
+        self.assertIsInstance(response['mlx'], bool)
+
+
+    def test_get_system_info_platforms(self):
+        app = SageRoad()
+
+        # A Mac with Apple silicon - its memory is its pages'
+        with unittest.mock.patch('platform.system', return_value='Darwin'), \
+                unittest.mock.patch('platform.machine', return_value='arm64'), \
+                unittest.mock.patch('os.sysconf', return_value=65536, create=True):
+            _, _, content = app.request('GET', '/getSystemInfo')
+        self.assertDictEqual(json.loads(content.decode('utf-8')), {'memory': 65536 * 65536, 'mlx': True})
+
+        # A Mac with an Intel processor, whose memory can't be determined
+        with unittest.mock.patch('platform.system', return_value='Darwin'), \
+                unittest.mock.patch('platform.machine', return_value='x86_64'), \
+                unittest.mock.patch('os.sysconf', return_value=-1, create=True):
+            _, _, content = app.request('GET', '/getSystemInfo')
+        self.assertDictEqual(json.loads(content.decode('utf-8')), {'memory': -1, 'mlx': False})
+
+        # Linux, with a page size that can't be determined
+        with unittest.mock.patch('platform.system', return_value='Linux'), \
+                unittest.mock.patch('os.sysconf', side_effect=lambda name: 1000 if name == 'SC_PHYS_PAGES' else -1, create=True):
+            _, _, content = app.request('GET', '/getSystemInfo')
+        self.assertDictEqual(json.loads(content.decode('utf-8')), {'memory': -1, 'mlx': False})
+
+        # Windows - its memory is its memory status's
+        def memory_status(status_ref):
+            status_ref._obj.ullTotalPhys = 17179869184 # pylint: disable=protected-access
+        windll = unittest.mock.Mock()
+        windll.kernel32.GlobalMemoryStatusEx.side_effect = memory_status
+        with unittest.mock.patch('platform.system', return_value='Windows'), \
+                unittest.mock.patch('ctypes.windll', windll, create=True):
+            _, _, content = app.request('GET', '/getSystemInfo')
+        self.assertDictEqual(json.loads(content.decode('utf-8')), {'memory': 17179869184, 'mlx': False})

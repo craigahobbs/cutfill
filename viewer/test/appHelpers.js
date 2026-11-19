@@ -159,9 +159,10 @@ export class FakeIndexedDB {
 
 
 // Create the application's browser - a jsdom window of the application's page with a fake clock (and the time functions
-// mocked to it), local storage items ("storage"), IndexedDB, fetch (of the "files" - a URL's text or a promise of it, or
-// null for a network error; any other URL isn't found), intersection observer, canvas 2D context, object URLs, and
-// scrolling. The browser object has the window and what the fakes record.
+// mocked to it), local storage items ("storage"), IndexedDB, fetch (of the "files" - a URL's text or a promise of it, null
+// for a network error, or a function of the fetch's options that returns one of those, undefined, or a response object;
+// any other URL isn't found), intersection observer, canvas 2D context, object URLs, and scrolling. The browser object
+// has the window and what the fakes record.
 export function fakeBrowser(testContext, {hash = '', search = '', files = {}, storage = {}, indexedDB = new FakeIndexedDB()} = {}) {
     const logs = [];
     const virtualConsole = new VirtualConsole();
@@ -196,13 +197,16 @@ export function fakeBrowser(testContext, {hash = '', search = '', files = {}, st
         window.localStorage.setItem(key, value);
     }
     window.indexedDB = indexedDB;
-    window.fetch = (url) => {
+    window.fetch = async (url, options) => {
         fetches.push(url);
-        const text = files[url];
+        const file = files[url];
+        const text = await (typeof file === 'function' ? file(options) : file);
         if (text === null) {
-            return Promise.reject(new TypeError('Failed to fetch'));
+            throw new TypeError('Failed to fetch');
+        } else if (text !== undefined && typeof text === 'object') {
+            return text;
         }
-        return Promise.resolve(text !== undefined ? {'ok': true, 'text': () => Promise.resolve(text)} : {'ok': false});
+        return text !== undefined ? {'ok': true, 'text': () => Promise.resolve(text)} : {'ok': false};
     };
 
     // The intersection observer - the test reports intersections with its "callback"

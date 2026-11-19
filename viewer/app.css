@@ -197,6 +197,9 @@ button.sageroad-button, a.sageroad-button {
     color: inherit;
     text-decoration: none;
 }
+.sageroad-button[hidden] {
+    display: none;
+}
 button.sageroad-button:disabled {
     opacity: 0.5;
     cursor: default;
@@ -233,6 +236,19 @@ button.sageroad-button:disabled {
 .sageroad-notice {
     font-weight: bold;
     color: light-dark(rgb(140, 80, 0), rgb(240, 180, 90));
+}
+
+
+/* The Ollama model pages - the models' tables, and the filters of the models to download */
+table.sageroad-models .sageroad-number {
+    text-align: right;
+}
+.sageroad-model-actions {
+    display: flex;
+    gap: 0.8em;
+}
+.sageroad-filters {
+    line-height: 1.8;
 }
 
 

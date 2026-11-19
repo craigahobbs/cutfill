@@ -2,6 +2,7 @@ import {FakeIndexedDB, fakeBrowser, fire, flush, startApp} from './appHelpers.js
 import {SageRoadApp} from '../lib/app.js';
 import assert from 'node:assert/strict';
 import {fixturePlan} from './fixture.js';
+import {ollamaMissingHtml} from '../lib/modelsPage.js';
 import test from 'node:test';
 import {titleFileName} from '../lib/homePage.js';
 
@@ -161,6 +162,7 @@ test('the home page with an example road plan', async (context) => {
 // Ollama's models' URL, and its response
 const modelsURL = 'http://127.0.0.1:11434/api/tags';
 const modelsText = JSON.stringify({'models': [{'name': 'qwen:27b'}, {'name': 5}, {'name': 'a<b'}]});
+const showURL = 'http://127.0.0.1:11434/api/show';
 
 
 // A plan config, and a loaded plan of it (in local storage) - opened from a file, without road options
@@ -237,9 +239,8 @@ function loadedElement(browser) {
 
 // The loaded plan's actions' text - and whether they're disabled
 function loadedActions(browser) {
-    return [...loadedElement(browser).querySelectorAll('.sageroad-actions a, .sageroad-actions button')].map((element) => (
-        `${element.textContent}${element.disabled ? ' (disabled)' : ''}`
-    ));
+    return [...loadedElement(browser).querySelectorAll('.sageroad-actions a, .sageroad-actions button')].
+        filter((element) => !element.hidden).map((element) => `${element.textContent}${element.disabled ? ' (disabled)' : ''}`);
 }
 
 
@@ -286,14 +287,14 @@ test('the loaded plan', async (context) => {
     ]);
     assert.deepEqual([...element.querySelectorAll('li')].map((item) => item.innerHTML), ['Stay off the barn.', 'A &lt;gravel&gt; road.']);
     assert.deepEqual(loadedActions(browser), [
-        'View Plan (disabled)', 'Edit Plan', 'Edit Map (disabled)', 'Save', 'Save As…', 'Close', 'Run Plan'
+        'View Plan (disabled)', 'Edit Plan', 'Edit Map (disabled)', 'Save', 'Save As…', 'Close', 'Run Plan', 'Ollama Models'
     ]);
     const modelOptions = [...browser.document.getElementById('sageroad-run-model').options];
     assert.deepEqual(modelOptions.map(({value, textContent}) => [value, textContent]), [
-        ['', 'No model - the notes aren\'t read'], ['qwen:27b', 'qwen:27b'], ['a<b', 'a<b']
+        ['', 'No model - the notes aren\'t read'], ['a<b', 'a<b'], ['qwen:27b', 'qwen:27b']
     ]);
     assert.equal(browser.document.getElementById('sageroad-run-progress').hidden, true);
-    assert.deepEqual(browser.fetches, [modelsURL]);
+    assert.deepEqual(browser.fetches, [modelsURL, showURL, showURL]);
 
     // A new plan, without notes, criteria, or exclusions - in feet - that isn't saved
     const {notes, exclusions, criteria, costRates, ...plain} = siteConfig;
@@ -380,7 +381,7 @@ test('running a plan', async (context) => {
         element.querySelector('.sageroad-loaded-kind').innerHTML, '<code>hill.json</code> <span class="sageroad-unsaved">Not saved</span>'
     );
     assert.deepEqual(loadedActions(browser), [
-        'View Plan', 'Edit Plan', 'Edit Map (disabled)', 'Save', 'Save As…', 'Close', 'Run Plan', 'Clear Road Options'
+        'View Plan', 'Edit Plan', 'Edit Map (disabled)', 'Save', 'Save As…', 'Close', 'Run Plan', 'Clear Road Options', 'Ollama Models'
     ]);
 
     // The last model chosen is the model - and no model, once it's chosen
@@ -632,6 +633,56 @@ test('editing a plan\'s config, and running it again', async (context) => {
 });
 
 
+test('the run\'s model messages', async (context) => {
+    // The run's model message - null if it's hidden
+    const message = (browser) => {
+        const element = browser.document.getElementById('sageroad-model-message');
+        return element.hidden ? null : element.innerHTML;
+    };
+
+    // Ollama isn't running - the plan's notes can't be read
+    const noOllama = loadedBrowser(context, loadedConfig, {'files': {[modelsURL]: null}});
+    await startToolsApp(noOllama);
+    assert.equal(message(noOllama), ollamaMissingHtml('a model can\'t read the plan\'s notes'));
+    assert.equal(noOllama.document.getElementById('sageroad-run-model').options.length, 1);
+    assert.equal(noOllama.document.getElementById('sageroad-models').getAttribute('href'), '#var.vModels=true');
+
+    // Ollama has no models that answer questions - its speech model isn't one
+    const speechText = JSON.stringify({'models': [{'name': 'phonon:latest', 'capabilities': ['speech']}]});
+    const noModels = loadedBrowser(context, loadedConfig, {'files': {[modelsURL]: speechText}});
+    await startToolsApp(noModels);
+    assert.equal(message(noModels), 'Ollama has no models that answer questions, so the plan\'s notes can\'t be read - ' +
+        '<a href="#var.vDownload=true">download a model</a> that reads images.');
+    assert.equal(noModels.document.getElementById('sageroad-run-model').options.length, 1);
+
+    // No model is chosen, and a model that doesn't read images is chosen - and one that does
+    const files = {
+        [modelsURL]: modelsText,
+        [showURL]: ({body}) => JSON.stringify({
+            'capabilities': JSON.parse(body).model === 'qwen:27b' ? ['completion', 'vision'] : ['completion']
+        })
+    };
+    const browser = loadedBrowser(context, loadedConfig, {files});
+    await startToolsApp(browser);
+    assert.equal(message(browser), 'No model is chosen - the plan\'s notes won\'t be read.');
+    const select = browser.document.getElementById('sageroad-run-model');
+    select.value = 'a<b';
+    fire(browser, select, 'change');
+    assert.equal(message(browser), 'The model "a&lt;b" doesn\'t read images - it reads the notes, but it can\'t find their places ' +
+        'on the site\'s map.');
+    select.value = 'qwen:27b';
+    fire(browser, select, 'change');
+    assert.equal(message(browser), null);
+
+    // A plan without notes doesn't need a model
+    const {notes, ...noNotes} = siteConfig;
+    assert.equal(notes.length, 2);
+    const noNotesBrowser = loadedBrowser(context, {...loadedConfig, 'site': noNotes}, {files});
+    await startToolsApp(noNotesBrowser);
+    assert.equal(message(noNotesBrowser), null);
+});
+
+
 test('clearing a plan\'s road options, and closing it', async (context) => {
     // Clear the road options - the plan keeps its site's data, so a run doesn't fetch it again
     const {browser, app, calls} = await startRunApp(context, {'results': [{'code': 0, 'lines': ['Wrote plan.json'], 'plan': sitePlan}]});
@@ -643,7 +694,7 @@ test('clearing a plan\'s road options, and closing it', async (context) => {
     assert.ok(loadedElement(browser).textContent.includes('The plan has no road options - run the plan to engineer them. Its ' +
         'site\'s data (its terrain, streams, roads, and map) is kept, so a run doesn\'t fetch it from the USGS again.'));
     assert.deepEqual(loadedActions(browser), [
-        'View Plan (disabled)', 'Edit Plan', 'Edit Map (disabled)', 'Save', 'Save As…', 'Close', 'Run Plan'
+        'View Plan (disabled)', 'Edit Plan', 'Edit Map (disabled)', 'Save', 'Save As…', 'Close', 'Run Plan', 'Ollama Models'
     ]);
     assert.equal(document.getElementById('sageroad-run-progress').hidden, true);
     const cleared = JSON.parse(await browser.indexedDB.records('files').find(({name}) => name === 'hill.json').blob.text());
