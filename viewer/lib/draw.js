@@ -231,10 +231,10 @@ export function labelX(label, fontSize, x, width) {
 
 
 // The drawings' style (the SVG drawings' and the canvas drawings') - the report's, and the full-window 3D explorer's,
-// which has no margins
-const drawingStyle = 'background: #f4f1ea; border: 1px solid #ccc; display: block; max-width: 100%; height: auto; break-inside: avoid;';
-export const svgStyle = `${drawingStyle} margin: 0.75em 0 1.5em 0;`;
-export const exploreStyle = `${drawingStyle} margin: 0;`;
+// which has no border or margins
+const drawingStyle = (border) => `background: #f4f1ea;${border} display: block; max-width: 100%; height: auto; break-inside: avoid;`;
+export const svgStyle = `${drawingStyle(' border: 1px solid #ccc;')} margin: 0.75em 0 1.5em 0;`;
+export const exploreStyle = `${drawingStyle('')} margin: 0;`;
 
 
 // Create an SVG drawing's opening tag

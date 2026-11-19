@@ -164,6 +164,7 @@ td:last-child {
 
 /* The 3D explorer fills the window */
 body.sageroad-explore {
+    margin: 0;
     overflow: hidden;
 }
 

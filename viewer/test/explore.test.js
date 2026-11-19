@@ -90,7 +90,7 @@ test('Explorer.renderSvg', () => {
     // The drawing fills the width and height, without margins
     assert.equal(
         exploreStyle,
-        'background: #f4f1ea; border: 1px solid #ccc; display: block; max-width: 100%; height: auto; break-inside: avoid; margin: 0;'
+        'background: #f4f1ea; display: block; max-width: 100%; height: auto; break-inside: avoid; margin: 0;'
     );
     const svgOpen = '<svg width="800" height="600" viewBox="0 0 800 600" role="img" ' +
         `aria-label="3D view of the Bridge - East road plan option" style="${exploreStyle}">`;

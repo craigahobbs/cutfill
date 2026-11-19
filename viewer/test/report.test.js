@@ -65,13 +65,13 @@ test('buildReport, a meters plan without descriptions, warnings, structures, or 
         '<h2 id="plan-options">Plan Options</h2>',
         '<table>',
         '<h2 id="flat">Flat</h2>',
+        `<p><a href="${exploreURL}">Explore the plan in 3D</a> (full window, with mouse controls)</p>`,
         '<p><strong>Cost score: 14</strong> - 40 m, 0.0% maximum grade, 0 design warnings</p>',
         '<h3 id="plan-view">Plan View</h3>',
         '<svg: Plan view of the Flat road plan option>',
         '<h3 id="profile">Profile</h3>',
         '<svg: Profile of the Flat road plan option>',
         '<h3 id="3d-views">3D Views</h3>',
-        `<p><a href="${exploreURL}">Explore the plan in 3D</a> (full window, with mouse controls)</p>`,
         '<p><strong>View 1 of 1: Overview</strong> - the whole site, looking north (0°) from 55° above the horizon. ' +
             `The road runs left to right from its start to its end. <a href="${exploreURL}">Explore this view</a></p>`,
         '<svg: 3D view of the Flat road plan option>',
@@ -140,6 +140,7 @@ test('buildReport, a feet plan with descriptions, warnings, structures, and a ma
         '<h2 id="plan-options">Plan Options</h2>',
         '<table>',
         '<h2 id="main">Main</h2>',
+        `<p><a href="${exploreURL}">Explore the plan in 3D</a> (full window, with mouse controls)</p>`,
         '<p>The main option.</p>',
         '<p><strong>Cost score: 48</strong> - 86 ft, 100.0% maximum grade, 18 design warnings</p>',
         '<h3 id="plan-view">Plan View</h3>',
@@ -147,7 +148,6 @@ test('buildReport, a feet plan with descriptions, warnings, structures, and a ma
         '<h3 id="profile">Profile</h3>',
         '<svg: Profile of the Main road plan option>',
         '<h3 id="3d-views">3D Views</h3>',
-        `<p><a href="${exploreURL}">Explore the plan in 3D</a> (full window, with mouse controls)</p>`,
         '<p><strong>View 1 of 1: Overview</strong> - the whole site, looking north (359°) from 55° above the horizon. ' +
             `The road runs left to right from its start to its end. <a href="${exploreURL}">Explore this view</a></p>`,
         '<svg: 3D view of the Main road plan option>',
@@ -219,10 +219,12 @@ test('buildReport, the selected option', () => {
         '<strong>Alt</strong>'
     ]);
 
-    // The selected option has no description or structures
+    // The selected option has no description or structures - its 3D explorer link is below its title
     const lines = outline(html);
-    assert.deepEqual(lines.slice(4, 7), [
+    assert.deepEqual(lines.slice(4, 8), [
         '<h2 id="alt">Alt</h2>',
+        '<p><a href="#var.vAzimuth=0&amp;var.vExplore=true&amp;var.vFile=&#039;complex.json&#039;&amp;var.vOption=1&amp;var.vTilt=55&amp;' +
+            'var.vX=40&amp;var.vY=42.6&amp;var.vZ=110">Explore the plan in 3D</a> (full window, with mouse controls)</p>',
         '<p><strong>Cost score: 471</strong> - 90 ft, 264.0% maximum grade, 8 design warnings</p>',
         '<h3 id="plan-view">Plan View</h3>'
     ]);
@@ -496,7 +498,7 @@ test('buildReport, HTML in the plan title and option names is escaped', () => {
     const {title, html} = report(planValue, {'vFile': 'a.json'}, 400);
     assert.equal(title, 'Cut & Fill');
     const lines = outline(html);
-    assert.deepEqual([...lines.slice(0, 2), ...lines.slice(4, 6)], [
+    assert.deepEqual([...lines.slice(0, 2), lines[4], lines[6]], [
         '<h1 id="cut-fill">Cut &amp; Fill</h1>',
         '<p>Use &lt;b&gt;care&lt;/b&gt;.</p>',
         '<h2 id="a-b-c">A &lt;B&gt; &amp; &quot;C&quot;</h2>',

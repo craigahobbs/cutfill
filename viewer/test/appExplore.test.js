@@ -15,13 +15,16 @@ const exploreHash = "#var.vFile='plans/fixture.json'&var.vExplore=true";
 
 
 // Create a browser at the fixture plan's 3D explorer - "cellCost" is the measured terrain cell cost in local storage, and
-// "storage" is more local storage
+// "storage" is more local storage. Its window is 976 by 720 pixels.
 function exploreBrowser(testContext, {cellCost = '1', search = '', hash = exploreHash, storage = {}} = {}) {
-    return fakeBrowser(testContext, {
+    const browser = fakeBrowser(testContext, {
         search, hash,
         'files': {'plans/fixture.json': JSON.stringify(fixturePlan())},
         'storage': {...(cellCost !== null ? {'sageRoadCellCost': cellCost} : {}), ...storage}
     });
+    browser.window.innerWidth = 976;
+    browser.window.innerHeight = 720;
+    return browser;
 }
 
 
@@ -92,8 +95,7 @@ test('the 3D explorer page', async (context) => {
     assert.deepEqual(browser.logs, []);
     assert.equal(app.page.explorer.data.file, 'plans/fixture.json');
 
-    // The page is a canvas that fills the window, less the page's margins, a link back to the report, the controls, and
-    // their help
+    // The page is a canvas that fills the window, a link back to the report, the controls, and their help
     assert.deepEqual([...main.querySelectorAll('*')].map((element) => element.tagName), [
         'DIV', 'CANVAS', 'A', 'DIV', 'BUTTON', 'BUTTON', 'BUTTON', 'BUTTON', 'BUTTON', 'LABEL', 'INPUT', 'BUTTON', 'UL',
         ...Array.from({'length': 6}, () => ['LI', 'STRONG']).flat()
@@ -107,6 +109,7 @@ test('the 3D explorer page', async (context) => {
     assert.equal(canvas.style.width, '976px');
     assert.equal(canvas.style.height, '720px');
     assert.equal(canvas.style.margin, '0px');
+    assert.equal(canvas.style.border, '');
     assert.equal(canvas.style.display, 'block');
     assert.equal(canvas.dataset.frame, '1');
     assert.equal(
@@ -232,17 +235,17 @@ test('the 3D explorer page fills the window', async (context) => {
     clock.runFrame();
     assert.equal(paintCount(canvas), 2);
     assert.equal(canvas.dataset.frame, '2');
-    assert.deepEqual([canvas.width, canvas.height, canvas.style.width, canvas.style.height], [1176, 800, '1176px', '800px']);
-    assert.deepEqual(canvas.calls.slice(-paintCalls(1176, 800, 85).length), paintCalls(1176, 800, 85));
+    assert.deepEqual([canvas.width, canvas.height, canvas.style.width, canvas.style.height], [1224, 848, '1224px', '848px']);
+    assert.deepEqual(canvas.calls.slice(-paintCalls(1224, 848, 85).length), paintCalls(1224, 848, 85));
 
     // The canvas's bitmap is the drawing's size times the device pixel ratio
     window.devicePixelRatio = 2;
     fire(browser, window, 'resize');
     clock.runFrame();
     assert.equal(paintCount(canvas), 3);
-    assert.deepEqual([canvas.width, canvas.height, canvas.style.width, canvas.style.height], [2352, 1600, '1176px', '800px']);
+    assert.deepEqual([canvas.width, canvas.height, canvas.style.width, canvas.style.height], [2448, 1696, '1224px', '848px']);
     assert.deepEqual(canvas.calls.filter(([name]) => name === 'setTransform' || name === 'fillRect').slice(-2), [
-        ['setTransform', 2, 0, 0, 2, 0, 0], ['fillRect', 0, 0, 1176, 800]
+        ['setTransform', 2, 0, 0, 2, 0, 0], ['fillRect', 0, 0, 1224, 848]
     ]);
 
     // A view of the same size keeps the canvas's bitmap
@@ -250,7 +253,7 @@ test('the 3D explorer page fills the window', async (context) => {
     fire(browser, window, 'resize');
     clock.runFrame();
     assert.equal(paintCount(canvas), 4);
-    assert.deepEqual([canvas.width, canvas.height, canvas.style.width, canvas.style.height], [2352, 1600, '100%', '800px']);
+    assert.deepEqual([canvas.width, canvas.height, canvas.style.width, canvas.style.height], [2448, 1696, '100%', '848px']);
 });
 
 
