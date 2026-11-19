@@ -3,9 +3,9 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "cutfill"
+name = "sageroad"
 version = "0.1.0"
-description = "Cutfill engineers low-volume roads on USGS lidar terrain and views the resulting road plans"
+description = "SageRoad engineers low-volume roads on USGS lidar terrain and views the resulting road plans"
 readme = "PYPI.md"
 license = "MIT"
 requires-python = ">=3.11"
@@ -31,14 +31,14 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/craigahobbs/cutfill"
+Homepage = "https://github.com/craigahobbs/sageroad"
 
 [project.scripts]
-cutfill = "cutfill.main:main"
+sageroad = "sageroad.main:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["cutfill", "cutfill.*"]
+include = ["sageroad", "sageroad.*"]
 
 [tool.setuptools.package-data]
-cutfill = ["static/**/*"]
+sageroad = ["static/**/*"]

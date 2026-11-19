@@ -1,5 +1,5 @@
 """
-The Cutfill back-end application
+The SageRoad back-end application
 """
 
 import importlib.resources
@@ -8,10 +8,10 @@ import pathlib
 import chisel
 
 
-# The Cutfill back-end WSGI application class - it serves the front end: "static_dir" is its directory (the
+# The SageRoad back-end WSGI application class - it serves the front end: "static_dir" is its directory (the
 # package's, by default). The front end does the rest in the browser - it opens and saves the user's files, and plans
 # a road with the planning tools.
-class Cutfill(chisel.Application):
+class SageRoad(chisel.Application):
     __slots__ = ()
 
 
@@ -22,7 +22,7 @@ class Cutfill(chisel.Application):
         self.add_requests(chisel.create_doc_requests())
 
         # Front-end statics - the application's page is the root URL's
-        static = importlib.resources.files('cutfill').joinpath('static') if static_dir is None else pathlib.Path(static_dir)
+        static = importlib.resources.files('sageroad').joinpath('static') if static_dir is None else pathlib.Path(static_dir)
         for name, content in sorted(_static_files(static, '')):
             urls = [('GET', f'/{name}')]
             if name == 'index.html':

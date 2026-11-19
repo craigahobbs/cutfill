@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-// cutfill.js - the Cutfill command line (see lib/cli.js)
+// sageroad.js - the SageRoad command line (see lib/cli.js)
 //
-// usage: node bin/cutfill.js evaluate <plan.json> [--detail]
-//        node bin/cutfill.js doc
+// usage: node bin/sageroad.js evaluate <plan.json> [--detail]
+//        node bin/sageroad.js doc
 
 import {cliMain} from '../lib/cli.js';
 import process from 'node:process';

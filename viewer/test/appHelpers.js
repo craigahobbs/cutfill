@@ -1,7 +1,7 @@
 // appHelpers.js - the application tests' browser - a jsdom window with fakes of the browser APIs jsdom doesn't have
 
 import {JSDOM, VirtualConsole} from 'jsdom';
-import {CutfillApp} from '../lib/app.js';
+import {SageRoadApp} from '../lib/app.js';
 import {setImmediate as nextTask} from 'node:timers/promises';
 
 
@@ -167,13 +167,13 @@ export function fakeBrowser(testContext, {hash = '', search = '', files = {}, st
     const virtualConsole = new VirtualConsole();
     virtualConsole.on('log', (message) => logs.push(message));
     const {window} = new JSDOM(
-        '<!DOCTYPE html><html><head><title>Cutfill</title></head><body><div id="cutfill"></div></body></html>',
+        '<!DOCTYPE html><html><head><title>SageRoad</title></head><body><div id="sageroad"></div></body></html>',
         {'url': `http://localhost/index.html${search}${hash}`, virtualConsole}
     );
     const browser = {
         window, indexedDB, logs,
         'document': window.document,
-        'main': window.document.getElementById('cutfill'),
+        'main': window.document.getElementById('sageroad'),
         'clock': new FakeClock(),
         'fetches': [],
         'observers': [],
@@ -266,7 +266,7 @@ export async function flush() {
 
 // Start the application in a browser and wait for its page - returns the application
 export async function startApp(browser) {
-    const app = new CutfillApp(browser.window);
+    const app = new SageRoadApp(browser.window);
     app.start();
     await flush();
     return app;

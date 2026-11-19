@@ -1,27 +1,27 @@
-/* The Cutfill viewer stylesheet - the MarkdownUp document style (https://github.com/craigahobbs/bare-script, MIT License) */
+/* The SageRoad viewer stylesheet - the MarkdownUp document style (https://github.com/craigahobbs/bare-script, MIT License) */
 
 
 :root {
     color-scheme: light dark;
-    --cutfill-color-foreground: light-dark(rgb(34, 34, 34), rgb(220, 220, 220));
-    --cutfill-color-link: light-dark(rgb(0, 80, 144), rgb(0, 130, 220));
-    --cutfill-color-background: light-dark(rgb(250, 250, 250), rgb(20, 20, 20));
-    --cutfill-color-background-pre: light-dark(rgb(239, 243, 244), rgb(32, 35, 39));
-    --cutfill-color-background-code: light-dark(rgb(230, 230, 230), rgb(80, 80, 80));
-    --cutfill-color-border: light-dark(rgb(192, 192, 192), rgb(80, 80, 80));
-    --cutfill-color-drop: light-dark(rgb(0, 80, 144), rgb(0, 130, 220));
-    --cutfill-font-size: 12pt;
-    --cutfill-line-height: 1.3em;
+    --sageroad-color-foreground: light-dark(rgb(34, 34, 34), rgb(220, 220, 220));
+    --sageroad-color-link: light-dark(rgb(0, 80, 144), rgb(0, 130, 220));
+    --sageroad-color-background: light-dark(rgb(250, 250, 250), rgb(20, 20, 20));
+    --sageroad-color-background-pre: light-dark(rgb(239, 243, 244), rgb(32, 35, 39));
+    --sageroad-color-background-code: light-dark(rgb(230, 230, 230), rgb(80, 80, 80));
+    --sageroad-color-border: light-dark(rgb(192, 192, 192), rgb(80, 80, 80));
+    --sageroad-color-drop: light-dark(rgb(0, 80, 144), rgb(0, 130, 220));
+    --sageroad-font-size: 12pt;
+    --sageroad-line-height: 1.3em;
 }
 
 
 @media print {
     :root {
         color-scheme: light !important;
-        --cutfill-color-foreground: rgb(0, 0, 0);
-        --cutfill-color-background: rgb(255, 255, 255);
-        --cutfill-color-background-pre: rgb(255, 255, 255);
-        --cutfill-color-background-code: rgb(255, 255, 255);
+        --sageroad-color-foreground: rgb(0, 0, 0);
+        --sageroad-color-background: rgb(255, 255, 255);
+        --sageroad-color-background-pre: rgb(255, 255, 255);
+        --sageroad-color-background-code: rgb(255, 255, 255);
     }
     blockquote, img, pre, table {
         break-inside: avoid;
@@ -29,7 +29,7 @@
     h1, h2, h3, h4, h5, h6 {
         break-after: avoid;
     }
-    .cutfill-open {
+    .sageroad-open {
         display: none;
     }
 }
@@ -40,17 +40,17 @@ html, body, div, span, h1, h2, h3, h4, h5, h6, p, hr, blockquote, pre, code, a, 
     padding: 0;
     border: 0;
     font-size: 1em;
-    line-height: var(--cutfill-line-height);
+    line-height: var(--sageroad-line-height);
 }
 html {
     font-family: system-ui, Arial, sans-serif;
-    font-size: var(--cutfill-font-size);
+    font-size: var(--sageroad-font-size);
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
 }
 body {
-    background-color: var(--cutfill-color-background);
-    color: var(--cutfill-color-foreground);
+    background-color: var(--sageroad-color-background);
+    color: var(--sageroad-color-foreground);
     margin: 1.5em;
 }
 h1, h2, h3, h4, h5, h6 {
@@ -84,32 +84,32 @@ p {
 }
 hr {
     margin: 1.6em 0;
-    border-top: 1px solid var(--cutfill-color-border);
+    border-top: 1px solid var(--sageroad-color-border);
 }
 blockquote {
     margin-top: 0.6em;
     padding-left: 1em;
-    border-left: 0.25em solid var(--cutfill-color-border);
+    border-left: 0.25em solid var(--sageroad-color-border);
 }
 pre {
-    background-color: var(--cutfill-color-background-pre);
+    background-color: var(--sageroad-color-background-pre);
     font-family: monospace;
     font-size: 0.9rem;
     line-height: 1.3em;
     margin-top: 0.6em;
     padding: 0.5em;
-    border: 1px solid var(--cutfill-color-border);
+    border: 1px solid var(--sageroad-color-border);
     border-radius: 4px;
     overflow-x: auto;
 }
 pre > code {
-    background-color: var(--cutfill-color-background-pre);
+    background-color: var(--sageroad-color-background-pre);
     font-size: 0.9rem;
     padding: 0;
     overflow-wrap: normal;
 }
 code {
-    background-color: var(--cutfill-color-background-code);
+    background-color: var(--sageroad-color-background-code);
     font-family: monospace;
     font-size: 0.9em;
     padding: 0 0.4em;
@@ -117,7 +117,7 @@ code {
     overflow-wrap: break-word;
 }
 a {
-    color: var(--cutfill-color-link);
+    color: var(--sageroad-color-link);
     text-decoration: none;
 }
 a:hover {
@@ -163,65 +163,65 @@ td:last-child {
 
 
 /* The 3D explorer fills the window */
-body.cutfill-explore {
+body.sageroad-explore {
     overflow: hidden;
 }
 
 
 /* The home page's open button and the drop target highlight */
-.cutfill-button {
+.sageroad-button {
     display: inline-block;
     cursor: pointer;
     padding: 0.4em 1em;
-    border: 1px solid var(--cutfill-color-border);
+    border: 1px solid var(--sageroad-color-border);
     border-radius: 4px;
-    background-color: var(--cutfill-color-background-pre);
+    background-color: var(--sageroad-color-background-pre);
     font-weight: bold;
 }
-.cutfill-button:hover {
-    border-color: var(--cutfill-color-link);
+.sageroad-button:hover {
+    border-color: var(--sageroad-color-link);
 }
-body.cutfill-drop {
-    outline: 3px dashed var(--cutfill-color-drop);
+body.sageroad-drop {
+    outline: 3px dashed var(--sageroad-color-drop);
     outline-offset: -6px;
 }
-.cutfill-loading {
-    color: var(--cutfill-color-border);
+.sageroad-loading {
+    color: var(--sageroad-color-border);
 }
 
 
 /* The application's controls - its buttons, and the loaded plan's panel */
-button.cutfill-button, a.cutfill-button {
+button.sageroad-button, a.sageroad-button {
     font: inherit;
     font-weight: bold;
     color: inherit;
     text-decoration: none;
 }
-button.cutfill-button:disabled {
+button.sageroad-button:disabled {
     opacity: 0.5;
     cursor: default;
 }
-.cutfill-actions {
+.sageroad-actions {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 0.6em;
 }
-.cutfill-loaded {
+.sageroad-loaded {
     margin: 1.5em 0;
     padding: 0.2em 1.2em 0.8em;
-    border: 1px solid var(--cutfill-color-border);
+    border: 1px solid var(--sageroad-color-border);
     border-radius: 6px;
 }
-.cutfill-loaded h2 {
+.sageroad-loaded h2 {
     margin-bottom: 0.2em;
 }
-.cutfill-loaded h3 {
+.sageroad-loaded h3 {
     margin: 1.4em 0 0.5em;
     padding-top: 0.8em;
-    border-top: 1px solid var(--cutfill-color-border);
+    border-top: 1px solid var(--sageroad-color-border);
 }
-.cutfill-unsaved {
+.sageroad-unsaved {
     margin-left: 0.5em;
     padding: 0.1em 0.5em;
     border-radius: 4px;
@@ -230,223 +230,223 @@ button.cutfill-button:disabled {
     color: light-dark(rgb(140, 80, 0), rgb(240, 180, 90));
     border: 1px solid currentColor;
 }
-.cutfill-notice {
+.sageroad-notice {
     font-weight: bold;
     color: light-dark(rgb(140, 80, 0), rgb(240, 180, 90));
 }
 
 
 /* The recent files - each can be removed */
-.cutfill-recent li p {
+.sageroad-recent li p {
     display: flex;
     align-items: center;
     gap: 0.4em;
 }
-button.cutfill-remove {
+button.sageroad-remove {
     font: inherit;
     line-height: 1;
-    color: var(--cutfill-color-border);
+    color: var(--sageroad-color-border);
     background: none;
     border: none;
     border-radius: 4px;
     padding: 0.15em 0.35em;
     cursor: pointer;
 }
-button.cutfill-remove:hover {
+button.sageroad-remove:hover {
     color: light-dark(rgb(176, 42, 30), rgb(240, 110, 95));
-    background-color: var(--cutfill-color-background-pre);
+    background-color: var(--sageroad-color-background-pre);
 }
-.cutfill-recent-loaded {
+.sageroad-recent-loaded {
     font-size: 0.85em;
     opacity: 0.7;
 }
 
 
 /* A plan's run - the running status (with a spinner, and the run's time), its steps, and its result */
-#cutfill-run-progress {
+#sageroad-run-progress {
     margin: 1em 0;
     padding: 0.6em 1em;
     border-radius: 6px;
-    background-color: var(--cutfill-color-background-pre);
+    background-color: var(--sageroad-color-background-pre);
 }
-.cutfill-running {
+.sageroad-running {
     display: flex;
     align-items: center;
     gap: 0.7em;
     margin: 0.3em 0 0.6em;
 }
-#cutfill-run-time {
+#sageroad-run-time {
     margin-left: auto;
     font-variant-numeric: tabular-nums;
     opacity: 0.8;
 }
-.cutfill-spinner {
+.sageroad-spinner {
     flex: none;
     width: 1em;
     height: 1em;
-    border: 0.18em solid var(--cutfill-color-border);
-    border-top-color: var(--cutfill-color-link);
+    border: 0.18em solid var(--sageroad-color-border);
+    border-top-color: var(--sageroad-color-link);
     border-radius: 50%;
-    animation: cutfill-spin 0.8s linear infinite;
+    animation: sageroad-spin 0.8s linear infinite;
 }
-@keyframes cutfill-spin {
+@keyframes sageroad-spin {
     to {
         transform: rotate(360deg);
     }
 }
-.cutfill-run-icon {
+.sageroad-run-icon {
     flex: none;
     font-weight: bold;
 }
-.cutfill-run-done::before {
+.sageroad-run-done::before {
     content: "✓";
     color: light-dark(rgb(30, 130, 60), rgb(90, 200, 120));
 }
-.cutfill-run-failed::before {
+.sageroad-run-failed::before {
     content: "✕";
     color: light-dark(rgb(176, 42, 30), rgb(240, 110, 95));
 }
-#cutfill-run-report summary {
+#sageroad-run-report summary {
     cursor: pointer;
 }
-.cutfill-steps {
+.sageroad-steps {
     margin: 0;
     padding: 0;
     list-style: none;
 }
-.cutfill-steps li {
+.sageroad-steps li {
     display: flex;
     gap: 0.5em;
     margin: 0.3em 0;
 }
-.cutfill-step-mark {
+.sageroad-step-mark {
     flex: none;
     width: 1em;
     text-align: center;
 }
-.cutfill-step-pending {
+.sageroad-step-pending {
     opacity: 0.5;
 }
-.cutfill-step-current {
+.sageroad-step-current {
     font-weight: bold;
 }
-.cutfill-step-current .cutfill-step-mark::before {
+.sageroad-step-current .sageroad-step-mark::before {
     content: "▸";
-    color: var(--cutfill-color-link);
+    color: var(--sageroad-color-link);
 }
-.cutfill-step-done .cutfill-step-mark::before {
+.sageroad-step-done .sageroad-step-mark::before {
     content: "✓";
     color: light-dark(rgb(30, 130, 60), rgb(90, 200, 120));
 }
-.cutfill-step-detail {
+.sageroad-step-detail {
     display: block;
     font-size: 0.85em;
     font-weight: normal;
     opacity: 0.8;
 }
-.cutfill-step-detail:empty {
+.sageroad-step-detail:empty {
     display: none;
 }
-.cutfill-loaded-kind {
+.sageroad-loaded-kind {
     margin-top: 0;
     opacity: 0.8;
 }
-.cutfill-error {
+.sageroad-error {
     color: light-dark(rgb(176, 42, 30), rgb(240, 110, 95));
 }
-button.cutfill-link {
+button.sageroad-link {
     font: inherit;
-    color: var(--cutfill-color-link);
+    color: var(--sageroad-color-link);
     background: none;
     border: none;
     padding: 0;
     cursor: pointer;
     text-decoration: underline;
 }
-#cutfill-run-model {
+#sageroad-run-model {
     font: inherit;
     padding: 0.2em 0.4em;
     max-width: 100%;
 }
-#cutfill-run-message:empty, #cutfill-save-status:empty, #cutfill-open-status:empty, #cutfill-edit-status:empty {
+#sageroad-run-message:empty, #sageroad-save-status:empty, #sageroad-open-status:empty, #sageroad-edit-status:empty {
     display: none;
 }
 
 
 /* The plan config form - groups of fields: a field's label, its control, and its documentation */
-.cutfill-form {
+.sageroad-form {
     max-width: 60em;
 }
-.cutfill-form-fields {
+.sageroad-form-fields {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(11em, 1fr));
     gap: 1em 1.5em;
     margin: 0.8em 0;
 }
-.cutfill-form-wide {
+.sageroad-form-wide {
     grid-column: 1 / -1;
 }
-.cutfill-form-field label {
+.sageroad-form-field label {
     display: block;
     font-weight: bold;
     margin-bottom: 0.3em;
 }
-.cutfill-form-field input, .cutfill-form-field select, .cutfill-form-field textarea {
+.sageroad-form-field input, .sageroad-form-field select, .sageroad-form-field textarea {
     display: block;
     width: 100%;
     box-sizing: border-box;
     font: inherit;
     padding: 0.3em 0.5em;
 }
-.cutfill-form-field p {
+.sageroad-form-field p {
     margin: 0;
 }
-.cutfill-form-doc {
+.sageroad-form-doc {
     font-size: 0.85em;
     font-weight: normal;
     opacity: 0.7;
     margin-top: 0.3em;
 }
-.cutfill-form-groups {
+.sageroad-form-groups {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(22em, 1fr));
     gap: 0 1.5em;
 }
-.cutfill-form-group {
+.sageroad-form-group {
     margin: 1em 0;
     padding: 0.5em 1.2em;
-    border: 1px solid var(--cutfill-color-border);
+    border: 1px solid var(--sageroad-color-border);
     border-radius: 6px;
 }
-.cutfill-form-group legend, .cutfill-form-group summary {
+.sageroad-form-group legend, .sageroad-form-group summary {
     font-weight: bold;
     padding: 0 0.3em;
 }
-.cutfill-form-group summary {
+.sageroad-form-group summary {
     cursor: pointer;
     padding: 0.3em 0;
 }
-.cutfill-form-group legend + .cutfill-form-doc {
+.sageroad-form-group legend + .sageroad-form-doc {
     margin-top: 0;
 }
 
 
 /* The 3D explorer's canvas, report link, controls, and their help */
-.cutfill-explorer {
+.sageroad-explorer {
     position: relative;
     user-select: none;
     -webkit-user-select: none;
 }
-.cutfill-explorer canvas {
+.sageroad-explorer canvas {
     background: #f4f1ea;
     cursor: grab;
     touch-action: none;
 }
-.cutfill-explorer-dragging canvas {
+.sageroad-explorer-dragging canvas {
     cursor: grabbing;
 }
 /* The controls are left of the drawing's compass, and right of the report link */
-.cutfill-explorer-tools {
+.sageroad-explorer-tools {
     position: absolute;
     top: 8px;
     right: 66px;
@@ -462,20 +462,20 @@ button.cutfill-link {
     font: 12px sans-serif;
     color: #222;
 }
-.cutfill-explorer-tools button {
+.sageroad-explorer-tools button {
     min-width: 2.2em;
     font: 12px sans-serif;
 }
-.cutfill-explorer-tools label {
+.sageroad-explorer-tools label {
     display: flex;
     align-items: center;
     gap: 4px;
 }
-.cutfill-explorer-tools input {
+.sageroad-explorer-tools input {
     width: 6em;
     margin: 0;
 }
-.cutfill-explorer-help {
+.sageroad-explorer-help {
     position: absolute;
     left: 8px;
     bottom: 30px;
@@ -489,10 +489,10 @@ button.cutfill-link {
     list-style: none;
     pointer-events: none;
 }
-.cutfill-explorer-help[hidden] {
+.sageroad-explorer-help[hidden] {
     display: none;
 }
-.cutfill-explorer-back {
+.sageroad-explorer-back {
     position: absolute;
     left: 13px;
     top: 11px;
@@ -500,25 +500,25 @@ button.cutfill-link {
     color: #1f4e8c;
     text-shadow: -1px -1px 0 white, 1px -1px 0 white, -1px 1px 0 white, 1px 1px 0 white, 0 0 3px white;
 }
-.cutfill-open {
+.sageroad-open {
     margin-top: 0.6em;
 }
 
 
 /* The map page - its tools, and its map */
-.cutfill-map-tools button[aria-pressed="true"] {
+.sageroad-map-tools button[aria-pressed="true"] {
     background: #1f4e8c;
     color: white;
 }
-.cutfill-map-hint {
+.sageroad-map-hint {
     font-size: 0.9em;
     opacity: 0.7;
 }
-.cutfill-map {
+.sageroad-map {
     max-width: 100%;
     overflow: hidden;
 }
-.cutfill-map-svg {
+.sageroad-map-svg {
     display: block;
     background: #f7f4ee;
     border: 1px solid #c8c2b6;

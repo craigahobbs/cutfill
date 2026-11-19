@@ -1,4 +1,4 @@
-# The Cutfill application - a Python package (python-build): its command line serves the Cutfill front end (the viewer)
+# The SageRoad application - a Python package (python-build): its command line serves the SageRoad front end (the viewer)
 # and the planning tools - the front end opens, runs, and saves plans in the browser
 
 # Download python-build
@@ -22,18 +22,18 @@ include Makefile.base
 PYLINT_ARGS := $(PYLINT_ARGS) --disable=missing-class-docstring --disable=missing-function-docstring --disable=missing-module-docstring
 
 
-# The Cutfill viewer project and planning tools project - the viewer's staged application is the package's front end,
+# The SageRoad viewer project and planning tools project - the viewer's staged application is the package's front end,
 # with the planning tools' modules (they plan a road in the browser) and their elevation models' reader
 VIEWER := ../viewer
 PLAN := ../plan
-STATIC := src/cutfill/static
+STATIC := src/sageroad/static
 
 
 help:
 	@echo "            [run|static]"
 	@echo ""
 	@echo "  make static           Stage the front end (the viewer's application and the planning tools) in the package"
-	@echo "  make run [ARGS=...]   Run the application (ARGS are the cutfill command's options)"
+	@echo "  make run [ARGS=...]   Run the application (ARGS are the sageroad command's options)"
 
 
 clean:
@@ -48,7 +48,7 @@ clean:
 $(DEFAULT_VENV_BUILD): | static
 static:
 	@$(MAKE) --no-print-directory -C $(VIEWER) app
-	rm -rf src/cutfill/static
+	rm -rf src/sageroad/static
 	mkdir -p $(STATIC)/plan
 	cp -R $(VIEWER)/build/app/. $(STATIC)/
 	cp -R $(PLAN)/lib $(STATIC)/plan/
@@ -69,4 +69,4 @@ changelog:
 # Run the application
 .PHONY: run
 run: $(DEFAULT_VENV_BUILD) static
-	$(DEFAULT_VENV_BIN)/cutfill$(if $(ARGS), $(ARGS))
+	$(DEFAULT_VENV_BIN)/sageroad$(if $(ARGS), $(ARGS))

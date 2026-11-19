@@ -1,13 +1,13 @@
-# Cutfill
+# SageRoad
 
-Cutfill engineers low-volume roads on USGS lidar terrain and views the resulting road plan models in
+SageRoad engineers low-volume roads on USGS lidar terrain and views the resulting road plan models in
 a printable report with 3D views. See [README.md](README.md) for the user-facing overview.
 
 The project is three subprojects, and the top-level makefile delegates to them:
 
 - **The viewer** (`viewer/`, JavaScript, [javascript-build](https://github.com/craigahobbs/javascript-build#readme)) -
   the web application (report, plan and profile views, 3D views, and 3D explorer), the road plan model (its Schema
-  Markdown schema, validation, earthwork, and cost analysis), and a command line (`viewer/bin/cutfill.js` - a plan's
+  Markdown schema, validation, earthwork, and cost analysis), and a command line (`viewer/bin/sageroad.js` - a plan's
   analysis, and the model documentation). See [viewer/CLAUDE.md](viewer/CLAUDE.md).
 - **The planning tools** (`plan/`, JavaScript, [javascript-build](https://github.com/craigahobbs/javascript-build#readme)) -
   `plan/lib/`. A road is planned from a road site model (a plan config - the road's start and end points, as
@@ -17,9 +17,9 @@ The project is three subprojects, and the top-level makefile delegates to them:
   and `auto` (without a model). See [plan/README.md](plan/README.md).
 
 - **The application** (`app/`, Python, [python-build](https://github.com/craigahobbs/python-build#readme)) - the
-  `cutfill` package: its command line (`cutfill`, `make run`) serves the front end - the viewer's application and the
+  `sageroad` package: its command line (`sageroad`, `make run`) serves the front end - the viewer's application and the
   planning tools, which `make -C app static` stages in the package - with a
-  [chisel](https://github.com/craigahobbs/chisel#readme) back end (`app/src/cutfill/app.py`) that's only the front
+  [chisel](https://github.com/craigahobbs/chisel#readme) back end (`app/src/sageroad/app.py`) that's only the front
   end's statics, for now. The front end does the work in the browser: its home page opens a plan (file dialog) or
   makes a new one (a config form made from the model's types - `viewer/lib/form.js`), shows the loaded plan - its
   config, and its road options - runs it with `plan/lib/browser/io.js` (`planRoad` - the run's procedure, `autoPlan`,
@@ -64,7 +64,7 @@ Run `make` in `viewer/` or `plan/` for a subproject's own targets (e.g.
   header, tags, and LZW-compressed tiles, by HTTP range requests), in Node and in a browser. The reader is of the one
   form the 1 meter models have, not a general TIFF reader - a model of another form is an error that says so. Its
   tests' files are made by `plan/test/tiffHelpers.js`.
-- All of Cutfill's functionality is the application's - there are no command line planning flows. Judgment that a
+- All of SageRoad's functionality is the application's - there are no command line planning flows. Judgment that a
   procedure can do is the tools' (`auto` - the other corridor, enlarging a site that's too small, the unmapped draws a
   road crosses), what only a person knows is the plan config's (its notes and marks), and a model is asked only small
   questions (Ollama's - `plan/lib/ollama.js`) with checked JSON answers: what the notes ask for, and where their places
@@ -84,7 +84,7 @@ Run `make` in `viewer/` or `plan/` for a subproject's own targets (e.g.
 - Keep the README's viewer section and key table in sync with the viewer's controls.
 - A road site model and a road plan model are each a JSON file of any name - there's no file naming convention
   (no `.site.json`).
-- The application's front end (`app/src/cutfill/static/`) is generated (`make -C app static`) and committed, so the
+- The application's front end (`app/src/sageroad/static/`) is generated (`make -C app static`) and committed, so the
   package builds from the repository without Node.js - commit it with the viewer and planning tool changes that
   regenerate it (`make commit` does), and don't edit it by hand. The front end loads nothing from the internet but
   the USGS's services (an app test checks). The package's readme (its PyPI page) is the README, by a link

@@ -281,7 +281,7 @@ test('buildReport, a narrow road has road segment views', () => {
 
     // The plan view outlines the segment views' areas and numbers them at the middle of their road segments (stations 1+10
     // and 3+30)
-    const planSvg = html.split('\n').find((line) => line.includes('class="cutfill-plan"'));
+    const planSvg = html.split('\n').find((line) => line.includes('class="sageroad-plan"'));
     assert.deepEqual(planSvg.match(/<title>[^<]*<\/title>/g), ['<title>3D view 2 area</title>', '<title>3D view 3 area</title>']);
     assert.deepEqual(planSvg.match(/<circle [^>]* r="9" [^>]*\/><text [^>]*>[^<]*<\/text>/g), [
         '<circle cx="281.9" cy="518.4" r="9" fill="#1f4e8c" stroke="white" stroke-width="1.5"/><text x="281.9" y="518.4" ' +

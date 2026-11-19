@@ -15,7 +15,7 @@ test('index.html preloads every application module', () => {
     const packageModules = ['parser.js', 'schema.js', 'schemaUtil.js', 'typeModel.js'].map((name) => `schema-markdown/lib/${name}`);
     assert.deepEqual(preloads, [...modules, ...packageModules]);
 
-    // The import map resolves the schema-markdown package - and, in the Cutfill application, the planning tools' Node
+    // The import map resolves the schema-markdown package - and, in the SageRoad application, the planning tools' Node
     // modules and their imports of the viewer's modules ("../../viewer/lib/")
     const [, importMap] = html.match(/<script type="importmap">([^<]*)<\/script>/);
     assert.deepEqual(JSON.parse(importMap), {'imports': {

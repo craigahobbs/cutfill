@@ -1,7 +1,7 @@
-// cli.js - the Cutfill command line - a road plan model's analysis and cost, and the model's documentation, as Markdown
-// text (see bin/cutfill.js)
+// cli.js - the SageRoad command line - a road plan model's analysis and cost, and the model's documentation, as Markdown
+// text (see bin/sageroad.js)
 
-import {analyzeOption, cutfillTypes, planCriteria, elevation as planElevation, planTopo, sampleAt, validatePlan} from './model.js';
+import {analyzeOption, planCriteria, elevation as planElevation, planTopo, sageRoadTypes, sampleAt, validatePlan} from './model.js';
 import {costTable, structuresTable} from './tables.js';
 import {displayQuantity, fixed, fixedTrim, station as formatStation, number, unitLabel} from './format.js';
 import {latLongText, planLatLong} from './geo.js';
@@ -12,8 +12,8 @@ import {schemaDocMarkdown} from './schemaDoc.js';
 
 // The command line's usage text lines
 const usage = [
-    'usage: cutfill evaluate <plan.json> [--detail]',
-    '       cutfill doc',
+    'usage: sageroad evaluate <plan.json> [--detail]',
+    '       sageroad doc',
     '',
     '  evaluate    Print a road plan model\'s analysis and cost (--detail adds each option\'s station table)',
     '  doc         Print the road plan model documentation'
@@ -27,7 +27,7 @@ export function cliMain(argv, {readFile, write}) {
     const files = args.filter((arg) => arg !== '--detail');
     let result;
     if (command === 'doc' && args.length === 0) {
-        result = {'code': 0, 'lines': schemaDocMarkdown(cutfillTypes, 'RoadPlan')};
+        result = {'code': 0, 'lines': schemaDocMarkdown(sageRoadTypes, 'RoadPlan')};
     } else if (command === 'evaluate' && files.length === 1 && !files[0].startsWith('--')) {
         result = evaluate(files[0], args.includes('--detail'), readFile);
     } else {

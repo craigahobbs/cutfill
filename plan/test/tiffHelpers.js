@@ -125,7 +125,7 @@ export function testTiff({
         '258': [3, [32]],
         '259': [3, [5]],
         '277': [3, [1]],
-        '305': ascii('Cutfill tests'),
+        '305': ascii('SageRoad tests'),
         '317': [3, [predictor]],
         '322': [3, [tileWidth]],
         '323': [3, [tileHeight]],

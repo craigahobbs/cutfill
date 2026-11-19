@@ -1,11 +1,11 @@
-import {argsLink, argsParse, argsURL, cutfillArguments, parseHash, parseLiteral} from '../lib/args.js';
+import {argsLink, argsParse, argsURL, parseHash, parseLiteral, sageRoadArguments} from '../lib/args.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
 
-test('cutfillArguments', () => {
+test('sageRoadArguments', () => {
     assert.deepEqual(
-        cutfillArguments.map((argument) => [argument.name, argument.type, argument.default ?? null, argument.explicit ?? false]),
+        sageRoadArguments.map((argument) => [argument.name, argument.type, argument.default ?? null, argument.explicit ?? false]),
         [
             ['file', 'string', null, false],
             ['option', 'int', 0, false],

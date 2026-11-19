@@ -69,30 +69,31 @@ test('formHtml', () => {
     assert.deepEqual([...form.children].map((element) => (
         `${element.tagName} ${element.className} ${[...element.children].map((child) => child.className || child.tagName).join(',')}`
     )), [
-        'DIV cutfill-form-fields cutfill-form-field cutfill-form-wide,cutfill-form-field,cutfill-form-field,cutfill-form-field,' +
-            'cutfill-form-field',
-        'DIV cutfill-form-groups cutfill-form-group',
-        'DETAILS cutfill-form-group SUMMARY,cutfill-form-fields',
-        'DETAILS cutfill-form-group SUMMARY,cutfill-form-fields',
-        'DIV cutfill-form-fields cutfill-form-field cutfill-form-wide,cutfill-form-field cutfill-form-wide,' +
-            'cutfill-form-field cutfill-form-wide,' +
-            'cutfill-form-field cutfill-form-wide',
-        'DIV cutfill-form-groups cutfill-form-group'
+        'DIV sageroad-form-fields sageroad-form-field sageroad-form-wide,sageroad-form-field,sageroad-form-field,sageroad-form-field,' +
+            'sageroad-form-field',
+        'DIV sageroad-form-groups sageroad-form-group',
+        'DETAILS sageroad-form-group SUMMARY,sageroad-form-fields',
+        'DETAILS sageroad-form-group SUMMARY,sageroad-form-fields',
+        'DIV sageroad-form-fields sageroad-form-field sageroad-form-wide,sageroad-form-field sageroad-form-wide,' +
+            'sageroad-form-field sageroad-form-wide,' +
+            'sageroad-form-field sageroad-form-wide',
+        'DIV sageroad-form-groups sageroad-form-group'
     ]);
 
     // A field is its member's label - its name's words, and a "*" if it's required - its control, and its documentation
     assert.equal(
-        form.querySelector('.cutfill-form-field').outerHTML,
-        '<div class="cutfill-form-field cutfill-form-wide"><label for="cutfill-form-tripName">Trip name *</label>' +
-            '<input type="text" id="cutfill-form-tripName" data-member="tripName" value="North &amp; &quot;south&quot;">' +
-            '<div class="cutfill-form-doc">The trip\'s name - its &lt;title&gt;</div></div>'
+        form.querySelector('.sageroad-form-field').outerHTML,
+        '<div class="sageroad-form-field sageroad-form-wide"><label for="sageroad-form-tripName">Trip name *</label>' +
+            '<input type="text" id="sageroad-form-tripName" data-member="tripName" value="North &amp; &quot;south&quot;">' +
+            '<div class="sageroad-form-doc">The trip\'s name - its &lt;title&gt;</div></div>'
     );
     assert.deepEqual([...form.querySelectorAll('label')].slice(0, 6).map((label) => label.textContent), [
         'Trip name *', 'Days', 'Cost *', 'Mode *', 'Return mode', 'City'
     ]);
     assert.equal(form.querySelector('[data-member="days"]').getAttribute('inputmode'), 'decimal');
-    assert.equal(form.querySelector('[data-member="start.city"]').id, 'cutfill-form-start-city');
-    assert.equal(form.querySelector('label[for="cutfill-form-notes"]').nextElementSibling.nextElementSibling.textContent, ' - a line each');
+    assert.equal(form.querySelector('[data-member="start.city"]').id, 'sageroad-form-start-city');
+    const notesLabel = form.querySelector('label[for="sageroad-form-notes"]');
+    assert.equal(notesLabel.nextElementSibling.nextElementSibling.textContent, ' - a line each');
 
     // An enumeration's values - an optional one's may be none
     assert.deepEqual(['mode', 'returnMode'].map((member) => (
@@ -107,7 +108,7 @@ test('formHtml', () => {
     ]);
 
     // The members that aren't edited are noted, if they have values
-    assert.deepEqual([...form.querySelectorAll('em')].map((note) => note.closest('.cutfill-form-field').textContent), [
+    assert.deepEqual([...form.querySelectorAll('em')].map((note) => note.closest('.sageroad-form-field').textContent), [
         'StopsIt isn\'t edited here - it\'s kept as it is.',
         'PaidIt isn\'t edited here - it\'s kept as it is.',
         'DistanceIt isn\'t edited here - it\'s kept as it is.'

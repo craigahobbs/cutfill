@@ -1,9 +1,9 @@
 {
     "type": "module",
-    "name": "cutfill-viewer",
+    "name": "sageroad-viewer",
     "version": "1.0.0",
     "private": true,
-    "description": "The Cutfill road plan viewer",
+    "description": "The SageRoad road plan viewer",
     "scripts": {
         "test": "node --test test/"
     },

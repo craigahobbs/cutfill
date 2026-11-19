@@ -48,7 +48,7 @@ function reportBrowser(testContext, plan, {cellCost = '1', search = '', hash = r
     return fakeBrowser(testContext, {
         search, hash,
         'files': {'plans/fixture.json': JSON.stringify(plan)},
-        'storage': cellCost !== null ? {'cutfillCellCost': cellCost} : {}
+        'storage': cellCost !== null ? {'sageRoadCellCost': cellCost} : {}
     });
 }
 
@@ -82,8 +82,8 @@ test('the report page', async (context) => {
     expected.innerHTML = report.html;
     assert.equal(main.innerHTML, expected.innerHTML);
     assert.equal(main.querySelector('h1').outerHTML, '<h1 id="fixture-plan">Fixture Plan</h1>');
-    assert.equal(main.querySelector('svg.cutfill-plan').getAttribute('width'), '976');
-    assert.equal(main.querySelector('svg.cutfill-plan').getAttribute('aria-label'), 'Plan view of the Direct road plan option');
+    assert.equal(main.querySelector('svg.sageroad-plan').getAttribute('width'), '976');
+    assert.equal(main.querySelector('svg.sageroad-plan').getAttribute('aria-label'), 'Plan view of the Direct road plan option');
     assert.equal(
         main.querySelector('a[href*="vExplore"]').outerHTML,
         '<a href="#var.vAzimuth=328.6&amp;var.vExplore=true&amp;var.vFile=\'plans%2Ffixture.json\'&amp;var.vTilt=55&amp;var.vX=202&amp;' +
@@ -119,7 +119,7 @@ test('the report page width', async (context) => {
         browser.window.innerWidth = innerWidth;
         await startApp(browser);
         const [canvas] = viewCanvases(browser);
-        assert.equal(browser.main.querySelector('svg.cutfill-plan').getAttribute('width'), `${width}`);
+        assert.equal(browser.main.querySelector('svg.sageroad-plan').getAttribute('width'), `${width}`);
         assert.equal(canvas.getAttribute('width'), `${width}`);
         assert.equal(canvas.getAttribute('height'), `${height}`);
     }
@@ -137,7 +137,7 @@ test('the report page draws its 3D views one per task', async (context) => {
     ]);
     assert.deepEqual(paintCounts(canvases), [0, 0, 0]);
     assert.deepEqual([...observer.targets], canvases);
-    assert.deepEqual(browser.logs, ['Cutfill: render in 0.0 ms']);
+    assert.deepEqual(browser.logs, ['SageRoad: render in 0.0 ms']);
 
     // The first task draws the first view - with the terrain points that fit the view's time budget (250 milliseconds)
     // at the measured cell cost (1 millisecond) - and it's no longer watched
@@ -193,9 +193,9 @@ test('the report page draws its 3D views one per task', async (context) => {
     assert.equal(clock.timeouts.size, 1);
     clock.time = 400;
     clock.runFrame();
-    assert.equal(window.localStorage.getItem('cutfillCellCost'), '0.76');
+    assert.equal(window.localStorage.getItem('sageRoadCellCost'), '0.76');
     assert.deepEqual(browser.logs.slice(1), [
-        'Cutfill: 3D view 1 - 858 operations, 140 cells, step 3, smooth 1 (213 point limit) - drawn in 400.0 ms'
+        'SageRoad: 3D view 1 - 858 operations, 140 cells, step 3, smooth 1 (213 point limit) - drawn in 400.0 ms'
     ]);
 
     // The next task draws the second view - with more terrain points, for the lower cell cost
@@ -213,10 +213,10 @@ test('the report page draws its 3D views one per task', async (context) => {
     assert.equal(clock.frames.size, 2);
     clock.time = 410;
     clock.runFrame();
-    assert.equal(window.localStorage.getItem('cutfillCellCost'), '0.3749499999999999');
+    assert.equal(window.localStorage.getItem('sageRoadCellCost'), '0.3749499999999999');
     assert.deepEqual(browser.logs.slice(2), [
-        'Cutfill: 3D view 2 - 570 operations, 164 cells, step 2, smooth 1 (280 point limit) - drawn in 10.0 ms',
-        'Cutfill: 3D view 3 - 591 operations, 160 cells, step 2, smooth 1 (280 point limit) - drawn in 10.0 ms'
+        'SageRoad: 3D view 2 - 570 operations, 164 cells, step 2, smooth 1 (280 point limit) - drawn in 10.0 ms',
+        'SageRoad: 3D view 3 - 591 operations, 160 cells, step 2, smooth 1 (280 point limit) - drawn in 10.0 ms'
     ]);
 
     // The last task finds every view drawn
@@ -321,11 +321,11 @@ test('the report page draws its 3D views without a measured cell cost', async (c
         clock.time = 120;
         clock.runFrame();
         assert.deepEqual(browser.logs, [
-            'Cutfill: render in 0.0 ms',
-            'Cutfill: 3D view 1 - 30546 operations, 30000 cells, step 1, smooth 5 - drawn in 120.0 ms'
+            'SageRoad: render in 0.0 ms',
+            'SageRoad: 3D view 1 - 30546 operations, 30000 cells, step 1, smooth 5 - drawn in 120.0 ms'
         ]);
         if (cellCost !== 'unavailable') {
-            assert.equal(window.localStorage.getItem('cutfillCellCost'), '0.00232');
+            assert.equal(window.localStorage.getItem('sageRoadCellCost'), '0.00232');
         }
     }
 });
@@ -367,7 +367,7 @@ test('the report page plan view opens the 3D explorer', async (context) => {
     // Click the plan view - shown at half its size, 20 pixels from the left and 30 from the top - at a point of the
     // site (400 by 300 feet, 2.39 pixels a foot, inside 10 pixels of padding)
     const clickPlan = async (x, y) => {
-        const planSvg = main.querySelector('svg.cutfill-plan');
+        const planSvg = main.querySelector('svg.sageroad-plan');
         assert.equal(planSvg.getAttribute('width'), '976');
         assert.equal(planSvg.getAttribute('height'), '737');
         planSvg.getBoundingClientRect = () => ({'left': 20, 'top': 30, 'width': 488, 'height': 368.5});
@@ -422,7 +422,7 @@ test('the report page is rendered again when its width changes', async (context)
     clock.runTimeout();
     assert.deepEqual(paintCounts([canvas]), [1]);
     assert.deepEqual([...clock.timeouts.values()].map(({time}) => time), [150]);
-    assert.equal(main.querySelector('svg.cutfill-plan').getAttribute('width'), '976');
+    assert.equal(main.querySelector('svg.sageroad-plan').getAttribute('width'), '976');
 
     // The report is rendered at its new width - at its scroll position
     window.scrollY = 300;
@@ -432,7 +432,7 @@ test('the report page is rendered again when its width changes', async (context)
     const expected = document.createElement('div');
     expected.innerHTML = expectedReport(fixturePlan(), 752).html;
     assert.equal(main.innerHTML, expected.innerHTML);
-    assert.equal(main.querySelector('svg.cutfill-plan').getAttribute('width'), '752');
+    assert.equal(main.querySelector('svg.sageroad-plan').getAttribute('width'), '752');
     assert.deepEqual(browser.scrolls, [['scrollTo', 0, 0], ['scrollTo', 0, 0], ['scrollTo', 0, 0], ['scrollTo', 0, 300]]);
 
     // Its 3D view is a new canvas, watched by a new observer, and drawn in a later task
@@ -451,7 +451,7 @@ test('the report page is rendered again when its width changes', async (context)
     assert.deepEqual(newCanvas.calls[3], ['fillRect', 0, 0, 752, 516]);
 
     // The plan view's click handler is the new plan view's
-    const planSvg = main.querySelector('svg.cutfill-plan');
+    const planSvg = main.querySelector('svg.sageroad-plan');
     planSvg.getBoundingClientRect = () => ({'left': 0, 'top': 0, 'width': 752, 'height': 569});
     fire(browser, planSvg, 'click', {'clientX': 10 + 1.83 * 200, 'clientY': 10 + 1.83 * 150});
     assert.equal(window.location.hash, "#var.vExplore=true&var.vFile='plans%2Ffixture.json'&var.vX=200&var.vY=150&var.vZoom=4");
@@ -497,7 +497,7 @@ test('the report page draws its 3D views for printing', async (context) => {
     fire(browser, window, 'resize');
     assert.deepEqual([...clock.timeouts.values()].map(({time}) => time), [100]);
     clock.runTimeout();
-    assert.equal(main.querySelector('svg.cutfill-plan').getAttribute('width'), '752');
+    assert.equal(main.querySelector('svg.sageroad-plan').getAttribute('width'), '752');
     assert.deepEqual(viewCanvases(browser).map((canvas) => [canvas.width, canvas.height]), [
         [752, 516], [752, 564], [752, 564], [752, 564]
     ]);
@@ -533,7 +533,7 @@ test('the report page stops drawing when it is left', async (context) => {
     // Leave the report for the documentation - its tasks are canceled, and its views aren't watched
     window.location.hash = '#var.vDoc=true';
     await flush();
-    assert.equal(document.title, 'Cutfill Road Plan Model');
+    assert.equal(document.title, 'SageRoad Road Plan Model');
     assert.equal(clock.timeouts.size, 0);
     assert.deepEqual([...observer.targets], []);
 
@@ -544,5 +544,5 @@ test('the report page stops drawing when it is left', async (context) => {
     // The drawn view's measurement is still recorded
     clock.time = 400;
     clock.runFrame();
-    assert.equal(window.localStorage.getItem('cutfillCellCost'), '0.76');
+    assert.equal(window.localStorage.getItem('sageRoadCellCost'), '0.76');
 });

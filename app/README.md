@@ -1,19 +1,19 @@
-# Cutfill Application
+# SageRoad Application
 
-The Cutfill application - a Python package (`cutfill`) built with
-[python-build](https://github.com/craigahobbs/python-build#readme). Its command line, `cutfill`, serves the Cutfill
+The SageRoad application - a Python package (`sageroad`) built with
+[python-build](https://github.com/craigahobbs/python-build#readme). Its command line, `sageroad`, serves the SageRoad
 front end - the [viewer](../viewer/README.md)'s application, and the planning tools - in your web browser. See the
 project's [README](../README.md).
 
 ```sh
-make static              # stage the front end (the viewer and the planning tools) in the package (src/cutfill/static/)
-make run [ARGS=...]      # run the application - "cutfill [-p PORT] [-n] [-q]" (it logs the requests that fail)
+make static              # stage the front end (the viewer and the planning tools) in the package (src/sageroad/static/)
+make run [ARGS=...]      # run the application - "sageroad [-p PORT] [-n] [-q]" (it logs the requests that fail)
 make commit              # the pre-commit gate: test, lint, and cover (100% required)
 ```
 
 The project's `make run` runs it.
 
-The back end (`src/cutfill/app.py`) is a [chisel](https://github.com/craigahobbs/chisel#readme) application, served
+The back end (`src/sageroad/app.py`) is a [chisel](https://github.com/craigahobbs/chisel#readme) application, served
 by [waitress](https://github.com/Pylons/waitress#readme) to this computer only (`127.0.0.1`). For now, it's only the
 front end's statics (and chisel's API documentation, `/doc/`) - the front end does the rest in the browser.
 
@@ -21,11 +21,11 @@ The front end is the package's `static` directory - `make static` copies the vie
 the planning tools' modules (`plan/lib/`). It's committed, so the package builds from the repository without Node.js.
 The package's readme (its PyPI page) is the project's README, by a link (`PYPI.md`) - setuptools reads only the
 package directory's files.
-The package is installed from [PyPI](https://pypi.org/project/cutfill/):
+The package is installed from [PyPI](https://pypi.org/project/sageroad/):
 
 ```sh
-python3 -m venv cutfill-venv
-cutfill-venv/bin/pip install cutfill
+python3 -m venv sageroad-venv
+sageroad-venv/bin/pip install sageroad
 ```
 
 The app adds the front end's files at creation (package resources), and the page loads nothing from the internet but
