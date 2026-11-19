@@ -174,8 +174,8 @@ export function routeLattice(topo, design, slopeWeight, roads = null) {
 // ([x, y] arrays). The lattice's nodes have heading states, so the alignment's turns have a radius. A move's cost is
 // the lattice's and its climb beyond the design grade, weighted by "gradeWeight" - the climb must be absorbed by
 // earthwork (soft, up to "softBand" over the design grade, less "gradeMargin") or it makes the end unreachable (hard).
-// A turning move is limited to the switchback grade, and a move that crosses a stream has a culvert (a turning move's
-// cost doesn't include it). "startHeading" is the heading at the start (the previous leg's final heading), or null.
+// A turning move is limited to the switchback grade, and a move that crosses a stream has a culvert - a turning move's,
+// too. "startHeading" is the heading at the start (the previous leg's final heading), or null.
 //
 // The lattice's "barrier", if it has one, is its nodes that the route doesn't go through (corridorBarrier).
 //
@@ -256,11 +256,11 @@ export function routeSearch(
                 const groundGrade = moveGrades[nextHeading][node];
                 if (turn === 0) {
                     moveCost += excessCost(groundGrade, gradeLimit, length);
-                    for (let culverts = moveCulverts[nextHeading][node]; culverts > 0; culverts--) {
-                        moveCost += costCulvert;
-                    }
                 } else {
                     moveCost = moveCost + excessCost(groundGrade, turnLimit, length) + turnPenalty;
+                }
+                for (let culverts = moveCulverts[nextHeading][node]; culverts > 0; culverts--) {
+                    moveCost += costCulvert;
                 }
             }
             const [dx, dy] = moves[nextHeading];

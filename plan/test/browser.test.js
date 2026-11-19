@@ -232,7 +232,8 @@ test('planRoad', async () => {
     assert.equal(result.code, 0);
     assert.deepEqual(result.lines.filter((line) => /^Notes|^Option \d|^Wrote/.test(line)), [
         'Notes: avoid "Barn" - an exclusion area from x 300 to 380, y 60 to 120',
-        'Option 0: "New Road" - cost score 72.6, design warnings: 0'
+        'Option 0: "New Road" - cost score 72.4, design warnings: 0',
+        'Option 1: "North Corridor" - cost score 85.0, design warnings: 0'
     ]);
     assert.deepEqual(Object.keys(result), ['code', 'lines', 'plan']);
     assert.deepEqual([statuses[0], statuses.at(-1)], [
@@ -243,7 +244,7 @@ test('planRoad', async () => {
     const {plan} = result;
     assert.deepEqual(siteDefaults(site), {'margin': 150, 'spacing': 1});
     assert.equal(autoSteps[0].key, 'site');
-    assert.deepEqual(plan.options.map(({name}) => name), ['New Road']);
+    assert.deepEqual(plan.options.map(({name}) => name), ['New Road', 'North Corridor']);
     assert.equal(plan.description[0], 'A road to the house.');
     assert.equal(plan.image, 'data:image/png;base64,iVBORw==');
     const {exclusions, ...config} = plan.site;

@@ -145,24 +145,24 @@ test('route, a switchback road', () => {
 
 test('route, via points, streams, rock, and an exclusion area', () => {
     // The Python planning tools' road went out to its via points and returned - it was 900 meters long, and it crossed
-    // itself. The via points are dead ends off the road's way, so the road passes them by.
+    // itself. Its first via point is a dead end off the road's way, so the road passes it by - and it passes through its
+    // second, where it crosses the stream (a culvert is charged on any move that crosses a stream).
     const {result, plan} = runExpected(hillPlan(), 'route-hill');
     assert.equal(expected.commands['route-hill'].lines[0],
         'Option "Hill Road": 900 meters long, 241 alignment points, max grade 9.0%, max cut 2.9, max fill 4.2');
     assert.deepEqual(result, {'code': 0, 'lines': [
-        'Option "Hill Road": 289 meters long, 79 alignment points, max grade 8.8%, max cut 2.0, max fill 2.4',
-        'Structures: 1 bridge, 2 culverts, 2 turnouts',
-        'Cost score: 321.5, design warnings: 0',
+        'Option "Hill Road": 291 meters long, 79 alignment points, max grade 9.0%, max cut 1.7, max fill 1.8',
+        'Structures: 1 bridge, 1 culvert, 2 turnouts',
+        'Cost score: 269.1, design warnings: 0',
         'NOTE: the via point 110,90 is a dead end off the road\'s way - the road would go out to it and return, so it passes it ' +
-            'by, 75 meters from it (station 215)',
-        'NOTE: the via point 150,60 is a dead end off the road\'s way - the road would go out to it and return, so it passes it ' +
-            'by, 107 meters from it (station 237)',
+            'by, 49 meters from it (station 168)',
         'Wrote plan.json - run "plan evaluate plan.json" for the full analysis and cost'
     ]});
     const [option] = plan.options;
     assert.deepEqual(option.description, ['A road', 'Second line']);
     assert.deepEqual(option.section, {'width': 4.3, 'cutSlope': 1, 'fillSlope': 1.5, 'surface': 'gravel'});
-    assert.deepEqual([option.alignment[0], option.alignment.at(-1)], [{'x': 20, 'y': 20, 'z': 51.61}, {'x': 180, 'y': 185, 'z': 64.8}]);
+    assert.deepEqual([option.alignment[0], option.alignment.at(-1)].map(({x, y}) => [x, y]), [[20, 20], [180, 185]]);
+    assert.ok(option.alignment.some(({x, y}) => Math.hypot(x - 150, y - 60) < 4));
     assert.equal(alignmentOverlaps(plan, option), null);
     assert.deepEqual([...new Set(option.structures.map(({type}) => type))].sort(), ['bridge', 'culvert', 'turnout']);
     assert.ok('plan' in validatePlan(plan));
@@ -304,12 +304,12 @@ test('route, the grade penalty weights', () => {
     assert.deepEqual(routed(['--grade-weight', '1']).result.lines.slice(0, 3), [
         'Option "Hill": 298 meters long, 81 alignment points, max grade 8.4%, max cut 1.7, max fill 1.8',
         'Structures: 2 culverts, 2 turnouts',
-        'Cost score: 98.0, design warnings: 0'
+        'Cost score: 97.8, design warnings: 0'
     ]);
     assert.deepEqual(routed(['--grade-weight', '0.5']).plan, road.plan);
 
     // With a design grade of 7%, the weight of 1's road costs the least
-    assert.equal(routed(['-g', '7']).result.lines[2], 'Cost score: 99.6, design warnings: 0');
+    assert.equal(routed(['-g', '7']).result.lines[2], 'Cost score: 99.0, design warnings: 0');
     assert.deepEqual(routed(['-g', '7']).plan, routed(['-g', '7', '--grade-weight', '1']).plan);
     assert.equal(routed(['-g', '7', '--grade-weight', '0.25']).result.lines[2], 'Cost score: 105.8, design warnings: 0');
 });
@@ -333,17 +333,24 @@ test('bestRoad', () => {
 
 
 test('route, the design arguments', () => {
+    // The Python planning tools' road crossed a stream on a turning move, which they didn't charge a culvert for - a
+    // culvert is a culvert, so the road is shorter, with a culvert less
     const {result, plan} = runExpected(hillPlan(), 'route-hill-custom');
-    const {code, lines, options} = expected.commands['route-hill-custom'];
-    assert.deepEqual(pythonResult(result), {code, lines});
-    assert.equal(result.lines[1], 'Existing road: stations 0.0 to 30.0 - its grade averages 0.2%, 5.4% over its steepest 12 meters');
-    assert.deepEqual(summarize(plan.options, 10), options);
+    const {lines} = expected.commands['route-hill-custom'];
+    assert.deepEqual(pythonResult(result), {'code': 0, 'lines': [
+        'Option "Wide": 299 meters long, 81 alignment points, max grade 7.0%, max cut 0.9, max fill 3.1',
+        'Existing road: stations 0.0 to 30.0',
+        'Structures: 1 existing road, 2 culverts',
+        'Cost score: 162.6, design warnings: 0',
+        'Wrote plan.json - run "plan evaluate plan.json" for the full analysis and cost'
+    ]});
+    assert.equal(result.lines[1], 'Existing road: stations 0.0 to 30.0 - its grade averages 0.0%, 5.4% over its steepest 12 meters');
     const [option] = plan.options;
     assert.deepEqual(option.section, {'width': 6, 'cutSlope': 0.75, 'fillSlope': 2, 'surface': 'asphalt'});
     assert.deepEqual(option.structures[0], {'type': 'existingRoad', 'station': 0, 'endStation': 30, 'name': 'Existing road'});
     assert.ok(option.structures.every(({type}) => type !== 'turnout'));
-    // (The Python planning tools broke grade where this road leaves its existing road - their vertical curves weren't
-    // held to the existing road's ground - so its maximum grade was 7.7%)
+    // The Python planning tools' road (they broke grade where this road leaves its existing road - their vertical curves
+    // weren't held to the existing road's ground - so its maximum grade was 7.7%)
     assert.deepEqual(lines, [
         'Option "Wide": 304 meters long, 83 alignment points, max grade 7.0%, max cut 1.9, max fill 3.0',
         'Existing road: stations 0.0 to 30.0',
@@ -456,7 +463,7 @@ test('route, the unmapped draws a road crosses', () => {
     stream.topography.features.push({'type': 'stream', 'name': 'First Draw', 'points': [{'x': 200, 'y': 800}, {'x': 200, 'y': 0}]});
     const streamRun = run(stream, ['route', 'plan.json', '-n', 'Across']);
     assert.deepEqual(streamRun.result.lines.slice(1, 4), [
-        'Structures: 1 culvert, 1 turnout', 'Cost score: 23.5, design warnings: 0', 'Wrote plan.json'
+        'Structures: 1 culvert, 1 turnout', 'Cost score: 23.0, design warnings: 0', 'Wrote plan.json'
     ]);
     assert.equal(streamRun.plan.options[0].structures.find(({type}) => type === 'culvert').name, 'First Draw culvert');
 

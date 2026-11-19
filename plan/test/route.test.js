@@ -3,10 +3,10 @@ import {
     followRoads, halfCircleMoves, polylineStations, resamplePolyline, roadOverlaps, routeLattice, routeSearch, smoothCurves,
     turnRadius, viaTurnBacks
 } from '../lib/route.js';
+import {planTopo, segmentIntersect} from '../../viewer/lib/model.js';
 import assert from 'node:assert/strict';
 import {createDesign} from '../lib/design.js';
 import {lineIndex} from '../lib/roads.js';
-import {planTopo} from '../../viewer/lib/model.js';
 import test from 'node:test';
 
 
@@ -414,15 +414,49 @@ test('routeSearch, a large site and a lattice searched again', () => {
 
 
 test('routeSearch, streams, rock, and an exclusion area', () => {
+    // The Python planning tools' route crossed the site's east-west stream (at y 150) on a turning move, which they didn't
+    // charge a culvert for - a culvert is a culvert, so the route crosses it on a straight move. The route is the
+    // Python planning tools' to the stream's valley, and they cross the streams as many times.
     const route = search(hillPlan(), designArgs(), [20, 20], [180, 185], 1, 1);
-    assert.deepEqual(route, expected['route-hill']);
+    const pythonRoute = expected['route-hill'];
+    assert.deepEqual(route.path.slice(0, 15), pythonRoute.path.slice(0, 15));
+    const north = (x, y, count) => Array.from({'length': count}, (unused, ix) => [x, y + ix * 7.5]);
+    assert.deepEqual(route.path.slice(15), [...north(180, 97.5, 12), [180, 185]]);
+    assert.deepEqual(pythonRoute.path.slice(14, 23), [
+        [172.5, 82.5], [172.5, 90], [172.5, 97.5], [172.5, 105], [172.5, 112.5], [172.5, 120], [172.5, 127.5], [172.5, 135], [180, 150]
+    ]);
+    assert.deepEqual([route.lattice, route.heading], [pythonRoute.lattice, pythonRoute.heading]);
+    assert.deepEqual([streamCrossings(route.path), streamCrossings(pythonRoute.path)], [2, 2]);
 
     // The route is around the exclusion area
     assert.ok(route.path.every(([x, y]) => !(x > 70 && x < 90 && y > 30 && y < 60)));
 
-    // The other way, with a wider road
-    assert.deepEqual(search(hillPlan(), designArgs({'width': 6}), [180, 185], [20, 20], 1, 1), expected['route-hill-west']);
+    // The other way, with a wider road - it crosses the stream straight, too
+    const west = search(hillPlan(), designArgs({'width': 6}), [180, 185], [20, 20], 1, 1);
+    const pythonWest = expected['route-hill-west'];
+    assert.deepEqual(west.path.slice(0, 13), [[180, 185], ...north(180, 97.5, 12).reverse()]);
+    assert.deepEqual(west.path.slice(14), pythonWest.path.slice(14));
+    assert.deepEqual(pythonWest.path.slice(4, 6), [[180, 157.5], [172.5, 142.5]]);
+    assert.deepEqual([streamCrossings(west.path), streamCrossings(pythonWest.path)], [2, 2]);
 });
+
+
+// Count a path's crossings of the hill plan's streams
+function streamCrossings(path) {
+    let count = 0;
+    for (const {points} of hillPlan().topography.features.filter(({type}) => type === 'stream')) {
+        for (let ix = 1; ix < path.length; ix++) {
+            for (let ixPoint = 1; ixPoint < points.length; ixPoint++) {
+                const [[x1, y1], [x2, y2]] = [path[ix - 1], path[ix]];
+                const [point1, point2] = [points[ixPoint - 1], points[ixPoint]];
+                if (segmentIntersect(x1, y1, x2, y2, point1.x, point1.y, point2.x, point2.y) !== null) {
+                    count += 1;
+                }
+            }
+        }
+    }
+    return count;
+}
 
 
 test('routeSearch, no route', () => {
