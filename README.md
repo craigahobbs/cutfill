@@ -16,9 +16,9 @@ Then view the options' report and 3D views, edit the plan and run it again, and 
 
 **[View the example road plan](https://craigahobbs.github.io/cutfill/viewer/#url=../example/example.json)** - an access road up a hill, with its road options' report,
 3D views, and 3D explorer - in the Cutfill viewer, on this project's web site. There's nothing to
-install. See [The example](#the-example).
+install. See The example, below.
 
-[![The example road plan's 3D views](example/screenshot.png)](https://craigahobbs.github.io/cutfill/viewer/#url=../example/example.json)
+[![The example road plan's 3D views](https://craigahobbs.github.io/cutfill/example/screenshot.png)](https://craigahobbs.github.io/cutfill/viewer/#url=../example/example.json)
 
 The application needs only Python 3.11 or later. A site must be in the United States, where the USGS
 has 1 meter lidar terrain.
@@ -53,7 +53,7 @@ spacing change) fetches, and Ollama, on this computer (an Ollama cloud model use
 1. Run `cutfill`, and choose **New Plan**.
 2. Give the plan a title, and its start and end points - copy each point's latitude and longitude from
    a map (Google Maps, say), and paste them into its latitude. Write the road's notes: what it's for,
-   and what it must avoid or pass through (see [The plan's notes](#the-plans-notes)).
+   and what it must avoid or pass through (see The plan's notes, below).
 3. **Run Plan**, with an Ollama model to read the notes. The first run fetches the site's data from
    the USGS, so it takes a few minutes.
 4. **View Plan** for its road options' report, and **Save** the plan to a file.
@@ -92,7 +92,7 @@ criteria, and marks), and what can be done with it:
   default). The run's steps are shown as it goes, with its time, and its result and report when it's
   done. **Stop** stops it, when its current step's work is done - and its work is thrown away. The
   road options it engineers are the plan's, and so are the places it found for the notes (see
-  [Planning a road](#planning-a-road)). A plan that's run again keeps its site's data (its terrain,
+  Planning a road, below). A plan that's run again keeps its site's data (its terrain,
   streams, roads, and map), so the USGS isn't asked for it again - unless its points, units, margin,
   or spacing changed, or "Fetch the site's data from the USGS again" is checked. **Clear Road
   Options** clears them - the plan keeps its site's data.
@@ -145,7 +145,7 @@ A run of the plan:
    site. Its streams are the USGS National Hydrography Dataset's (moved to the bottoms of their
    valleys), its roads and trails and its topographic map image are the USGS National Map's, and its
    marks are the config's.
-2. **Reads the notes**, with a model - see [The plan's notes](#the-plans-notes).
+2. **Reads the notes**, with a model - see The plan's notes, below.
 3. **Engineers the road options:**
    - **Existing Roads** - the least-cost road, following the site's existing roads where upgrading
      them costs less than a new road (if it follows any)
@@ -262,7 +262,7 @@ The explorer's URL keeps its view, so it can be reloaded or shared.
 
 The application views a road plan that's opened, or made by a run. The viewer is also a web site,
 [craigahobbs.github.io/cutfill/viewer/](https://craigahobbs.github.io/cutfill/viewer/) (see
-[Publishing](#publishing)), that views plans without installing anything:
+Publishing, below), that views plans without installing anything:
 
 - **Open a local plan** - on the viewer's home page, select or drop the plan's JSON file (and its
   source map image, to show it in the report). Local files stay on your computer - they're kept in
@@ -271,10 +271,10 @@ The application views a road plan that's opened, or made by a run. The viewer is
 - **View a plan URL** - `viewer/#url=<plan.json URL>` (the URL is relative to the viewer). The plan's
   map image is relative to the plan's URL. Plans hosted on another site must allow cross-origin
   requests (CORS).
-- **View the example** - the web site's viewer has a link to [the example](#the-example) on its home
+- **View the example** - the web site's viewer has a link to the example on its home
   page.
 
-The viewer validates every plan it loads against the [road plan model](#the-road-plan-model), and
+The viewer validates every plan it loads against the road plan model (see The road plan model, below), and
 reports the first problem it finds.
 
 
@@ -337,9 +337,9 @@ to the model documentation.
 
 ## The example
 
-The [example](example/example.json) is an access road up a hill at the south edge of Kennewick,
+The [example](https://craigahobbs.github.io/cutfill/example/example.json) is an access road up a hill at the south edge of Kennewick,
 Washington - not quite half a mile of road, to climb 200 feet. It was made by the application, from
-its config, [site.json](example/site.json): the road's start and end points, as latitudes and
+its config, [site.json](https://craigahobbs.github.io/cutfill/example/site.json): the road's start and end points, as latitudes and
 longitudes, its planning notes, and its marks - the house lots at the foot of the hill, which the road
 must avoid, and an unmapped dirt track to the hilltop, which a road may follow.
 
@@ -386,7 +386,7 @@ top-level makefile delegates to the project's subprojects - run `make` in one fo
 
 | Directory | Contents |
 | --- | --- |
-| [viewer/](viewer/) | The Cutfill viewer - the web application, the road plan model (its schema, validation, earthwork, and cost analysis), and a command line (`bin/cutfill.js`) that prints a plan's analysis and the model documentation. JavaScript, built with [javascript-build](https://github.com/craigahobbs/javascript-build#readme) - see its [README](#url=viewer/README.md). |
+| [viewer/](https://github.com/craigahobbs/cutfill/tree/main/viewer) | The Cutfill viewer - the web application, the road plan model (its schema, validation, earthwork, and cost analysis), and a command line (`bin/cutfill.js`) that prints a plan's analysis and the model documentation. JavaScript, built with [javascript-build](https://github.com/craigahobbs/javascript-build#readme) - see its [README](https://github.com/craigahobbs/cutfill/blob/main/viewer/README.md). |
 | `plan/` | The planning tools - the site's USGS lidar terrain and features, road engineering, and a plan's run (`auto`) - which the application runs in the browser, and a command line for their development (`bin/plan.js`). JavaScript, built with [javascript-build](https://github.com/craigahobbs/javascript-build#readme). |
 | `app/` | The Cutfill application - a Python package (`cutfill`), built with [python-build](https://github.com/craigahobbs/python-build#readme). Its command line, `cutfill`, serves the front end (the viewer's application and the planning tools, staged in the package) with a [chisel](https://github.com/craigahobbs/chisel#readme) back end - to this computer only. |
 | `example/` | The example - its road site model, and its plan |
