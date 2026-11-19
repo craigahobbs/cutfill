@@ -13,6 +13,130 @@ import {unproject} from './view3d.js';
 export const planPad = 10;
 
 
+// The features' names' font size, the space kept around a name and around the road (its highlighted centerline's half
+// width), and the farthest that the road's edge is from a name's place for the name to be beside the road there, in
+// pixels - and the places along a line feature that its name is tried at (fractions of its length - its middle first)
+const nameSize = 11;
+const nameGap = 2;
+const roadGap = 3;
+const besideMax = 2 * nameSize;
+const nameFractions = [0.5, 0.4, 0.6, 0.3, 0.7, 0.2, 0.8];
+
+
+// Get a label's box - a [left, top, right, bottom] array - from its center and its font size
+function labelBox(label, fontSize, x, y) {
+    const halfWidth = labelHalfWidth(label, fontSize);
+    const halfHeight = fontSize * 0.6;
+    return [x - halfWidth, y - halfHeight, x + halfWidth, y + halfHeight];
+}
+
+
+// Get a line's points (a coordinates array's) at fractions of its length
+function linePoints(coords, length, fractions) {
+    return fractions.map((fraction) => {
+        let remaining = fraction * length;
+        let ix = 2;
+        let segment = Math.hypot(coords[2] - coords[0], coords[3] - coords[1]);
+        while (remaining > segment) {
+            remaining -= segment;
+            ix += 2;
+            segment = Math.hypot(coords[ix] - coords[ix - 2], coords[ix + 1] - coords[ix - 1]);
+        }
+        const ratio = remaining / Math.max(segment, Number.EPSILON);
+        return [coords[ix - 2] + (coords[ix] - coords[ix - 2]) * ratio, coords[ix - 1] + (coords[ix + 1] - coords[ix - 1]) * ratio];
+    });
+}
+
+
+// Get the boxes that a label's box - its center and its half width and half height - is over
+function boxesOver(boxes, x, y, halfWidth, halfHeight) {
+    const left = x - halfWidth;
+    const right = x + halfWidth;
+    const top = y - halfHeight;
+    const bottom = y + halfHeight;
+    return boxes.filter((box) => left < box[2] && right > box[0] && top < box[3] && bottom > box[1]);
+}
+
+
+// The road's boxes are kept by the cells of a grid that they're in (a map of a cell's key to its boxes), so a label's
+// box is tested against the road's boxes near it - a road has thousands. This is the cells' size, in pixels.
+const cellSize = 64;
+
+
+// Add a box to the cells it's in
+function cellsAdd(cells, box) {
+    for (let cellX = Math.floor(box[0] / cellSize); cellX <= Math.floor(box[2] / cellSize); cellX++) {
+        for (let cellY = Math.floor(box[1] / cellSize); cellY <= Math.floor(box[3] / cellSize); cellY++) {
+            const key = `${cellX},${cellY}`;
+            const boxes = cells.get(key) ?? [];
+            boxes.push(box);
+            cells.set(key, boxes);
+        }
+    }
+}
+
+
+// Get the cells' boxes that a label's box is over - a box that's in more than one cell may be there more than once
+function cellsOver(cells, x, y, halfWidth, halfHeight) {
+    const near = [];
+    for (let cellX = Math.floor((x - halfWidth) / cellSize); cellX <= Math.floor((x + halfWidth) / cellSize); cellX++) {
+        for (let cellY = Math.floor((y - halfHeight) / cellSize); cellY <= Math.floor((y + halfHeight) / cellSize); cellY++) {
+            near.push(...cells.get(`${cellX},${cellY}`) ?? []);
+        }
+    }
+    return boxesOver(near, x, y, halfWidth, halfHeight);
+}
+
+
+// Create the features' names' markup - "names" is an array of [name, color, points] arrays, in the order they're placed.
+// A name is at the first of its points where it's within the drawing and clear of the boxes ("boxes" - the drawing's
+// other labels, and the names placed before it) and of the road ("roadCells"). A name that has no such point is beside
+// the road, at the first of its points that the road is over - above the road there, below it, left of it, or right of
+// it, where the road's edge is near the point - and a name that fits nowhere isn't drawn.
+function featureNames(names, boxes, roadCells, width, height) {
+    const elements = [];
+    for (const [name, color, points] of names) {
+        const halfWidth = labelHalfWidth(name, nameSize) + nameGap;
+        const halfHeight = nameSize * 0.6 + nameGap;
+        const fits = ([x, y]) => (
+            x - halfWidth >= 0 && y - halfHeight >= 0 && x + halfWidth <= width && y + halfHeight <= height &&
+            boxesOver(boxes, x, y, halfWidth, halfHeight).length === 0
+        );
+
+        // The name's places on its feature, and its places beside the road
+        const beside = [];
+        let place = null;
+        for (const point of points) {
+            const [x, y] = point;
+            const over = cellsOver(roadCells, x, y, halfWidth, halfHeight);
+            if (over.length === 0 && fits(point)) {
+                place = point;
+                break;
+            } else if (over.length > 0) {
+                const top = Math.min(...over.map((box) => box[1]));
+                const bottom = Math.max(...over.map((box) => box[3]));
+                const left = Math.min(...over.map((box) => box[0]));
+                const right = Math.max(...over.map((box) => box[2]));
+                beside.push(...[
+                    [x, top - halfHeight - 0.5, y - top],
+                    [x, bottom + halfHeight + 0.5, bottom - y],
+                    [left - halfWidth - 0.5, y, x - left],
+                    [right + halfWidth + 0.5, y, right - x]
+                ].filter(([, , distance]) => distance <= besideMax));
+            }
+        }
+        place ??= beside.find((point) => fits(point) && cellsOver(roadCells, point[0], point[1], halfWidth, halfHeight).length === 0) ??
+            null;
+        if (place !== null) {
+            const [x, y] = place;
+            boxes.push([x - halfWidth + nameGap, y - halfHeight + nameGap, x + halfWidth - nameGap, y + halfHeight - nameGap]);
+            elements.push(svgText(name, x, y, nameSize, 'middle', color, false));
+        }
+    }
+    return elements.join('');
+}
+
+
 // Create the plan view SVG markup - "outlines" is an array of [number, view, [x, y]] arrays of 3D views (projection)
 // whose visible areas are outlined, with their numbers marked on the road at [x, y]. Returns the markup and the plan
 // view's scale and height (for the click handler).
@@ -60,15 +184,26 @@ export function planView(plan, topo, analyses, ixOption, width, outlines) {
     elements.push(`<path d="${minorPath.join('')}" fill="none" stroke="#b89a72" stroke-width="0.6"/>`);
     elements.push(`<path d="${indexPath.join('')}" fill="none" stroke="#8a6a45" stroke-width="1.3"/>`);
 
-    // Features
+    // Features - their names are drawn where they fit (featureNames), once the drawing's other labels and its road are
+    // known: an area's name is at its center or, if it doesn't fit there, halfway to one of its corners, and a line's is
+    // at its middle or, if it doesn't fit there, elsewhere along it. The pieces of a line (the features of its type and
+    // name) have one name.
+    const boxes = [];
+    const roadCells = new Map();
+    const areaNames = [];
+    const lineNames = new Map();
     for (const feature of topo.features) {
         const {type} = feature;
         const coords = [];
         let sumX = 0;
         let sumY = 0;
+        let lineLength = 0;
         for (const point of feature.points) {
             const pxValue = pad + point.x * scale;
             const pyValue = pad + (topoHeight - point.y) * scale;
+            if (coords.length > 0) {
+                lineLength += Math.hypot(pxValue - coords[coords.length - 2], pyValue - coords[coords.length - 1]);
+            }
             coords.push(pxValue, pyValue);
             sumX += pxValue;
             sumY += pyValue;
@@ -86,9 +221,20 @@ export function planView(plan, topo, analyses, ixOption, width, outlines) {
             elements.push(svgPolygon(coords, 'rgba(208,49,45,0.12)', '#d0312d', 1.5));
         }
         const name = feature.name ?? null;
-        if (name !== null) {
-            const count = feature.points.length;
-            elements.push(svgText(name, sumX / count, sumY / count, 11, 'middle', type === 'stream' ? '#1d4f9e' : '#444', false));
+        if (name !== null && (type === 'stream' || type === 'road' || type === 'trail')) {
+            const key = `${type} ${name}`;
+            const line = lineNames.get(key) ?? {name, 'color': type === 'stream' ? '#1d4f9e' : '#444', 'length': 0, 'pieces': []};
+            line.length += lineLength;
+            line.pieces.push([lineLength, coords]);
+            lineNames.set(key, line);
+        } else if (name !== null) {
+            const centerX = sumX / feature.points.length;
+            const centerY = sumY / feature.points.length;
+            const points = [[centerX, centerY]];
+            for (let ix = 0; ix < coords.length; ix += 2) {
+                points.push([(centerX + coords[ix]) * 0.5, (centerY + coords[ix + 1]) * 0.5]);
+            }
+            areaNames.push([name, '#444', points]);
         }
     }
 
@@ -102,6 +248,10 @@ export function planView(plan, topo, analyses, ixOption, width, outlines) {
             elements.push(svgPolyline(coords, '#777777', 1.5, '6 4'));
         }
     }
+
+    // The features' names' place in the drawing - over the features and the other options, and under the road
+    const ixNames = elements.length;
+    elements.push('');
 
     // The selected option's footprint
     const analysis = analyses[ixOption];
@@ -148,6 +298,18 @@ export function planView(plan, topo, analyses, ixOption, width, outlines) {
             elements.push(svgPolygon([
                 prevCoords[2], prevCoords[3], coords[2], coords[3], coords[4], coords[5], prevCoords[4], prevCoords[5]
             ], fill, fill, 0.5));
+
+            // The features' names are clear of the road - its sample interval's surface and slopes, and its centerline
+            const box = [Infinity, Infinity, -Infinity, -Infinity];
+            for (const intervalCoords of [prevCoords, coords]) {
+                for (let ix = 0; ix < 8; ix += 2) {
+                    box[0] = Math.min(box[0], intervalCoords[ix] - roadGap);
+                    box[1] = Math.min(box[1], intervalCoords[ix + 1] - roadGap);
+                    box[2] = Math.max(box[2], intervalCoords[ix] + roadGap);
+                    box[3] = Math.max(box[3], intervalCoords[ix + 1] + roadGap);
+                }
+            }
+            cellsAdd(roadCells, box);
         }
         prevCoords = coords;
     }
@@ -183,7 +345,9 @@ export function planView(plan, topo, analyses, ixOption, width, outlines) {
         const pxValue = pad + x * scale;
         const pyValue = pad + (topoHeight - y) * scale;
         elements.push(`<circle cx="${px(pxValue)}" cy="${px(pyValue)}" r="2.5" fill="#222"/>`);
-        elements.push(svgText(formatStation(stationValue, units), pxValue + 6, pyValue - 8, 10, 'start', '#222', false));
+        const label = formatStation(stationValue, units);
+        elements.push(svgText(label, pxValue + 6, pyValue - 8, 10, 'start', '#222', false));
+        boxes.push(labelBox(label, 10, pxValue + 6 + labelHalfWidth(label, 10), pyValue - 8));
     }
 
     // Start and end markers
@@ -192,6 +356,8 @@ export function planView(plan, topo, analyses, ixOption, width, outlines) {
         const pyValue = pad + (topoHeight - point.y) * scale;
         elements.push(`<circle cx="${px(pxValue)}" cy="${px(pyValue)}" r="6" fill="${color}" stroke="white" stroke-width="2"/>`);
         elements.push(svgText(label, labelX(label, 13, pxValue, width), pyValue - 14, 13, 'middle', color, true));
+        boxes.push([pxValue - 7, pyValue - 7, pxValue + 7, pyValue + 7]);
+        boxes.push(labelBox(label, 13, labelX(label, 13, pxValue, width), pyValue - 14));
     }
 
     // Scale bar
@@ -200,12 +366,15 @@ export function planView(plan, topo, analyses, ixOption, width, outlines) {
     const barY = height - pad - 12;
     elements.push(`<rect x="${pad + 8}" y="${barY - 14}" width="${px(barPx + 16)}" height="26" fill="white" fill-opacity="0.8"/>`);
     elements.push(svgPolyline([pad + 16, barY, pad + 16 + barPx, barY], '#222', 3));
-    elements.push(svgText(`${number(barLength, 0)} ${unitLabel(units, 'length')} — contours ${fixedTrim(interval, 2)} ` +
-        `${unitLabel(units, 'length')}`, pad + 16, barY - 7, 10, 'start', '#222', false));
+    const barLabel = `${number(barLength, 0)} ${unitLabel(units, 'length')} — contours ${fixedTrim(interval, 2)} ` +
+        `${unitLabel(units, 'length')}`;
+    elements.push(svgText(barLabel, pad + 16, barY - 7, 10, 'start', '#222', false));
+    boxes.push([pad + 8, barY - 14, pad + 16 + Math.max(barPx + 8, 2 * labelHalfWidth(barLabel, 10)), barY + 12]);
 
     // North arrow
     elements.push(svgPolygon([width - 30, pad + 8, width - 37, pad + 28, width - 23, pad + 28], '#222', '#222', 1));
     elements.push(svgText('N', width - 30, pad + 38, 11, 'middle', '#222', true));
+    boxes.push([width - 37, pad + 8, width - 23, pad + 45]);
 
     // The 3D views' visible areas - their corners projected onto the ground - as light dashed outlines, then their
     // numbers marked on the road (on top of the outlines)
@@ -223,9 +392,19 @@ export function planView(plan, topo, analyses, ixOption, width, outlines) {
         const pxValue = pad + marker[0] * scale;
         const pyValue = pad + (topoHeight - marker[1]) * scale;
         elements.push(`<circle cx="${px(pxValue)}" cy="${px(pyValue)}" r="9" fill="#1f4e8c" stroke="white" stroke-width="1.5"/>`);
+        boxes.push([pxValue - 10, pyValue - 10, pxValue + 10, pyValue + 10]);
         elements.push(`<text x="${px(pxValue)}" y="${px(pyValue)}" font-size="11" font-family="sans-serif" font-weight="bold" ` +
             `text-anchor="middle" dominant-baseline="central" fill="white">${outlineNumber}</text>`);
     }
+
+    // The features' names - the areas', then the lines' from the longest line to the shortest, each at its longest piece
+    // that has a place for it
+    const names = [...areaNames];
+    for (const {name, color, pieces} of [...lineNames.values()].sort((line, other) => other.length - line.length)) {
+        pieces.sort((piece, other) => other[0] - piece[0]);
+        names.push([name, color, pieces.flatMap(([pieceLength, coords]) => linePoints(coords, pieceLength, nameFractions))]);
+    }
+    elements[ixNames] = featureNames(names, boxes, roadCells, width, height);
 
     const svgElement = svgOpen(
         width, height, `Plan view of the ${option.name} road plan option`, `${svgStyle} cursor: crosshair;`, ' class="sageroad-plan"'

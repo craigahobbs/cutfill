@@ -239,8 +239,9 @@ and cost score, then shows:
 - **Plan options** - a comparison of every option's length, maximum grade, cut, fill, net import or
   export, retaining walls, design warnings, and cost score (select an option to view it)
 - **Plan view** - a contour map with the road footprint (cut and fill slopes), structures, station
-  ticks, the other options' centerlines, and the outlines of the 3D views. Click it to explore the 3D
-  landscape from that point.
+  ticks, the other options' centerlines, and the outlines of the 3D views. The site's streams, roads,
+  and areas are named where their names fit - clear of each other, the road, and the drawing's labels
+  (the longest first). Click it to explore the 3D landscape from that point.
 - **Profile** - the ground and road grade along the road, with cut and fill areas, structures, and
   grades over the maximum highlighted
 - **3D views** - the terrain (with contours) graded to the road's finished surface: the road, cut and

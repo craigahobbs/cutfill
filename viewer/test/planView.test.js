@@ -121,7 +121,7 @@ test('planView, features, structures, and the other options', () => {
     const {planDrawing, planElements} = drawings(complexPlan(), 0, 420);
     assert.equal(planDrawing.scale, 5);
     assert.equal(planDrawing.height, 420);
-    assert.equal(planElements.length, 105);
+    assert.equal(planElements.length, 103);
 
     // The 4 foot contours of the 80% slope cross each of the 64 grid cells twice (within it and along its top) - every fifth
     // contour (120, 140, and 160 feet) is an index contour
@@ -131,26 +131,22 @@ test('planView, features, structures, and the other options', () => {
     assert.ok(planElements[1].includes('M60 160L10 160M'));
     assert.ok(planElements[1].endsWith('M410 285L360 285" fill="none" stroke="#8a6a45" stroke-width="1.3"/>'));
 
-    // The features - streams (one unnamed, one from beyond the topography), a rock outcrop, and an exclusion area - with their
-    // names at their centers
+    // The features - streams (one unnamed, one from beyond the topography), a rock outcrop, and an exclusion area - then
+    // the other option's dashed centerline, and the features' names over them. The road and its slopes are over the
+    // middles of the streams, so they're named farther along (seven tenths of the way), and the road is over the rock
+    // outcrop and the exclusion area, which aren't named
     const nameAttr = `font-size="11" ${textAttr}`;
-    assert.deepEqual(planElements.slice(2, 11), [
+    assert.deepEqual(planElements.slice(2, 10), [
         `<polyline points="70,435 70,-40" fill="none" stroke="#2a6fdb" stroke-width="2.5" ${lineAttr}/>`,
-        `<text x="70" y="197.5" ${nameAttr} fill="#1d4f9e" ${textStroke}>Creek A</text>`,
         `<polyline points="235,410 235,10" fill="none" stroke="#2a6fdb" stroke-width="2.5" ${lineAttr}/>`,
         `<polyline points="250,410 250,10" fill="none" stroke="#2a6fdb" stroke-width="2.5" ${lineAttr}/>`,
-        `<text x="250" y="210" ${nameAttr} fill="#1d4f9e" ${textStroke}>Creek C</text>`,
         '<polygon points="85,360 135,360 135,260 85,260" fill="rgba(110,110,110,0.35)" stroke="#555555" stroke-width="1"/>',
-        `<text x="110" y="310" ${nameAttr} fill="#444" ${textStroke}>Ledge</text>`,
         '<polygon points="320,360 350,360 350,260 320,260" fill="rgba(208,49,45,0.12)" stroke="#d0312d" stroke-width="1.5"/>',
-        `<text x="335" y="310" ${nameAttr} fill="#444" ${textStroke}>Shed</text>`
+        `<polyline points="10,210 210,210 460,210" fill="none" stroke="#777777" stroke-width="1.5" ${lineAttr} stroke-dasharray="6 4"/>`,
+        `<text x="70" y="102.5" ${nameAttr} fill="#1d4f9e" ${textStroke}>Creek A</text>`,
+        `<text x="250" y="130" ${nameAttr} fill="#1d4f9e" ${textStroke}>Creek C</text>`
     ]);
-
-    // The other option's centerline is dashed
-    assert.equal(
-        planElements[11],
-        `<polyline points="10,210 210,210 460,210" fill="none" stroke="#777777" stroke-width="1.5" ${lineAttr} stroke-dasharray="6 4"/>`
-    );
+    assert.deepEqual(texts(planElements, 'font-size', '11'), ['Creek A', 'Creek C', 'N']);
     assert.equal(withAttr(planElements, 'stroke-dasharray', '6 4').length, 1);
 
     // The road's footprint - 26 sample intervals of asphalt, but for the bridge deck. The retaining walls (both sides from 0+00
@@ -195,7 +191,7 @@ test('planView, features, structures, and the other options', () => {
 
     // The other option - no structures, a gravel surface, and the first option's centerline
     const other = drawings(complexPlan(), 1, 420).planElements;
-    assert.ok(other[11].startsWith('<polyline points="10,310 110,310 110,310 210,310 260,310 310,310 360,310 365,300 435,300" '));
+    assert.ok(other[7].startsWith('<polyline points="10,310 110,310 110,310 210,310 260,310 310,310 360,310 365,300 435,300" '));
     assert.equal(withAttr(other, 'stroke-dasharray', '6 4').length, 1);
     assert.equal(withAttr(other, 'fill', 'rgb(150,146,136)').length, 27);
     assert.deepEqual(withAttr(other, 'stroke-width', '3').filter((element) => element.includes('stroke="#2a6fdb"')), []);
@@ -204,7 +200,8 @@ test('planView, features, structures, and the other options', () => {
 
 
 test('planView, a road feature', () => {
-    // An existing road is a cased line, with its name - an existing trail is a thin line
+    // An existing road is a cased line, and an existing trail is a thin line - the road is named at its middle (half of its
+    // length), over the features. The trail is along the plan's road, 100 pixels wide, so it isn't named
     const planValue = simplePlan();
     planValue.topography.features = [
         {'type': 'road', 'name': 'Mill Rd', 'points': [{'x': 0, 'y': 10}, {'x': 20, 'y': 30}, {'x': 40, 'y': 30}]},
@@ -213,15 +210,15 @@ test('planView, a road feature', () => {
     ];
     const {planElements} = drawings(planValue, 0, 420);
     const lineAttr2 = 'fill="none" stroke="white" stroke-width="3.5"';
-    assert.deepEqual(planElements.slice(2, 9), [
+    assert.deepEqual(planElements.slice(2, 8), [
         `<polyline points="10,310 210,110 410,110" ${lineAttr2} ${lineAttr}/>`,
         `<polyline points="10,310 210,110 410,110" fill="none" stroke="#6e675f" stroke-width="1.5" ${lineAttr}/>`,
-        `<text x="210" y="176.7" font-size="11" ${textAttr} fill="#444" ${textStroke}>Mill Rd</text>`,
         `<polyline points="110,410 110,10" ${lineAttr2} ${lineAttr}/>`,
         `<polyline points="110,410 110,10" fill="none" stroke="#6e675f" stroke-width="1.5" ${lineAttr}/>`,
         `<polyline points="10,210 410,210" fill="none" stroke="#6e675f" stroke-width="1" ${lineAttr}/>`,
-        `<text x="210" y="210" font-size="11" ${textAttr} fill="#444" ${textStroke}>Mill Trail</text>`
+        `<text x="180.7" y="139.3" font-size="11" ${textAttr} fill="#444" ${textStroke}>Mill Rd</text>`
     ]);
+    assert.deepEqual(texts(planElements, 'font-size', '11'), ['Mill Rd', 'N']);
 
     // A road or a trail has no effect on the plan's analysis
     const {plan} = validatePlan(planValue);
@@ -240,8 +237,8 @@ test('planView, a bridge and an existing road', () => {
     assert.equal(withAttr(planElements, 'fill', 'rgb(112,110,104)').length, 29);
     assert.equal(withAttr(planElements, 'fill', 'rgb(70,72,76)').length, 85);
 
-    // The stream is named at its middle, and the exclusion area at its center - the rock outcrop has no name
-    assert.deepEqual(texts(planElements, 'font-size', '11'), ['Test Creek', 'Barn', 'N']);
+    // The exclusion area is named at its center, and then the stream, along it - the rock outcrop has no name
+    assert.deepEqual(texts(planElements, 'font-size', '11'), ['Barn', 'Test Creek', 'N']);
     assert.equal(withAttr(planElements, 'fill', 'rgba(110,110,110,0.35)').length, 1);
 
     // The station ticks, 100 feet apart, and the scale bar
@@ -252,6 +249,95 @@ test('planView, a bridge and an existing road', () => {
 
     // The start point's label and the default end label
     assert.deepEqual(texts(planElements, 'font-size', '13'), ['Road', 'End']);
+});
+
+
+// Get a plan view's features' names - their [name, x, y] arrays, in the order they're drawn
+function featureNames(planElements) {
+    return withAttr(planElements, 'font-size', '11').filter((element) => !element.includes('font-weight')).map((element) => [
+        element.slice(element.indexOf('>') + 1, element.lastIndexOf('<')),
+        Number(element.match(/ x="([^"]+)"/)[1]),
+        Number(element.match(/ y="([^"]+)"/)[1])
+    ]);
+}
+
+
+test('planView, feature names that meet', () => {
+    // A name is its text's box - a name's box is clear of the names before it, from the longest line to the shortest
+    const planValue = simplePlan();
+    planValue.topography.features = [
+        // The creeks cross at their middles - the long creek is named there, and the short one three tenths of the way along
+        // it (the long creek's name is over its middle, and over four and six tenths of the way)
+        {'type': 'stream', 'name': 'Short Run', 'points': [{'x': 21, 'y': 36}, {'x': 21, 'y': 26}]},
+        {'type': 'stream', 'name': 'Long Creek', 'points': [{'x': 2, 'y': 31}, {'x': 38, 'y': 31}]},
+
+        // A road in two pieces has one name, at the middle of its longer piece - a trail of its name has its own
+        {'type': 'road', 'name': 'Mill Rd', 'points': [{'x': 2, 'y': 10}, {'x': 8, 'y': 10}]},
+        {'type': 'road', 'name': 'Mill Rd', 'points': [{'x': 10, 'y': 10}, {'x': 20, 'y': 10}, {'x': 30, 'y': 10}]},
+        {'type': 'trail', 'name': 'Mill Rd', 'points': [{'x': 10, 'y': 6}, {'x': 30, 'y': 6}]},
+
+        // A road along the drawing's edge has no place for its name within the drawing, and a road that's a point has
+        // its name there
+        {'type': 'road', 'name': 'Edge Rd', 'points': [{'x': 0.5, 'y': 36}, {'x': 0.5, 'y': 30}]},
+        {'type': 'road', 'name': 'Point Rd', 'points': [{'x': 30, 'y': 12}, {'x': 30, 'y': 12}]}
+    ];
+    const {planElements} = drawings(planValue, 0, 420);
+    assert.deepEqual(featureNames(planElements), [
+        ['Long Creek', 210, 100],
+        ['Mill Rd', 210, 310],
+        ['Mill Rd', 210, 350],
+        ['Short Run', 220, 80],
+        ['Point Rd', 310, 290]
+    ]);
+
+    // The names are over the features, and under the road
+    const ixName = planElements.findIndex((element) => element.includes('>Long Creek<'));
+    assert.ok(planElements[ixName - 1].startsWith('<polyline points="310,290 310,290" fill="none" stroke="#6e675f"'));
+    assert.ok(planElements[ixName + 5].startsWith('<polygon points="10,160 10,154.4 43.3,154.4 43.3,160" fill="rgb(196,120,64)"'));
+});
+
+
+test('planView, feature names and the road', () => {
+    // A creek along the narrow road's centerline is named beside the road, at its middle - a station's label is above the
+    // road there, so the name is below it. The road's edge is too far from the name's ends for it to be left or right of
+    // the road
+    const planValue = simplePlan();
+    planValue.options[0].section.width = 0.1;
+    planValue.topography.features = [
+        {'type': 'stream', 'name': 'Road Creek', 'points': [{'x': 0, 'y': 20}, {'x': 40, 'y': 20}]}
+    ];
+    const {planElements} = drawings(planValue, 0, 420);
+    assert.deepEqual(featureNames(planElements), [['Road Creek', 210, 222.7]]);
+
+    // A creek across the road is named clear of it, six tenths of the way along it - a station's label is over four tenths
+    // of the way
+    planValue.topography.features = [
+        {'type': 'stream', 'name': 'Cross Creek', 'points': [{'x': 14, 'y': 30}, {'x': 14, 'y': 10}]}
+    ];
+    assert.deepEqual(featureNames(drawings(planValue, 0, 420).planElements), [['Cross Creek', 150, 230]]);
+});
+
+
+test('planView, feature names and the drawing\'s labels', () => {
+    // A name is clear of the drawing's labels, too
+    const planValue = simplePlan();
+    planValue.options[0].section.width = 0.1;
+    planValue.topography.features = [
+        // The north arrow is over the area's center, so it's named halfway to its first corner
+        {'type': 'exclusion', 'name': 'Pond', 'points': [{'x': 34, 'y': 35}, {'x': 40, 'y': 35}, {'x': 40, 'y': 39}, {'x': 34, 'y': 39}]},
+
+        // The scale bar is over the creek, and a 3D view's number is over the trail - they aren't named
+        {'type': 'stream', 'name': 'Bar Creek', 'points': [{'x': 2, 'y': 1.2}, {'x': 14, 'y': 1.2}]},
+        {'type': 'trail', 'name': 'View Trail', 'points': [{'x': 25, 'y': 26}, {'x': 37, 'y': 26}]},
+
+        // The start point's label is over the gate road's middle, and the plan's road is over its end, so it's named two
+        // tenths of the way along it
+        {'type': 'road', 'name': 'Gate Rd', 'points': [{'x': 3, 'y': 25.4}, {'x': 3, 'y': 17.4}]}
+    ];
+    const {planElements} = drawings(planValue, 0, 420, (topo) => [
+        ['2', projection(topo, {'azimuth': 0, 'tilt': 90, 'exaggeration': 1, 'zoom': 2, 'x': 10, 'y': 30}, 420, 315), [30, 26]]
+    ]);
+    assert.deepEqual(featureNames(planElements), [['Pond', 365, 50], ['Gate Rd', 40, 172]]);
 });
 
 
