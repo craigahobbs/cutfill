@@ -6,10 +6,10 @@ model itself (its schema, validation, and the earthwork and cost analysis) and a
 analysis and the model documentation. See the project's [README](../README.md) for what the viewer shows, how to view
 a plan, and the 3D explorer's keys.
 
-The viewer is plain JavaScript modules (`index.html`, `app.css`, and `lib/`), served as they are - there's no bundler.
-It replaced the project's original viewer, a MarkdownUp application written in BareScript, for performance: its report
-was verified identical to that viewer's on real plans before the original was removed, and its URLs are compatible
-(`#var.vFile='plan.json'&var.vOption=1`).
+The viewer is plain JavaScript modules (`index.html`, `app.css`, its icon `sageroad.svg`, and `lib/`), served as they
+are - there's no bundler. It replaced the project's original viewer, a MarkdownUp application written in BareScript,
+for performance: its report was verified identical to that viewer's on real plans before the original was removed, and
+its URLs are compatible (`#var.vFile='plan.json'&var.vOption=1`).
 
 
 ## Development

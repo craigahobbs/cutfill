@@ -52,7 +52,7 @@ help:
 app: build/npm.build
 	rm -rf build/app/
 	mkdir -p build/app/schema-markdown/
-	cp -R index.html app.css lib build/app/
+	cp -R index.html app.css sageroad.svg lib build/app/
 	rm build/app/lib/cli.js
 	cp -R node_modules/schema-markdown/lib build/app/schema-markdown/
 	rm build/app/schema-markdown/lib/encode.js
