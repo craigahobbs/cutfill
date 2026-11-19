@@ -7,7 +7,7 @@ import {validateType} from 'schema-markdown/lib/schema.js';
 
 // The road grading plan model's type model - the model is defined with Schema Markdown
 // (https://craigahobbs.github.io/schema-markdown-js/language/)
-export const cutfillTypes = parseSchemaMarkdown([
+export const sageRoadTypes = parseSchemaMarkdown([
     '# A road grading plan model. A plan contains the site topography, the road start and end points, and',
     '# one or more road plan options. All lengths and elevations are in the plan\'s units.',
     'struct RoadPlan',
@@ -534,7 +534,7 @@ export function culvertDiameter(units, structure) {
 export function validatePlan(planValue) {
     let plan;
     try {
-        plan = validateType(cutfillTypes, 'RoadPlan', planValue);
+        plan = validateType(sageRoadTypes, 'RoadPlan', planValue);
     } catch ({message}) {
         return {'error': message};
     }
@@ -643,7 +643,7 @@ export function siteMarkFeatures(...sites) {
 export function validateSite(siteValue) {
     let site;
     try {
-        site = validateType(cutfillTypes, 'RoadSite', siteValue);
+        site = validateType(sageRoadTypes, 'RoadSite', siteValue);
     } catch ({message}) {
         return {'error': message};
     }

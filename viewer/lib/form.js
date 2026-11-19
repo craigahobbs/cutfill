@@ -1,4 +1,4 @@
-// form.js - a form for a Schema Markdown struct's value - the Cutfill application's road site editor. The form is made
+// form.js - a form for a Schema Markdown struct's value - the SageRoad application's road site editor. The form is made
 // from the struct's type model, so it has the model's members, and their documentation.
 
 import {escapeHtml} from './format.js';
@@ -33,7 +33,7 @@ function memberLabel(name) {
 
 // Create a form control's ID from its member's path
 function controlId(memberPath) {
-    return `cutfill-form-${memberPath.replace(/\./g, '-')}`;
+    return `sageroad-form-${memberPath.replace(/\./g, '-')}`;
 }
 
 
@@ -52,13 +52,13 @@ export function formHtml(types, typeName, value = {}, path = '') {
     let groups = [];
     const endFields = () => {
         if (fields.length > 0) {
-            parts.push(`<div class="cutfill-form-fields">\n${fields.join('\n')}\n</div>`);
+            parts.push(`<div class="sageroad-form-fields">\n${fields.join('\n')}\n</div>`);
             fields = [];
         }
     };
     const endGroups = () => {
         if (groups.length > 0) {
-            parts.push(`<div class="cutfill-form-groups">\n${groups.join('\n')}\n</div>`);
+            parts.push(`<div class="sageroad-form-groups">\n${groups.join('\n')}\n</div>`);
             groups = [];
         }
     };
@@ -73,8 +73,8 @@ export function formHtml(types, typeName, value = {}, path = '') {
         if (kind === 'struct' && !optional) {
             endFields();
             groups.push(
-                `<fieldset class="cutfill-form-group"><legend>${escapeHtml(labelText)}</legend>` +
-                    `<div class="cutfill-form-doc">${escapeHtml(docText)}</div>\n` +
+                `<fieldset class="sageroad-form-group"><legend>${escapeHtml(labelText)}</legend>` +
+                    `<div class="sageroad-form-doc">${escapeHtml(docText)}</div>\n` +
                     `${formHtml(types, type.user, memberValue ?? {}, `${memberPath}.`)}\n</fieldset>`
             );
             continue;
@@ -85,8 +85,8 @@ export function formHtml(types, typeName, value = {}, path = '') {
         if (kind === 'struct') {
             endFields();
             parts.push(
-                `<details class="cutfill-form-group"${memberValue !== null ? ' open' : ''}><summary>${escapeHtml(labelText)} ` +
-                    `<span class="cutfill-form-doc">${escapeHtml(docText)}</span></summary>\n` +
+                `<details class="sageroad-form-group"${memberValue !== null ? ' open' : ''}><summary>${escapeHtml(labelText)} ` +
+                    `<span class="sageroad-form-doc">${escapeHtml(docText)}</span></summary>\n` +
                     `${formHtml(types, type.user, memberValue ?? {}, `${memberPath}.`)}\n</details>`
             );
             continue;
@@ -118,8 +118,8 @@ export function formHtml(types, typeName, value = {}, path = '') {
         }
         const docHtml = escapeHtml(kind === 'strings' ? `${docText} - a line each` : docText);
         fields.push(
-            `<div class="cutfill-form-field${isWide ? ' cutfill-form-wide' : ''}"><label for="${id}">${escapeHtml(labelText)}</label>` +
-                `${controlHtml}<div class="cutfill-form-doc">${docHtml}</div></div>`
+            `<div class="sageroad-form-field${isWide ? ' sageroad-form-wide' : ''}"><label for="${id}">${escapeHtml(labelText)}</label>` +
+                `${controlHtml}<div class="sageroad-form-doc">${docHtml}</div></div>`
         );
     }
     endFields();

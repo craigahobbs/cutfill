@@ -1,15 +1,15 @@
-// homePage.js - the Cutfill application's home page - open a plan, or make a new one, and the loaded plan: view it,
+// homePage.js - the SageRoad application's home page - open a plan, or make a new one, and the loaded plan: view it,
 // edit its config, run it, save it, and close it - and its plan config editor page
 
 import {argsLink, argsURL, localPrefix} from './args.js';
-import {cutfillTypes, defaultRates, orderPlan, planCriteria, planText, unitScale, validateSite} from './model.js';
+import {defaultRates, orderPlan, planCriteria, planText, sageRoadTypes, unitScale, validateSite} from './model.js';
 import {escapeHtml, number, unitLabel} from './format.js';
 import {formHtml, formPastePoint, formPlaceholders, formValue, memberWords} from './form.js';
 import {latLongDistance, latLongText} from './geo.js';
 
 
 // The local storage key of the last model chosen to run a plan
-const modelKey = 'cutfillModel';
+const modelKey = 'sageRoadModel';
 
 
 // Create a file name from a title - without the characters a file's name can't have
@@ -77,31 +77,31 @@ export class HomePage {
         this.runResult = null;
         const example = app.main.dataset.example ?? null;
         const html = [
-            '<h1>Cutfill</h1>',
-            '<p>Cutfill engineers low-volume roads on USGS lidar terrain. A plan is a road\'s start and end points, and its ' +
+            '<h1>SageRoad</h1>',
+            '<p>SageRoad engineers low-volume roads on USGS lidar terrain. A plan is a road\'s start and end points, and its ' +
                 'planning notes - running it engineers its road options on the site\'s terrain, and costs them. A plan\'s ' +
                 'road options are viewed in a report, with 3D views.</p>',
-            '<div class="cutfill-open">',
-            '<p class="cutfill-actions"><button type="button" id="cutfill-open" class="cutfill-button">Open Plan</button>' +
-                '<button type="button" id="cutfill-new" class="cutfill-button">New Plan</button>' +
-                '<input type="file" id="cutfill-file" multiple accept=".json,application/json,image/*,application/pdf" hidden></p>',
+            '<div class="sageroad-open">',
+            '<p class="sageroad-actions"><button type="button" id="sageroad-open" class="sageroad-button">Open Plan</button>' +
+                '<button type="button" id="sageroad-new" class="sageroad-button">New Plan</button>' +
+                '<input type="file" id="sageroad-file" multiple accept=".json,application/json,image/*,application/pdf" hidden></p>',
             '<p>Open or drop a plan\'s JSON file (and its source map image, to show it in the report). The files stay on your ' +
                 'computer.</p>',
-            `<p id="cutfill-open-status" class="cutfill-error">${escapeHtml(app.openError ?? '')}</p>`,
+            `<p id="sageroad-open-status" class="sageroad-error">${escapeHtml(app.openError ?? '')}</p>`,
             '</div>',
-            '<div id="cutfill-loaded"></div>',
-            '<div id="cutfill-recent"></div>',
+            '<div id="sageroad-loaded"></div>',
+            '<div id="sageroad-recent"></div>',
             ...(example !== null ? [`<p>${argsLink(globals, 'View the example road plan', {'file': example})}</p>`] : []),
             '<p>To view a road plan model URL, use the "file" argument: <code>#var.vFile=\'plan.json\'</code></p>',
             '<hr>',
             `<p>${argsLink(globals, 'Road plan model documentation', {'doc': true})}</p>`
         ];
         app.openError = null;
-        app.render('Cutfill', html.join('\n'));
+        app.render('SageRoad', html.join('\n'));
         const {document} = app;
-        document.getElementById('cutfill-file').addEventListener('change', (event) => app.openFiles(event.target.files));
-        document.getElementById('cutfill-open').addEventListener('click', () => app.openPicker());
-        document.getElementById('cutfill-new').addEventListener('click', () => {
+        document.getElementById('sageroad-file').addEventListener('change', (event) => app.openFiles(event.target.files));
+        document.getElementById('sageroad-open').addEventListener('click', () => app.openPicker());
+        document.getElementById('sageroad-new').addEventListener('click', () => {
             if (app.confirmReplace()) {
                 app.window.location.hash = argsURL(globals, {'edit': 'new'});
             }
@@ -119,7 +119,7 @@ export class HomePage {
     async renderLoaded() {
         const {app, globals} = this;
         const {loaded} = app;
-        const element = app.document.getElementById('cutfill-loaded');
+        const element = app.document.getElementById('sageroad-loaded');
         if (loaded === null) {
             element.innerHTML = '';
             return;
@@ -138,21 +138,21 @@ export class HomePage {
 
         // The plan's title, its file, and its actions - its road options are viewed with "View Plan", in a new tab
         const button = (id, text, isDisabled = false) => (
-            `<button type="button" id="${id}" class="cutfill-button"${isDisabled ? ' disabled' : ''}>${escapeHtml(text)}</button>`
+            `<button type="button" id="${id}" class="sageroad-button"${isDisabled ? ' disabled' : ''}>${escapeHtml(text)}</button>`
         );
         const viewURL = argsURL(globals, {'file': `${localPrefix}${loaded.file}`});
         const viewHtml = hasOptions ?
-            `<a id="cutfill-view" class="cutfill-button" href="${escapeHtml(viewURL)}" target="_blank" rel="noopener">View Plan</a>` :
-            button('cutfill-view', 'View Plan', true);
+            `<a id="sageroad-view" class="sageroad-button" href="${escapeHtml(viewURL)}" target="_blank" rel="noopener">View Plan</a>` :
+            button('sageroad-view', 'View Plan', true);
         const html = [
             `<h2 id="loaded">${escapeHtml(site?.title ?? value.title)}</h2>`,
-            `<p class="cutfill-loaded-kind">${loaded.name !== null ? `<code>${escapeHtml(loaded.name)}</code>` : 'A new plan'}` +
-                `${loaded.saved === false ? ' <span class="cutfill-unsaved">Not saved</span>' : ''}</p>`,
-            '<p class="cutfill-actions">' +
-                `${viewHtml}${button('cutfill-edit', 'Edit Plan', site === null)}` +
-                `${button('cutfill-map', 'Edit Map', site === null || !('georeference' in (value ?? {})))}` +
-                `${button('cutfill-save', 'Save')}${button('cutfill-save-as', 'Save As…')}${button('cutfill-close', 'Close')}</p>`,
-            '<p id="cutfill-save-status"></p>'
+            `<p class="sageroad-loaded-kind">${loaded.name !== null ? `<code>${escapeHtml(loaded.name)}</code>` : 'A new plan'}` +
+                `${loaded.saved === false ? ' <span class="sageroad-unsaved">Not saved</span>' : ''}</p>`,
+            '<p class="sageroad-actions">' +
+                `${viewHtml}${button('sageroad-edit', 'Edit Plan', site === null)}` +
+                `${button('sageroad-map', 'Edit Map', site === null || !('georeference' in (value ?? {})))}` +
+                `${button('sageroad-save', 'Save')}${button('sageroad-save-as', 'Save As…')}${button('sageroad-close', 'Close')}</p>`,
+            '<p id="sageroad-save-status"></p>'
         ];
         if (value === null) {
             html.push('<p>The plan has no road options yet - run the plan to engineer them.</p>');
@@ -160,7 +160,7 @@ export class HomePage {
             html.push('<p>The plan has no road options - run the plan to engineer them. Its site\'s data (its terrain, streams, ' +
                 'roads, and map) is kept, so a run doesn\'t fetch it from the USGS again.</p>');
         } else if (loaded.changed) {
-            html.push('<p class="cutfill-notice">The plan was edited since its road options were engineered - run the plan to ' +
+            html.push('<p class="sageroad-notice">The plan was edited since its road options were engineered - run the plan to ' +
                 'engineer them again.</p>');
         }
 
@@ -177,31 +177,31 @@ export class HomePage {
                 '<h3 id="loaded-run">Run Plan</h3>',
                 '<p>A run builds the site from the USGS\'s lidar terrain, and engineers the plan\'s road options - it takes a ' +
                     'minute or two. A model is asked only what the notes ask for.</p>',
-                '<p class="cutfill-actions"><label>Model: <select id="cutfill-run-model"><option value="">No model - the notes ' +
+                '<p class="sageroad-actions"><label>Model: <select id="sageroad-run-model"><option value="">No model - the notes ' +
                     'aren\'t read</option></select></label>' +
-                    `${button('cutfill-run', 'Run Plan', true)}${hasOptions ? button('cutfill-clear', 'Clear Road Options') : ''}` +
+                    `${button('sageroad-run', 'Run Plan', true)}${hasOptions ? button('sageroad-clear', 'Clear Road Options') : ''}` +
                     '</p>',
-                ...(value !== null ? ['<p><label><input type="checkbox" id="cutfill-run-fetch"> Fetch the site\'s data from the USGS ' +
+                ...(value !== null ? ['<p><label><input type="checkbox" id="sageroad-run-fetch"> Fetch the site\'s data from the USGS ' +
                     'again - its terrain, streams, roads, and map (a site with other points, units, margin, or spacing is fetched ' +
                     'anyway)</label></p>'] : []),
-                '<p id="cutfill-run-message"></p>',
-                `<div id="cutfill-run-progress"${this.runResult === null ? ' hidden' : ''}>${this.runResultHtml()}</div>`
+                '<p id="sageroad-run-message"></p>',
+                `<div id="sageroad-run-progress"${this.runResult === null ? ' hidden' : ''}>${this.runResultHtml()}</div>`
             );
         }
-        element.innerHTML = `<div class="cutfill-loaded">\n${html.join('\n')}\n</div>`;
+        element.innerHTML = `<div class="sageroad-loaded">\n${html.join('\n')}\n</div>`;
 
         // The actions
         const {document, window} = app;
         const on = (id, listener) => document.getElementById(id)?.addEventListener('click', listener);
-        on('cutfill-edit', () => {
+        on('sageroad-edit', () => {
             window.location.hash = argsURL(globals, {'edit': 'loaded'});
         });
-        on('cutfill-map', () => {
+        on('sageroad-map', () => {
             window.location.hash = argsURL(globals, {'map': true});
         });
-        on('cutfill-save', () => this.save(false));
-        on('cutfill-save-as', () => this.save(true));
-        on('cutfill-close', () => {
+        on('sageroad-save', () => this.save(false));
+        on('sageroad-save-as', () => this.save(true));
+        on('sageroad-close', () => {
             if (app.confirmReplace()) {
                 app.closeLoaded();
                 this.runResult = null;
@@ -209,7 +209,7 @@ export class HomePage {
                 this.renderRecent();
             }
         });
-        on('cutfill-clear', async () => {
+        on('sageroad-clear', async () => {
             // The plan's road options and their description are cleared - its site's data is kept
             const cleared = Object.fromEntries(Object.entries(value).filter(([member]) => member !== 'description'));
             await app.storeLocal(loaded.file, new window.Blob([planText({...cleared, 'options': []})], {'type': 'application/json'}));
@@ -218,7 +218,7 @@ export class HomePage {
             await this.renderLoaded();
         });
         if (site !== null) {
-            on('cutfill-run', () => this.run());
+            on('sageroad-run', () => this.run());
             this.prepareRun();
         }
     }
@@ -239,10 +239,10 @@ export class HomePage {
             message = `The plan failed, after ${time} - its report says why.`;
         }
         return [
-            `<p class="cutfill-running"><span class="cutfill-run-icon cutfill-run-${code === 0 ? 'done' : 'failed'}"></span>` +
-                `<strong id="cutfill-run-status">${escapeHtml(message)}</strong></p>`,
-            ...(stopped ? [] : [`<details id="cutfill-run-report"${code !== 0 ? ' open' : ''}><summary>The run's report</summary>` +
-                `<pre id="cutfill-run-log">${escapeHtml(lines.join('\n'))}</pre></details>`])
+            `<p class="sageroad-running"><span class="sageroad-run-icon sageroad-run-${code === 0 ? 'done' : 'failed'}"></span>` +
+                `<strong id="sageroad-run-status">${escapeHtml(message)}</strong></p>`,
+            ...(stopped ? [] : [`<details id="sageroad-run-report"${code !== 0 ? ' open' : ''}><summary>The run's report</summary>` +
+                `<pre id="sageroad-run-log">${escapeHtml(lines.join('\n'))}</pre></details>`])
         ].join('\n');
     }
 
@@ -255,14 +255,14 @@ export class HomePage {
             this.tools ??= await app.importPlan();
         } catch {
             if (!this.closed) {
-                document.getElementById('cutfill-run-message').textContent = 'A plan is run by the Cutfill application - this ' +
+                document.getElementById('sageroad-run-message').textContent = 'A plan is run by the SageRoad application - this ' +
                     'page doesn\'t have its planning tools. Run the application with "make run".';
             }
             return;
         }
         this.models ??= await app.modelList(this.tools.ollamaHostDefault);
         const {models} = this;
-        const select = this.closed ? null : document.getElementById('cutfill-run-model');
+        const select = this.closed ? null : document.getElementById('sageroad-run-model');
         if (select !== null) {
             // The model is the last model chosen, if Ollama has it
             const lastModel = app.storageGet(modelKey);
@@ -270,7 +270,7 @@ export class HomePage {
                 `<option${model === lastModel ? ' selected' : ''}>${escapeHtml(model)}</option>`
             )).join(''));
             select.addEventListener('change', () => app.storageSet(modelKey, select.value !== '' ? select.value : null));
-            document.getElementById('cutfill-run').disabled = false;
+            document.getElementById('sageroad-run').disabled = false;
         }
     }
 
@@ -280,12 +280,12 @@ export class HomePage {
         const {app, tools} = this;
         const {document, window} = app;
         const {loaded} = app;
-        const select = document.getElementById('cutfill-run-model');
+        const select = document.getElementById('sageroad-run-model');
         const model = select.value !== '' ? select.value : null;
-        const fetchElement = document.getElementById('cutfill-run-fetch');
+        const fetchElement = document.getElementById('sageroad-run-fetch');
         const fetch = fetchElement?.checked ?? false;
         const controls = [select, ...document.querySelectorAll(
-            '#cutfill-loaded button, #cutfill-run-fetch, #cutfill-open, #cutfill-new, #cutfill-recent button'
+            '#sageroad-loaded button, #sageroad-run-fetch, #sageroad-open, #sageroad-new, #sageroad-recent button'
         )];
         for (const control of controls) {
             control.disabled = true;
@@ -293,28 +293,28 @@ export class HomePage {
 
         // The run's button stops it
         const controller = new window.AbortController();
-        const runButton = document.getElementById('cutfill-run');
+        const runButton = document.getElementById('sageroad-run');
         const stopButton = document.createElement('button');
         stopButton.type = 'button';
-        stopButton.id = 'cutfill-stop';
-        stopButton.className = 'cutfill-button';
+        stopButton.id = 'sageroad-stop';
+        stopButton.className = 'sageroad-button';
         stopButton.textContent = 'Stop';
         runButton.replaceWith(stopButton);
 
         // The run's steps - the notes are read only with a model
         const steps = tools.autoSteps.filter(({isModel}) => model !== null || !isModel);
-        const progressElement = document.getElementById('cutfill-run-progress');
+        const progressElement = document.getElementById('sageroad-run-progress');
         progressElement.hidden = false;
         progressElement.innerHTML = [
-            '<p class="cutfill-running"><span class="cutfill-spinner"></span><strong id="cutfill-run-status">Starting the run…' +
-                '</strong><span id="cutfill-run-time"></span></p>',
-            `<ol id="cutfill-run-steps" class="cutfill-steps">${steps.map(({key, text}, ixStep) => (
-                `<li data-step="${key}" class="cutfill-step-pending"><span class="cutfill-step-mark"></span>` +
-                    `<span>${ixStep + 1}. ${escapeHtml(text)}<span class="cutfill-step-detail"></span></span></li>`
+            '<p class="sageroad-running"><span class="sageroad-spinner"></span><strong id="sageroad-run-status">Starting the run…' +
+                '</strong><span id="sageroad-run-time"></span></p>',
+            `<ol id="sageroad-run-steps" class="sageroad-steps">${steps.map(({key, text}, ixStep) => (
+                `<li data-step="${key}" class="sageroad-step-pending"><span class="sageroad-step-mark"></span>` +
+                    `<span>${ixStep + 1}. ${escapeHtml(text)}<span class="sageroad-step-detail"></span></span></li>`
             )).join('')}</ol>`
         ].join('\n');
-        const statusElement = document.getElementById('cutfill-run-status');
-        const stepsElement = document.getElementById('cutfill-run-steps');
+        const statusElement = document.getElementById('sageroad-run-status');
+        const stepsElement = document.getElementById('sageroad-run-steps');
         stopButton.addEventListener('click', () => {
             controller.abort();
             stopButton.disabled = true;
@@ -322,7 +322,7 @@ export class HomePage {
         });
 
         // The run's time, every second
-        const timeElement = document.getElementById('cutfill-run-time');
+        const timeElement = document.getElementById('sageroad-run-time');
         const timeBegin = Date.now();
         let isRunning = true;
         const tick = () => {
@@ -343,9 +343,9 @@ export class HomePage {
             statusElement.textContent = `Running - step ${ixStep + 1} of ${steps.length}`;
             for (const [ixItem, item] of [...stepsElement.children].entries()) {
                 item.className = ixItem < ixStep
-                    ? 'cutfill-step-done'
-                    : (ixItem === ixStep ? 'cutfill-step-current' : 'cutfill-step-pending');
-                item.querySelector('.cutfill-step-detail').textContent = ixItem === ixStep ? `${text}…` : '';
+                    ? 'sageroad-step-done'
+                    : (ixItem === ixStep ? 'sageroad-step-current' : 'sageroad-step-pending');
+                item.querySelector('.sageroad-step-detail').textContent = ixItem === ixStep ? `${text}…` : '';
             }
             return new Promise((resolve) => {
                 window.setTimeout(resolve, 0);
@@ -387,7 +387,7 @@ export class HomePage {
         const {app} = this;
         const {document, window} = app;
         const {loaded} = app;
-        const statusElement = document.getElementById('cutfill-save-status');
+        const statusElement = document.getElementById('sageroad-save-status');
 
         // The plan's file text - its road plan model (its site's data, and its road options), with its config, or its
         // config
@@ -404,7 +404,7 @@ export class HomePage {
             let handle = isSaveAs ? null : app.fileHandle;
             if (handle === null && typeof window.showSaveFilePicker === 'function') {
                 handle = await window.showSaveFilePicker({
-                    'suggestedName': name, 'types': [{'description': 'Cutfill plan', 'accept': {'application/json': ['.json']}}]
+                    'suggestedName': name, 'types': [{'description': 'SageRoad plan', 'accept': {'application/json': ['.json']}}]
                 });
             }
             if (handle !== null) {
@@ -437,7 +437,7 @@ export class HomePage {
         app.setLoaded({...loaded, name, file, 'saved': true});
         if (!this.closed) {
             await this.renderLoaded();
-            document.getElementById('cutfill-save-status').textContent = `Saved the plan, "${name}".`;
+            document.getElementById('sageroad-save-status').textContent = `Saved the plan, "${name}".`;
             await this.renderRecent();
         }
     }
@@ -451,7 +451,7 @@ export class HomePage {
         if (this.closed) {
             return;
         }
-        const element = app.document.getElementById('cutfill-recent');
+        const element = app.document.getElementById('sageroad-recent');
         if (recent.length === 0) {
             element.innerHTML = '';
             return;
@@ -459,12 +459,12 @@ export class HomePage {
         const loadedFile = app.loaded?.file ?? null;
         const items = recent.map(({name}) => {
             const nameHtml = escapeHtml(name);
-            const removeHtml = name === loadedFile ? ' <span class="cutfill-recent-loaded">(the loaded plan)</span>' :
-                `<button type="button" class="cutfill-remove" data-remove="${nameHtml}" title="Remove it from the recent files" ` +
+            const removeHtml = name === loadedFile ? ' <span class="sageroad-recent-loaded">(the loaded plan)</span>' :
+                `<button type="button" class="sageroad-remove" data-remove="${nameHtml}" title="Remove it from the recent files" ` +
                     `aria-label="Remove ${nameHtml}">✕</button>`;
-            return `<li><p><button type="button" class="cutfill-link" data-name="${nameHtml}">${nameHtml}</button>${removeHtml}</p></li>`;
+            return `<li><p><button type="button" class="sageroad-link" data-name="${nameHtml}">${nameHtml}</button>${removeHtml}</p></li>`;
         });
-        element.innerHTML = `<h2 id="recent-files">Recent Files</h2><ul class="cutfill-recent">${items.join('')}</ul>`;
+        element.innerHTML = `<h2 id="recent-files">Recent Files</h2><ul class="sageroad-recent">${items.join('')}</ul>`;
         for (const button of element.querySelectorAll('button[data-name]')) {
             button.addEventListener('click', () => {
                 if (app.confirmReplace()) {
@@ -505,12 +505,12 @@ export class EditPage {
             '<p>A plan\'s config is the road\'s start and end points, and its planning notes - the road\'s purpose, constraints, ' +
                 'and preferences. A member with a * is required, and an empty member is its default. To set a point, copy ' +
                 'its latitude and longitude from a map and paste them into its latitude ("46.16755, -119.16811").</p>',
-            `<form id="cutfill-site" class="cutfill-form">\n${formHtml(cutfillTypes, 'RoadSite', this.site)}\n</form>`,
-            '<p id="cutfill-edit-status" class="cutfill-error"></p>',
-            '<p class="cutfill-actions"><button type="button" id="cutfill-edit-done" class="cutfill-button">Done</button>' +
-                `<a class="cutfill-button" href="${escapeHtml(argsURL(globals))}">Cancel</a></p>`
+            `<form id="sageroad-site" class="sageroad-form">\n${formHtml(sageRoadTypes, 'RoadSite', this.site)}\n</form>`,
+            '<p id="sageroad-edit-status" class="sageroad-error"></p>',
+            '<p class="sageroad-actions"><button type="button" id="sageroad-edit-done" class="sageroad-button">Done</button>' +
+                `<a class="sageroad-button" href="${escapeHtml(argsURL(globals))}">Cancel</a></p>`
         ].join('\n'));
-        const form = app.document.getElementById('cutfill-site');
+        const form = app.document.getElementById('sageroad-site');
         form.addEventListener('paste', (event) => {
             formPastePoint(form, event);
             this.updateDefaults();
@@ -518,7 +518,7 @@ export class EditPage {
         form.addEventListener('submit', (event) => event.preventDefault());
         form.addEventListener('input', () => this.updateDefaults());
         form.addEventListener('change', () => this.updateDefaults());
-        app.document.getElementById('cutfill-edit-done').addEventListener('click', () => this.done());
+        app.document.getElementById('sageroad-edit-done').addEventListener('click', () => this.done());
         this.updateDefaults();
 
         // The site's default margin and grid spacing are the planning tools'
@@ -540,8 +540,8 @@ export class EditPage {
         if (this.closed) {
             return;
         }
-        const form = this.app.document.getElementById('cutfill-site');
-        const site = formValue(cutfillTypes, 'RoadSite', form, this.site);
+        const form = this.app.document.getElementById('sageroad-site');
+        const site = formValue(sageRoadTypes, 'RoadSite', form, this.site);
         const placeholders = {};
         const criteria = planCriteria({'units': site.units});
         for (const [name, value] of Object.entries(criteria)) {
@@ -561,10 +561,10 @@ export class EditPage {
     // The plan config is done - it's the loaded plan's, if it's valid
     done() {
         const {app} = this;
-        const site = formValue(cutfillTypes, 'RoadSite', app.document.getElementById('cutfill-site'), this.site);
+        const site = formValue(sageRoadTypes, 'RoadSite', app.document.getElementById('sageroad-site'), this.site);
         const validated = validateSite(site);
         if ('error' in validated) {
-            app.document.getElementById('cutfill-edit-status').textContent = validated.error;
+            app.document.getElementById('sageroad-edit-status').textContent = validated.error;
             return;
         }
         if (this.isNew) {

@@ -92,7 +92,7 @@ export class MapPage {
 
         // The page
         const toolButtons = Object.keys(toolHints).map((tool) => (
-            `<button type="button" class="cutfill-button" data-tool="${tool}">${escapeHtml(markKinds[tool]?.name ?? 'Select')}</button>`
+            `<button type="button" class="sageroad-button" data-tool="${tool}">${escapeHtml(markKinds[tool]?.name ?? 'Select')}</button>`
         ));
         const backdropOptions = Object.entries(backdrops).map(([backdrop, name]) => (
             `<option value="${backdrop}"${backdrop === 'map' && this.imageURL === null ? ' disabled' : ''}>${escapeHtml(name)}</option>`
@@ -102,27 +102,27 @@ export class MapPage {
             '<p>The plan config\'s marks - the areas the road must avoid, the existing roads that the USGS doesn\'t map (a track, a ' +
                 'driveway), and the places the road must pass through. A dashed mark is one a run found for the notes - edit it ' +
                 'to correct it. Run the plan again to engineer its road options with the marks.</p>',
-            '<p class="cutfill-actions cutfill-map-tools">' +
-                `<label>Backdrop: <select id="cutfill-map-backdrop">${backdropOptions.join('')}</select></label>` +
+            '<p class="sageroad-actions sageroad-map-tools">' +
+                `<label>Backdrop: <select id="sageroad-map-backdrop">${backdropOptions.join('')}</select></label>` +
                 `${toolButtons.join('')}</p>`,
-            '<p id="cutfill-map-hint" class="cutfill-map-hint"></p>',
-            '<div id="cutfill-map" class="cutfill-map">' +
-                '<svg id="cutfill-map-svg" class="cutfill-map-svg" xmlns="http://www.w3.org/2000/svg">' +
-                '<g id="cutfill-map-view"><g id="cutfill-map-backdrop-layer"></g><g id="cutfill-map-features"></g></g>' +
-                '<g id="cutfill-map-marks"></g></svg></div>',
-            '<div id="cutfill-map-selection"></div>',
-            '<p class="cutfill-actions"><button type="button" id="cutfill-map-done" class="cutfill-button">Done</button>' +
-                `<a class="cutfill-button" href="${escapeHtml(argsURL(globals))}">Cancel</a></p>`
+            '<p id="sageroad-map-hint" class="sageroad-map-hint"></p>',
+            '<div id="sageroad-map" class="sageroad-map">' +
+                '<svg id="sageroad-map-svg" class="sageroad-map-svg" xmlns="http://www.w3.org/2000/svg">' +
+                '<g id="sageroad-map-view"><g id="sageroad-map-backdrop-layer"></g><g id="sageroad-map-features"></g></g>' +
+                '<g id="sageroad-map-marks"></g></svg></div>',
+            '<div id="sageroad-map-selection"></div>',
+            '<p class="sageroad-actions"><button type="button" id="sageroad-map-done" class="sageroad-button">Done</button>' +
+                `<a class="sageroad-button" href="${escapeHtml(argsURL(globals))}">Cancel</a></p>`
         ].join('\n'));
 
         // The controls
         const {document} = app;
-        this.svg = document.getElementById('cutfill-map-svg');
-        document.getElementById('cutfill-map-backdrop').addEventListener('change', (event) => this.setBackdrop(event.target.value));
+        this.svg = document.getElementById('sageroad-map-svg');
+        document.getElementById('sageroad-map-backdrop').addEventListener('change', (event) => this.setBackdrop(event.target.value));
         for (const button of document.querySelectorAll('[data-tool]')) {
             button.addEventListener('click', () => this.setTool(button.dataset.tool));
         }
-        document.getElementById('cutfill-map-done').addEventListener('click', () => this.done());
+        document.getElementById('sageroad-map-done').addEventListener('click', () => this.done());
         this.svg.addEventListener('pointerdown', (event) => this.pointerDown(event));
         this.svg.addEventListener('pointermove', (event) => this.pointerMove(event));
         this.svg.addEventListener('pointerup', (event) => this.pointerUp(event));
@@ -147,7 +147,7 @@ export class MapPage {
         if (this.closed || this.svg === undefined) {
             return;
         }
-        const width = Math.max(320, this.app.document.getElementById('cutfill-map').clientWidth || defaultWidth);
+        const width = Math.max(320, this.app.document.getElementById('sageroad-map').clientWidth || defaultWidth);
         this.size = [width, Math.round(width * 0.65)];
         this.svg.setAttribute('width', `${width}`);
         this.svg.setAttribute('height', `${this.size[1]}`);
@@ -193,7 +193,7 @@ export class MapPage {
         for (const button of this.app.document.querySelectorAll('[data-tool]')) {
             button.setAttribute('aria-pressed', `${button.dataset.tool === tool}`);
         }
-        this.app.document.getElementById('cutfill-map-hint').textContent = toolHints[tool];
+        this.app.document.getElementById('sageroad-map-hint').textContent = toolHints[tool];
         this.renderMarks();
     }
 
@@ -201,9 +201,9 @@ export class MapPage {
     // Set the backdrop - the site's contours, its topographic map, or its shaded relief
     setBackdrop(backdrop) {
         this.backdrop = backdrop;
-        this.app.document.getElementById('cutfill-map-backdrop').value = backdrop;
+        this.app.document.getElementById('sageroad-map-backdrop').value = backdrop;
         const {topo} = this;
-        const layer = this.app.document.getElementById('cutfill-map-backdrop-layer');
+        const layer = this.app.document.getElementById('sageroad-map-backdrop-layer');
         if (backdrop === 'contours') {
             layer.innerHTML = contoursHtml(this.plan, topo);
         } else {
@@ -248,7 +248,7 @@ export class MapPage {
             lines.push(`<polyline points="${px(point.x)},${px(point.y)} ${px(point.x)},${px(point.y)}" stroke="${color}" ` +
                 'stroke-width="12" stroke-linecap="round" vector-effect="non-scaling-stroke"/>');
         }
-        this.app.document.getElementById('cutfill-map-features').innerHTML = lines.join('');
+        this.app.document.getElementById('sageroad-map-features').innerHTML = lines.join('');
     }
 
 
@@ -258,7 +258,7 @@ export class MapPage {
         const {view} = this;
         const value = (number) => `${round(number, 4) + 0}`;
         const translate = `${value(width / 2 - view.x * view.scale)} ${value(height / 2 + view.y * view.scale)}`;
-        this.app.document.getElementById('cutfill-map-view').setAttribute(
+        this.app.document.getElementById('sageroad-map-view').setAttribute(
             'transform', `matrix(${value(view.scale)} 0 0 ${value(-view.scale)} ${translate})`
         );
         this.renderMarks();
@@ -275,14 +275,14 @@ export class MapPage {
         if (this.drawing !== null && this.drawing.length > 0) {
             elements.push(markHtml(this.tool, this.drawing.map((point) => this.toScreen(point)), null, false, true));
         }
-        this.app.document.getElementById('cutfill-map-marks').innerHTML = elements.join('');
+        this.app.document.getElementById('sageroad-map-marks').innerHTML = elements.join('');
     }
 
 
     // Render the selected mark's panel - its kind, its name, how it was found, and its delete button
     renderSelection() {
         const {document} = this.app;
-        const element = document.getElementById('cutfill-map-selection');
+        const element = document.getElementById('sageroad-map-selection');
         const mark = this.selected !== null ? this.marks[this.selected] : null;
         if (mark === null) {
             element.innerHTML = '';
@@ -294,24 +294,24 @@ export class MapPage {
             const how = (found.model ?? null) !== null ?
                 `The model "${found.model}" found it on the site's map${(found.why ?? '') !== '' ? ` - "${found.why}"` : ''}.` :
                 'Its coordinates are the notes\'.';
-            foundHtml = `<p id="cutfill-map-found">A run found it for the notes' place "${escapeHtml(found.place)}". ${escapeHtml(how)} ` +
+            foundHtml = `<p id="sageroad-map-found">A run found it for the notes' place "${escapeHtml(found.place)}". ${escapeHtml(how)} ` +
                 'Edit it to correct it - it\'s yours then. If it\'s deleted, a run finds it again while the notes name it.</p>';
         }
         element.innerHTML = [
             `<h2>${escapeHtml(markKinds[mark.kind].name)}</h2>`,
-            '<p class="cutfill-actions"><label>Name: <input type="text" id="cutfill-map-name" ' +
+            '<p class="sageroad-actions"><label>Name: <input type="text" id="sageroad-map-name" ' +
                 `value="${escapeHtml(mark.name)}"></label>` +
-                '<button type="button" id="cutfill-map-delete" class="cutfill-button">Delete</button></p>',
+                '<button type="button" id="sageroad-map-delete" class="sageroad-button">Delete</button></p>',
             foundHtml
         ].join('\n');
-        document.getElementById('cutfill-map-name').addEventListener('input', (event) => {
+        document.getElementById('sageroad-map-name').addEventListener('input', (event) => {
             const name = event.target.value.trim();
             if (name !== '') {
                 this.editMark(this.selected, {name});
-                document.getElementById('cutfill-map-found')?.remove();
+                document.getElementById('sageroad-map-found')?.remove();
             }
         });
-        document.getElementById('cutfill-map-delete').addEventListener('click', () => {
+        document.getElementById('sageroad-map-delete').addEventListener('click', () => {
             this.marks.splice(this.selected, 1);
             this.placed = null;
             this.select(null);
@@ -405,7 +405,7 @@ export class MapPage {
         this.drag = null;
         if (drag === null || drag.moved || drag.kind === 'point') {
             if (drag?.kind === 'point' && drag.moved) {
-                this.app.document.getElementById('cutfill-map-found')?.remove();
+                this.app.document.getElementById('sageroad-map-found')?.remove();
             }
             return;
         }
@@ -576,7 +576,7 @@ function markHtml(kind, points, name, isFound, isSelected) {
         elements.push(`<text x="${px(points[0][0] + 9)}" y="${px(points[0][1] - 9)}" font-size="12" font-family="sans-serif" ` +
             `fill="${color}" stroke="white" stroke-width="3" paint-order="stroke">${escapeHtml(name)}</text>`);
     }
-    return `<g class="cutfill-map-mark">${elements.join('')}</g>`;
+    return `<g class="sageroad-map-mark">${elements.join('')}</g>`;
 }
 
 

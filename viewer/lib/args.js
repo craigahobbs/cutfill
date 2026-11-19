@@ -1,13 +1,13 @@
 // args.js - the viewer's URL hash arguments
 //
-// The URL hash's "var" arguments are the original MarkdownUp Cutfill viewer's - "#var.vFile='plan.json'&var.vOption=1" -
+// The URL hash's "var" arguments are the original MarkdownUp SageRoad viewer's - "#var.vFile='plan.json'&var.vOption=1" -
 // so links to it still work.
 
 import {encodeComponent, escapeHtml} from './format.js';
 
 
 // The viewer's URL arguments
-export const cutfillArguments = [
+export const sageRoadArguments = [
     {'name': 'file', 'type': 'string', 'description': 'The road plan model JSON file URL'},
     {'name': 'option', 'type': 'int', 'default': 0, 'description': 'The selected road plan option index'},
     {'name': 'azimuth', 'type': 'float', 'default': 30, 'description': 'The 3D explorer view direction, in compass degrees'},
@@ -124,7 +124,7 @@ function validateValue(value, type) {
 // Parse the arguments from the hash variables - returns the arguments object (argument name to value, with defaults)
 export function argsParse(globals) {
     const args = {};
-    for (const argument of cutfillArguments) {
+    for (const argument of sageRoadArguments) {
         const value = validateValue(globals[globalName(argument)], argument.type) ?? argument.default ?? null;
         if (value !== null) {
             args[argument.name] = value;
@@ -147,7 +147,7 @@ function formatValue(value, type) {
 // arguments with default values are omitted
 export function argsURL(globals, linkArgs = null) {
     const urlVars = [];
-    for (const argument of cutfillArguments) {
+    for (const argument of sageRoadArguments) {
         const global = globalName(argument);
         let value = null;
         if (linkArgs !== null && Object.hasOwn(linkArgs, argument.name)) {
