@@ -2,6 +2,8 @@
 
 ## 1.0.1 (2026-11-19)
 
+- [d83b8f0](https://github.com/craigahobbs/sageroad/commit/d83b8f0) - Enlarge the README's icon to 128 pixels
+
 - [2b201f6](https://github.com/craigahobbs/sageroad/commit/2b201f6) - Enlarge the README's icon
 
 - [4ae460a](https://github.com/craigahobbs/sageroad/commit/4ae460a) - Add the SageRoad icon
