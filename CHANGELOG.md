@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.2 (2026-11-19)
+
+- [1082d7f](https://github.com/craigahobbs/sageroad/commit/1082d7f) - Name the plan view's features where their names fit
+
 ## 1.0.1 (2026-11-19)
 
 - [e89c718](https://github.com/craigahobbs/sageroad/commit/e89c718) - Remove the icon from the README
