@@ -128,7 +128,12 @@ cost score - it's never worse than the first weight's road, by its cost score or
 not, and a new road's move doesn't run in a stream's channel - within the road's half-width of a stream, without crossing
 it - but from a leg's start point or to its end point (a road's point may be on a stream). An existing road is as it's
 built. The search can't see what a road's profile will need - its sags' cross drains, or borrow - so it's the road's
-cost score, not its search, that chooses between the weights' roads. It's a port of the project's first planning tools,
+cost score, not its search, that chooses between the weights' roads. Two ways of letting it see were built and measured
+on a real site (a 1,024 x 329 node lattice), and neither is used: a search of the line and its profile together (the
+road's elevation a search state) explored about 5 million states a minute and was under a tenth of the way to its end
+after 9 minutes - its estimate of the cost to the end can't tell its elevations apart - and refining a road's line with
+its profile's elevations (searched again, and kept only if its cost score was lower) lowered the options' cost scores
+0-3.4%, for half again the run's time. It's a port of the project's first planning tools,
 which were Python (they digitized a topographic map image) - their results are the engineering tests' expectations
 (`test/expected/pythonTools.json`).
 
