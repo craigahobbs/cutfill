@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.1 (2026-11-19)
+
+- [8c3289b](https://github.com/craigahobbs/sageroad/commit/8c3289b) - Set the version to 1.0.1
+- [4ae460a](https://github.com/craigahobbs/sageroad/commit/4ae460a) - Add the SageRoad icon
+- [e26a320](https://github.com/craigahobbs/sageroad/commit/e26a320) - Add a top-level make publish
+
 ## 1.0.0 (2026-11-19)
 
 - [2ab3f26](https://github.com/craigahobbs/sageroad/commit/2ab3f26) - Fix the 1.0.0 review's findings, and set the version to 1.0.0
