@@ -20,7 +20,7 @@ function exploreBrowser(testContext, {cellCost = '1', search = '', hash = explor
     return fakeBrowser(testContext, {
         search, hash,
         'files': {'plans/fixture.json': JSON.stringify(fixturePlan())},
-        'storage': {...(cellCost !== null ? {'roadieCellCost': cellCost} : {}), ...storage}
+        'storage': {...(cellCost !== null ? {'cutfillCellCost': cellCost} : {}), ...storage}
     });
 }
 
@@ -86,7 +86,7 @@ test('the 3D explorer page', async (context) => {
     const {clock, document, main} = browser;
     const app = await startApp(browser);
     assert.equal(document.title, 'Fixture Plan - 3D');
-    assert.equal(document.body.className, 'roadie-explore');
+    assert.equal(document.body.className, 'cutfill-explore');
     assert.deepEqual(browser.scrolls, [['scrollTo', 0, 0], ['scrollTo', 0, 0]]);
     assert.deepEqual(browser.fetches, ['plans/fixture.json']);
     assert.deepEqual(browser.logs, []);
@@ -98,7 +98,7 @@ test('the 3D explorer page', async (context) => {
         'DIV', 'CANVAS', 'A', 'DIV', 'BUTTON', 'BUTTON', 'BUTTON', 'BUTTON', 'BUTTON', 'LABEL', 'INPUT', 'BUTTON', 'UL',
         ...Array.from({'length': 6}, () => ['LI', 'STRONG']).flat()
     ]);
-    assert.equal(main.firstElementChild.className, 'roadie-explorer');
+    assert.equal(main.firstElementChild.className, 'cutfill-explorer');
     const canvas = main.querySelector('canvas');
     assert.equal(canvas.getAttribute('role'), 'img');
     assert.equal(canvas.getAttribute('aria-label'), '3D view of the Direct road plan option');
@@ -111,13 +111,13 @@ test('the 3D explorer page', async (context) => {
     assert.equal(canvas.dataset.frame, '1');
     assert.equal(
         main.querySelector('a').outerHTML,
-        '<a class="roadie-explorer-back" href="#var.vFile=\'plans%2Ffixture.json\'">Back to the report</a>'
+        '<a class="cutfill-explorer-back" href="#var.vFile=\'plans%2Ffixture.json\'">Back to the report</a>'
     );
 
     // The controls - zoom in and out, face north, view from above, view the whole site, the vertical exaggeration, and
     // the help, which is shown
     assert.deepEqual(
-        [...main.querySelectorAll('.roadie-explorer-tools button')].map((button) => [button.dataset.command, button.textContent]),
+        [...main.querySelectorAll('.cutfill-explorer-tools button')].map((button) => [button.dataset.command, button.textContent]),
         [['in', '+'], ['out', '\u2212'], ['north', 'North'], ['top', 'Top'], ['reset', 'Reset'], ['help', '?']]
     );
     const input = main.querySelector('input');
@@ -333,17 +333,17 @@ test('the 3D explorer page draws its still view', async (context) => {
     const {clock, main, window} = browser;
     await startApp(browser);
     const canvas = main.querySelector('canvas');
-    assert.deepEqual(browser.logs, ['Roadie: render in 0.0 ms']);
+    assert.deepEqual(browser.logs, ['Cutfill: render in 0.0 ms']);
 
     // The moving view's frame is measured - a fast frame (30 milliseconds, over at least 2000 cells, moves the cell cost
     // estimate 30% of the way from 1 millisecond to 0.015) raises the moving view's point limit
     clock.time = 30;
     clock.runFrame();
     assert.deepEqual(browser.logs.slice(1), [
-        'Roadie: 3D explorer moving frame - 522 operations, 80 cells, step 4, smooth 1 (85 point limit) - built in 0.0 ms, ' +
+        'Cutfill: 3D explorer moving frame - 522 operations, 80 cells, step 4, smooth 1 (85 point limit) - built in 0.0 ms, ' +
             'painted in 0.0 ms, frame in 30.0 ms'
     ]);
-    assert.equal(window.localStorage.getItem('roadieCellCost'), '1');
+    assert.equal(window.localStorage.getItem('cutfillCellCost'), '1');
 
     // A quarter second after the view stops moving, the still view is drawn - with the points that fit its time budget
     // (500 milliseconds)
@@ -359,10 +359,10 @@ test('the 3D explorer page draws its still view', async (context) => {
     clock.time = 900;
     clock.runFrame();
     assert.deepEqual(browser.logs.slice(2), [
-        'Roadie: 3D explorer still frame - 777 operations, 300 cells, step 2, smooth 1 (425 point limit) - built in 0.0 ms, ' +
+        'Cutfill: 3D explorer still frame - 777 operations, 300 cells, step 2, smooth 1 (425 point limit) - built in 0.0 ms, ' +
             'painted in 0.0 ms, frame in 650.0 ms'
     ]);
-    assert.equal(window.localStorage.getItem('roadieCellCost'), '0.5906499999999999');
+    assert.equal(window.localStorage.getItem('cutfillCellCost'), '0.5906499999999999');
 
     // A key draws the moving view - with its raised point limit
     assert.equal(keyDown(browser, 'ArrowRight', 'ArrowRight'), true);
@@ -370,7 +370,7 @@ test('the 3D explorer page draws its still view', async (context) => {
     assert.equal(paintCount(canvas), 3);
     clock.runFrame();
     assert.deepEqual(browser.logs.slice(3), [
-        'Roadie: 3D explorer moving frame - 522 operations, 80 cells, step 4, smooth 1 (121 point limit) - built in 0.0 ms, ' +
+        'Cutfill: 3D explorer moving frame - 522 operations, 80 cells, step 4, smooth 1 (121 point limit) - built in 0.0 ms, ' +
             'painted in 0.0 ms, frame in 0.0 ms'
     ]);
     assert.deepEqual([...clock.timeouts.values()].map(({time}) => time), [1150]);
@@ -384,7 +384,7 @@ test('the 3D explorer page draws its still view', async (context) => {
     assert.deepEqual([...clock.timeouts.values()].map(({time}) => time), [1250]);
     clock.runFrame();
     assert.deepEqual(browser.logs.slice(4), [
-        'Roadie: 3D explorer moving frame - 572 operations, 129 cells, step 3, smooth 1 (206 point limit) - built in 0.0 ms, ' +
+        'Cutfill: 3D explorer moving frame - 572 operations, 129 cells, step 3, smooth 1 (206 point limit) - built in 0.0 ms, ' +
             'painted in 0.0 ms, frame in 0.0 ms'
     ]);
     clock.runTimeout();
@@ -395,7 +395,7 @@ test('the 3D explorer page draws its still view', async (context) => {
     clock.time = 101250;
     clock.runFrame();
     assert.deepEqual(browser.logs.slice(5), [
-        'Roadie: 3D explorer still frame - 733 operations, 272 cells, step 2, smooth 1 (425 point limit) - built in 0.0 ms, ' +
+        'Cutfill: 3D explorer still frame - 733 operations, 272 cells, step 2, smooth 1 (425 point limit) - built in 0.0 ms, ' +
             'painted in 0.0 ms, frame in 100000.0 ms'
     ]);
 
@@ -410,7 +410,7 @@ test('the 3D explorer page draws its still view', async (context) => {
     assert.equal(clock.timeouts.size, 0);
     clock.runFrame();
     assert.deepEqual(browser.logs.slice(6), [
-        'Roadie: 3D explorer moving frame - 500 operations, 104 cells, step 3, smooth 1 (294 point limit) - built in 0.0 ms, ' +
+        'Cutfill: 3D explorer moving frame - 500 operations, 104 cells, step 3, smooth 1 (294 point limit) - built in 0.0 ms, ' +
             'painted in 0.0 ms, frame in 250.0 ms'
     ]);
 });
@@ -423,16 +423,16 @@ test('the 3D explorer page draws all of the terrain when it fits the time budget
         [
             null,
             [
-                'Roadie: 3D explorer moving frame - 43747 operations, 43200 cells, step 1, smooth 6 (53125 point limit) - ' +
+                'Cutfill: 3D explorer moving frame - 43747 operations, 43200 cells, step 1, smooth 6 (53125 point limit) - ' +
                     'built in 0.0 ms, painted in 0.0 ms, frame in 0.0 ms',
-                'Roadie: 3D explorer still frame - 59347 operations, 58800 cells, step 1, smooth 7 - ' +
+                'Cutfill: 3D explorer still frame - 59347 operations, 58800 cells, step 1, smooth 7 - ' +
                     'built in 0.0 ms, painted in 0.0 ms, frame in 0.0 ms'
             ]
         ],
         [
             '0.0001',
             [
-                'Roadie: 3D explorer moving frame - 59347 operations, 58800 cells, step 1, smooth 7 - ' +
+                'Cutfill: 3D explorer moving frame - 59347 operations, 58800 cells, step 1, smooth 7 - ' +
                     'built in 0.0 ms, painted in 0.0 ms, frame in 0.0 ms'
             ]
         ]
@@ -487,7 +487,7 @@ test('the 3D explorer page is left', async (context) => {
     assert.equal(keyDown(browser, 'ArrowRight', 'ArrowRight'), true);
     assert.equal(clock.frames.size, 1);
     assert.equal(clock.timeouts.size, 0);
-    assert.equal(window.localStorage.getItem('roadieCellCost'), '1');
+    assert.equal(window.localStorage.getItem('cutfillCellCost'), '1');
 
     // Leave the explorer for the report - the key's frame is canceled, and the cell cost estimate is kept in local storage
     window.location.hash = "#var.vFile='plans/fixture.json'";
@@ -496,30 +496,30 @@ test('the 3D explorer page is left', async (context) => {
     assert.equal(document.body.className, '');
     assert.equal(clock.frames.size, 0);
     assert.equal(paintCount(canvas), 1);
-    assert.equal(window.localStorage.getItem('roadieCellCost'), '0.7044999999999999');
+    assert.equal(window.localStorage.getItem('cutfillCellCost'), '0.7044999999999999');
 
     // The report's 3D view is drawn with the points that fit its time budget at the explorer's cell cost estimate
     clock.runTimeout();
     clock.runFrame();
     assert.deepEqual(browser.logs.slice(-1), [
-        'Roadie: 3D view 1 - 594 operations, 140 cells, step 3, smooth 1 (302 point limit) - drawn in 0.0 ms'
+        'Cutfill: 3D view 1 - 594 operations, 140 cells, step 3, smooth 1 (302 point limit) - drawn in 0.0 ms'
     ]);
 
     // The explorer, again - it has its moving view's point limit, and the still view is drawn before leaving it again
     window.location.hash = exploreHash;
     await flush();
     assert.equal(document.title, 'Fixture Plan - 3D');
-    assert.equal(document.body.className, 'roadie-explore');
+    assert.equal(document.body.className, 'cutfill-explore');
     clock.runFrame();
     assert.deepEqual(browser.logs.slice(-2), [
-        'Roadie: render in 0.0 ms',
-        'Roadie: 3D explorer moving frame - 522 operations, 80 cells, step 4, smooth 1 (121 point limit) - built in 0.0 ms, ' +
+        'Cutfill: render in 0.0 ms',
+        'Cutfill: 3D explorer moving frame - 522 operations, 80 cells, step 4, smooth 1 (121 point limit) - built in 0.0 ms, ' +
             'painted in 0.0 ms, frame in 0.0 ms'
     ]);
     assert.equal(clock.timeouts.size, 1);
     window.location.hash = '#var=';
     await flush();
-    assert.equal(document.title, 'Roadie');
+    assert.equal(document.title, 'Cutfill');
     assert.equal(document.body.className, '');
     assert.equal(clock.timeouts.size, 0);
     assert.equal(clock.frames.size, 0);
@@ -549,7 +549,7 @@ test('the 3D explorer page drags', async (context) => {
     const ground = pageGround(app, 500, 400);
     pointer('pointerdown', 500, 400);
     assert.deepEqual(captures, [1]);
-    assert.equal(root.className, 'roadie-explorer roadie-explorer-dragging');
+    assert.equal(root.className, 'cutfill-explorer cutfill-explorer-dragging');
     assert.equal(canvas.title, '');
     assert.equal(clock.frames.size, 0);
     pointer('pointermove', 520, 380);
@@ -562,7 +562,7 @@ test('the 3D explorer page drags', async (context) => {
 
     // The drag's end moves the view center along its line of sight to the ground - the view doesn't change
     pointer('pointerup', 560, 370);
-    assert.equal(root.className, 'roadie-explorer');
+    assert.equal(root.className, 'cutfill-explorer');
     clock.runFrame();
     assert.equal(paintCount(canvas), 3);
     assertAt(app, ground, 560, 370);
@@ -595,20 +595,20 @@ test('the 3D explorer page drags', async (context) => {
     pointer('pointerdown', 300, 200, {'pointerId': 2});
     pointer('pointermove', 350, 250, {'pointerId': 2});
     pointer('pointerup', 350, 250, {'pointerId': 2});
-    assert.equal(root.className, 'roadie-explorer roadie-explorer-dragging');
+    assert.equal(root.className, 'cutfill-explorer cutfill-explorer-dragging');
     pointer('pointerup', 400, 300);
     clock.runFrame();
     pointer('pointerdown', 400, 300, {'button': 1});
-    assert.equal(root.className, 'roadie-explorer');
+    assert.equal(root.className, 'cutfill-explorer');
     assert.deepEqual(captures, [1, 1, 1, 1, 1]);
 
     // A drag whose pointer up is missed (its buttons are up) is ended by its next move, and a canceled drag is ended
     pointer('pointerdown', 400, 300);
     pointer('pointermove', 450, 300, {'buttons': 0});
-    assert.equal(root.className, 'roadie-explorer');
+    assert.equal(root.className, 'cutfill-explorer');
     pointer('pointerdown', 400, 300);
     pointer('pointercancel', 400, 300);
-    assert.equal(root.className, 'roadie-explorer');
+    assert.equal(root.className, 'cutfill-explorer');
     assert.equal(clock.frames.size, 0);
 
     // The canvas has no context menu (the right button drags)
@@ -720,18 +720,18 @@ test('the 3D explorer page controls', async (context) => {
     click('help');
     assert.equal(help.hidden, true);
     assert.equal(helpButton.getAttribute('aria-expanded'), 'false');
-    assert.equal(window.localStorage.getItem('roadieExploreHelpHidden'), 'true');
+    assert.equal(window.localStorage.getItem('cutfillExploreHelpHidden'), 'true');
     click('help');
     assert.equal(help.hidden, false);
     assert.equal(helpButton.getAttribute('aria-expanded'), 'true');
-    assert.equal(window.localStorage.getItem('roadieExploreHelpHidden'), 'false');
+    assert.equal(window.localStorage.getItem('cutfillExploreHelpHidden'), 'false');
     assert.equal(clock.frames.size, 0);
     assert.equal(paintCount(canvas), paints);
 });
 
 
 test('the 3D explorer page help is hidden', async (context) => {
-    const browser = exploreBrowser(context, {'storage': {'roadieExploreHelpHidden': 'true'}});
+    const browser = exploreBrowser(context, {'storage': {'cutfillExploreHelpHidden': 'true'}});
     const {main} = browser;
     await startApp(browser);
     assert.equal(main.querySelector('ul').hidden, true);

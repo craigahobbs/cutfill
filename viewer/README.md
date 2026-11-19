@@ -1,6 +1,6 @@
-# Roadie Viewer
+# Cutfill Viewer
 
-The Roadie viewer is a web application that views Roadie road plan models - the plan's options, plan view, profile, 3D
+The Cutfill viewer is a web application that views Cutfill road plan models - the plan's options, plan view, profile, 3D
 views, cost breakdown, design warnings, and structures, and a full-window 3D explorer. It also holds the road plan
 model itself (its schema, validation, and the earthwork and cost analysis) and a command line that prints a plan's
 analysis and the model documentation. See the project's [README](../README.md) for what the viewer shows, how to view
@@ -38,7 +38,7 @@ The source is ES modules in `lib/`, loaded by `index.html`:
 | `explore.js`, `canvas.js` | The 3D explorer, and the 3D views' drawing operations - painted on a canvas, or converted to SVG markup |
 | `doc.js`, `schemaDoc.js` | The model documentation page, generated from the model's schema |
 | `args.js`, `format.js`, `geo.js`, `draw.js`, `markdown.js`, `planData.js`, `smoothing.js` | URL arguments, formatting, the map projection, drawing helpers, Markdown, a loaded plan's cached analyses and drawings, and the 3D drawings' time budget |
-| `cli.js` | The command line (`bin/roadie.js`) - not part of the web application |
+| `cli.js` | The command line (`bin/cutfill.js`) - not part of the web application |
 
 The road plan model is defined with [Schema Markdown](https://craigahobbs.github.io/schema-markdown-js/language/) (in
 `model.js`) and validated with the [schema-markdown](https://github.com/craigahobbs/schema-markdown-js#readme) package -
@@ -51,11 +51,11 @@ IndexedDB, `fetch`, and canvas context (`test/appHelpers.js`).
 
 ### The command line
 
-`bin/roadie.js` prints a plan's analysis and cost, and the model's documentation, as Markdown text:
+`bin/cutfill.js` prints a plan's analysis and cost, and the model's documentation, as Markdown text:
 
 ```sh
-node bin/roadie.js evaluate <plan.json> [--detail]   # each option's earthwork, cost, design warnings, and structures
-node bin/roadie.js doc                               # the road plan model documentation
+node bin/cutfill.js evaluate <plan.json> [--detail]   # each option's earthwork, cost, design warnings, and structures
+node bin/cutfill.js doc                               # the road plan model documentation
 ```
 
 `--detail` adds each option's station table. The command exits with status 1 if the plan can't be loaded or is invalid.
@@ -70,7 +70,7 @@ this computer's browser (`make run`).
 The viewer was measured against the original MarkdownUp viewer (served by `markdown-up`) when it replaced it, in
 headless Chrome on an Apple Silicon Mac (`tools/bench.js`), from navigation until every drawing is painted:
 
-| Plan | MarkdownUp viewer | Roadie viewer |
+| Plan | MarkdownUp viewer | Cutfill viewer |
 | --- | --- | --- |
 | The first example (a synthetic 1,200 ft site, 3 options) | 377 ms | 74 ms |
 | A small site (2 options) | 910 ms | 201 ms |

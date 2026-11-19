@@ -1,9 +1,9 @@
 {
     "type": "module",
-    "name": "roadie-plan",
+    "name": "cutfill-plan",
     "version": "1.0.0",
     "private": true,
-    "description": "The Roadie road planning tools",
+    "description": "The Cutfill road planning tools",
     "scripts": {
         "test": "node --test test/"
     },

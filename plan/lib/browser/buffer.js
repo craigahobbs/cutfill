@@ -1,5 +1,5 @@
 // buffer.js - a web browser's "node:buffer" - the planning tools make an image's base64 text with its Buffer. The
-// Roadie application's page maps "node:buffer" to this module (its import map).
+// Cutfill application's page maps "node:buffer" to this module (its import map).
 
 
 // The bytes of a part of the base64 text - a multiple of three, so the parts' texts join

@@ -4,7 +4,7 @@ import posixpath
 import re
 import unittest
 
-from roadie.app import Roadie
+from cutfill.app import Cutfill
 
 from .util import create_test_files
 
@@ -22,7 +22,7 @@ class TestApp(unittest.TestCase):
 
     def test_init(self):
         with create_test_files(STATIC_FILES) as temp_dir:
-            app = Roadie(os.path.join(temp_dir, 'static'))
+            app = Cutfill(os.path.join(temp_dir, 'static'))
             self.assertListEqual(
                 sorted(request.name for request in app.requests.values() if request.doc_group == 'Statics'),
                 ['app.css', 'index.html', 'lib/app.js', 'schema-markdown/lib/parser.js']
@@ -32,7 +32,7 @@ class TestApp(unittest.TestCase):
 
     def test_statics(self):
         with create_test_files(STATIC_FILES) as temp_dir:
-            app = Roadie(os.path.join(temp_dir, 'static'))
+            app = Cutfill(os.path.join(temp_dir, 'static'))
 
             # The application's page is the root URL's
             for url in ('/', '/index.html'):
@@ -52,7 +52,7 @@ class TestApp(unittest.TestCase):
 
     def test_statics_package(self):
         # The package's front end is its "static" directory's files - the page, and every file it loads
-        app = Roadie()
+        app = Cutfill()
         urls = {url for request in app.requests.values() if request.doc_group == 'Statics' for _, url in request.urls}
         status, headers, content = app.request('GET', '/')
         self.assertEqual(status, '200 OK')
@@ -73,7 +73,7 @@ class TestApp(unittest.TestCase):
     def test_statics_modules(self):
         # Every module the front end imports is the package's, and every module of the package is imported - from the
         # page's module, by its import map (the planning tools' Node modules, and their imports of the viewer's)
-        app = Roadie()
+        app = Cutfill()
         urls = {url for request in app.requests.values() if request.doc_group == 'Statics' for _, url in request.urls}
         page = app.request('GET', '/')[2].decode('utf-8')
         import_map = json.loads(re.search(r'<script type="importmap">(.*?)</script>', page, re.DOTALL).group(1))['imports']
@@ -116,7 +116,7 @@ class TestApp(unittest.TestCase):
             'https://basemap.nationalmap.gov/', 'http://127.0.0.1:11434', 'http://${', 'http://www.w3.org/2000/svg',
             'https://github.com/craigahobbs/', 'https://craigahobbs.github.io/'
         )
-        app = Roadie()
+        app = Cutfill()
         found = set()
         for request in app.requests.values():
             if request.doc_group == 'Statics' and request.urls[0][1].endswith(('.html', '.css', '.js')):
@@ -129,5 +129,5 @@ class TestApp(unittest.TestCase):
     def test_statics_missing(self):
         # A front end directory that isn't there has no files
         with create_test_files([(('static', 'index.html'), b'<!DOCTYPE html>')]) as temp_dir:
-            app = Roadie(os.path.join(temp_dir, 'missing'))
+            app = Cutfill(os.path.join(temp_dir, 'missing'))
             self.assertListEqual([request.name for request in app.requests.values() if request.doc_group == 'Statics'], [])

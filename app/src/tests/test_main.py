@@ -3,8 +3,8 @@ import logging
 import unittest
 import unittest.mock
 
-from roadie.__main__ import main as main_main
-from roadie.main import main
+from cutfill.__main__ import main as main_main
+from cutfill.main import main
 
 
 class TestMain(unittest.TestCase):
@@ -19,7 +19,7 @@ class TestMain(unittest.TestCase):
             with self.assertRaises(SystemExit) as cm_exc:
                 main(['-h'])
             self.assertEqual(cm_exc.exception.code, 0)
-            self.assertTrue(stdout.getvalue().startswith('usage: roadie [-h] [-p N] [-n] [-q]\n'))
+            self.assertTrue(stdout.getvalue().startswith('usage: cutfill [-h] [-p N] [-n] [-q]\n'))
             self.assertEqual(stderr.getvalue(), '')
 
 
@@ -43,7 +43,7 @@ class TestMain(unittest.TestCase):
             serve_args, serve_kwargs = mock_serve.call_args
             application_wrap = serve_args[0]
             self.assertDictEqual(serve_kwargs, {'host': '127.0.0.1', 'port': 8080})
-            self.assertEqual(stdout.getvalue(), 'roadie: Serving at http://127.0.0.1:8080/ ...\n')
+            self.assertEqual(stdout.getvalue(), 'cutfill: Serving at http://127.0.0.1:8080/ ...\n')
             self.assertEqual(logging.getLogger('waitress.queue').level, logging.ERROR)
 
             # A request that succeeds isn't logged
@@ -52,13 +52,13 @@ class TestMain(unittest.TestCase):
             response = application_wrap(environ, lambda status, headers: statuses.append(status))
             self.assertListEqual(statuses, ['200 OK'])
             self.assertIn(b'<html', b''.join(response))
-            self.assertEqual(stdout.getvalue(), 'roadie: Serving at http://127.0.0.1:8080/ ...\n')
+            self.assertEqual(stdout.getvalue(), 'cutfill: Serving at http://127.0.0.1:8080/ ...\n')
 
             # A request that fails is logged
             environ = {'REQUEST_METHOD': 'GET', 'PATH_INFO': '/unknown', 'QUERY_STRING': 'a=1', 'wsgi.url_scheme': 'http'}
             application_wrap(environ, lambda status, headers: statuses.append(status))
             self.assertListEqual(statuses, ['200 OK', '404 Not Found'])
-            self.assertEqual(stdout.getvalue(), 'roadie: Serving at http://127.0.0.1:8080/ ...\nroadie: 404 GET /unknown a=1\n')
+            self.assertEqual(stdout.getvalue(), 'cutfill: Serving at http://127.0.0.1:8080/ ...\ncutfill: 404 GET /unknown a=1\n')
             self.assertEqual(stderr.getvalue(), '')
 
 
@@ -95,5 +95,5 @@ class TestMain(unittest.TestCase):
             self.assertEqual(stdout.getvalue(), '')
             self.assertEqual(
                 stderr.getvalue(),
-                'roadie: Could not serve at http://127.0.0.1:9000/ - Address already in use (another port is the "-p" argument)\n'
+                'cutfill: Could not serve at http://127.0.0.1:9000/ - Address already in use (another port is the "-p" argument)\n'
             )

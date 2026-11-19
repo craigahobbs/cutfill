@@ -47,7 +47,7 @@ help:
 
 # Stage the application - the page, its stylesheet, its source modules, and the schema-markdown package's (the page's
 # import map resolves "schema-markdown/" there - its "encode" module isn't the application's). The command line
-# module isn't part of the application. The Roadie application's package stages it, too (app/Makefile's "static").
+# module isn't part of the application. The Cutfill application's package stages it, too (app/Makefile's "static").
 .PHONY: app
 app: build/npm.build
 	rm -rf build/app/

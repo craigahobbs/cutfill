@@ -1,5 +1,5 @@
-// cli.js - the Roadie planning tools' command line (see bin/plan.js) - for the tools' development: a road is planned in
-// the Roadie application. The commands read and write a plan's files - the tools they run make the plan in memory.
+// cli.js - the Cutfill planning tools' command line (see bin/plan.js) - for the tools' development: a road is planned in
+// the Cutfill application. The commands read and write a plan's files - the tools they run make the plan in memory.
 
 import {
     corridorNames, corridorOption, engineerOption, keepOptions, roadSurfaces, ruledOutError, standardOptions
@@ -25,7 +25,7 @@ export const autoUsage = [
     '  mark that was found isn\'t looked for again, and a mark for a place that the notes no longer name is removed.',
     '',
     'options:',
-    '  --model MODEL          the Ollama model to ask (default is none - the site\'s notes aren\'t read) - the Roadie',
+    '  --model MODEL          the Ollama model to ask (default is none - the site\'s notes aren\'t read) - the Cutfill',
     '                         application\'s (the command line doesn\'t ask a model)',
     '  --fresh                ask the model again - don\'t use its saved answer, and look for the notes\' places again',
     '  --fetch                fetch the site\'s data from the USGS again - an existing plan\'s, if it\'s the site\'s, is kept',
@@ -291,7 +291,7 @@ const synopsis = [autoUsage, siteUsage, optionsUsage, routeUsage].flatMap(
 const usage = [
     ...synopsis.map((line, ixLine) => `${ixLine === 0 ? 'usage:' : '      '} ${line}`),
     '',
-    '  auto      Plan a road by procedure - its site, options, and descriptions - as the Roadie application does',
+    '  auto      Plan a road by procedure - its site, options, and descriptions - as the Cutfill application does',
     '            (without a model)',
     '  site      Create a road plan model\'s site from a road site model - its topography (USGS lidar terrain),',
     '            georeference, start and end points, features, and topographic map image',

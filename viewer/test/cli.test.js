@@ -220,8 +220,8 @@ test('cliMain doc', () => {
 test('cliMain usage', () => {
     const usage = {
         'code': 1,
-        'output': 'usage: roadie evaluate <plan.json> [--detail]\n' +
-            '       roadie doc\n' +
+        'output': 'usage: cutfill evaluate <plan.json> [--detail]\n' +
+            '       cutfill doc\n' +
             '\n' +
             "  evaluate    Print a road plan model's analysis and cost (--detail adds each option's station table)\n" +
             '  doc         Print the road plan model documentation\n'

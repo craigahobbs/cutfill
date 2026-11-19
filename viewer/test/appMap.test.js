@@ -44,23 +44,23 @@ const siteConfig = {
 // Start the application with a plan opened from a file (and its map image's file, if "imageName" isn't null), and open
 // its map
 async function startMap(context, plan = {...placedPlan, 'site': siteConfig}, imageName = null) {
-    const browser = fakeBrowser(context, {'storage': {'roadieCellCost': '1'}});
+    const browser = fakeBrowser(context, {'storage': {'cutfillCellCost': '1'}});
     const app = await startApp(browser);
-    const input = browser.document.getElementById('roadie-file');
+    const input = browser.document.getElementById('cutfill-file');
     const files = [new browser.window.File([JSON.stringify(plan)], 'road.json', {'type': 'application/json'})];
     if (imageName !== null) {
         files.push(new browser.window.File(['png'], imageName, {'type': 'image/png'}));
     }
     Object.defineProperty(input, 'files', {'value': files, 'configurable': true});
     fire(browser, input, 'change');
-    for (let count = 0; count < 20 && browser.document.getElementById('roadie-map')?.disabled !== false; count++) {
+    for (let count = 0; count < 20 && browser.document.getElementById('cutfill-map')?.disabled !== false; count++) {
         await flush();
     }
-    fire(browser, browser.document.getElementById('roadie-map'), 'click');
-    for (let count = 0; count < 20 && browser.document.getElementById('roadie-map-svg') === null; count++) {
+    fire(browser, browser.document.getElementById('cutfill-map'), 'click');
+    for (let count = 0; count < 20 && browser.document.getElementById('cutfill-map-svg') === null; count++) {
         await flush();
     }
-    const svg = browser.document.getElementById('roadie-map-svg');
+    const svg = browser.document.getElementById('cutfill-map-svg');
     svg.getBoundingClientRect = () => ({'left': 10, 'top': 20, 'width': 1000, 'height': 650});
     return {browser, app, 'page': app.page, svg};
 }
@@ -83,7 +83,7 @@ function clickMap(browser, page, planPoint = null, mapPoint = null) {
 
 // The map's marks - each one's SVG element names, and its text
 function marks(browser) {
-    return [...browser.document.querySelectorAll('#roadie-map-marks .roadie-map-mark')].map((mark) => (
+    return [...browser.document.querySelectorAll('#cutfill-map-marks .cutfill-map-mark')].map((mark) => (
         [[...mark.children].map((child) => child.tagName).join(' '), mark.textContent]
     ));
 }
@@ -103,39 +103,39 @@ test('the map page', async (context) => {
     assert.equal(document.title, 'Edit Map');
     assert.deepEqual([svg.getAttribute('width'), svg.getAttribute('height')], ['1000', '650']);
     assert.deepEqual(marks(browser), [['polygon text', 'Barn'], ['polyline text', 'Track'], ['circle text', 'Gate']]);
-    assert.ok(document.querySelector('#roadie-map-marks polygon').getAttribute('stroke-dasharray') === '6 4');
-    assert.equal(document.querySelector('#roadie-map-marks polyline').getAttribute('stroke-dasharray'), null);
+    assert.ok(document.querySelector('#cutfill-map-marks polygon').getAttribute('stroke-dasharray') === '6 4');
+    assert.equal(document.querySelector('#cutfill-map-marks polyline').getAttribute('stroke-dasharray'), null);
     const toolStates = [...document.querySelectorAll('[data-tool]')].map(
         (button) => [button.textContent, button.getAttribute('aria-pressed')]
     );
     assert.deepEqual(toolStates, [
         ['Select', 'true'], ['Area to avoid', 'false'], ['Existing road', 'false'], ['Place to pass through', 'false']
     ]);
-    assert.ok(document.getElementById('roadie-map-hint').textContent.startsWith('Select a mark'));
-    assert.equal(document.querySelectorAll('#roadie-map-backdrop-layer path').length, 2);
-    assert.equal(document.getElementById('roadie-map-view').getAttribute('transform'), 'matrix(2.0583 0 0 -2.0583 88.3333 633.75)');
+    assert.ok(document.getElementById('cutfill-map-hint').textContent.startsWith('Select a mark'));
+    assert.equal(document.querySelectorAll('#cutfill-map-backdrop-layer path').length, 2);
+    assert.equal(document.getElementById('cutfill-map-view').getAttribute('transform'), 'matrix(2.0583 0 0 -2.0583 88.3333 633.75)');
 
     // The site's features - its stream, road, and trail, its rock outcrop and its own exclusion area, and its road
     // options, but not its exclusion area or its road that are the config's marks - and its start and end points
-    const features = [...document.querySelectorAll('#roadie-map-features polyline')].map(
+    const features = [...document.querySelectorAll('#cutfill-map-features polyline')].map(
         (line) => [line.getAttribute('stroke'), line.getAttribute('stroke-dasharray')]
     );
     assert.deepEqual(features, [
         ['#2a6fdb', null], ['#6e675f', null], ['#6e675f', '5 4'], ['#d6246e', null], ['#d6246e', null], ['#1a8f3c', null],
         ['#c0392b', null]
     ]);
-    assert.deepEqual([...document.querySelectorAll('#roadie-map-features polygon')].map((polygon) => polygon.getAttribute('stroke')), [
+    assert.deepEqual([...document.querySelectorAll('#cutfill-map-features polygon')].map((polygon) => polygon.getAttribute('stroke')), [
         '#8a6a45', '#555555'
     ]);
 
     // Select the found area - its panel says how it was found
     clickMap(browser, page, [130, 125]);
-    assert.equal(document.querySelector('#roadie-map-selection h2').textContent, 'Area to avoid');
-    assert.equal(document.getElementById('roadie-map-name').value, 'Barn');
-    assert.ok(document.getElementById('roadie-map-found').textContent.startsWith(
+    assert.equal(document.querySelector('#cutfill-map-selection h2').textContent, 'Area to avoid');
+    assert.equal(document.getElementById('cutfill-map-name').value, 'Barn');
+    assert.ok(document.getElementById('cutfill-map-found').textContent.startsWith(
         'A run found it for the notes\' place "Barn". The model "test-model" found it on the site\'s map - "A block."'
     ));
-    assert.equal(document.querySelectorAll('#roadie-map-marks circle').length, 4 + 1);
+    assert.equal(document.querySelectorAll('#cutfill-map-marks circle').length, 4 + 1);
 
     // Drag its corner - it's the author's, then
     pointer(browser, page, 'pointerdown', [160, 150]);
@@ -145,8 +145,8 @@ test('the map page', async (context) => {
     pointer(browser, page, 'pointerup', null, [cornerX + 20.6, cornerY - 20.6]);
     assert.deepEqual(rounded(page.marks[0].points), [[100, 100], [160, 100], [170, 160], [100, 150]]);
     assert.deepEqual([page.marks[0].found, page.marks[0].source], [null, null]);
-    assert.equal(document.getElementById('roadie-map-found'), null);
-    assert.equal(document.querySelector('#roadie-map-marks polygon').getAttribute('stroke-dasharray'), null);
+    assert.equal(document.getElementById('cutfill-map-found'), null);
+    assert.equal(document.querySelector('#cutfill-map-marks polygon').getAttribute('stroke-dasharray'), null);
 
     // A click on a point that doesn't move keeps the selection - and a pointer that moves before it's down does nothing
     clickMap(browser, page, [100, 100]);
@@ -155,9 +155,9 @@ test('the map page', async (context) => {
 
     // Select the place, and rename it - a name that's empty isn't one
     clickMap(browser, page, [300, 50]);
-    assert.equal(document.querySelector('#roadie-map-selection h2').textContent, 'Place to pass through');
-    assert.equal(document.getElementById('roadie-map-found'), null);
-    const name = document.getElementById('roadie-map-name');
+    assert.equal(document.querySelector('#cutfill-map-selection h2').textContent, 'Place to pass through');
+    assert.equal(document.getElementById('cutfill-map-found'), null);
+    const name = document.getElementById('cutfill-map-name');
     name.value = '  ';
     fire(browser, name, 'input');
     assert.equal(page.marks[2].name, 'Gate');
@@ -167,14 +167,14 @@ test('the map page', async (context) => {
 
     // Select the road by its line, and nothing - the map's empty ground
     clickMap(browser, page, [200, 280]);
-    assert.equal(document.querySelector('#roadie-map-selection h2').textContent, 'Existing road');
+    assert.equal(document.querySelector('#cutfill-map-selection h2').textContent, 'Existing road');
     clickMap(browser, page, [250, 200]);
-    assert.equal(document.getElementById('roadie-map-selection').innerHTML, '');
+    assert.equal(document.getElementById('cutfill-map-selection').innerHTML, '');
 
     // Draw an area - a click near the last corner (a double-click's) isn't another, Backspace removes the last, and a
     // double-click finishes it
     fire(browser, document.querySelector('[data-tool="area"]'), 'click');
-    assert.ok(document.getElementById('roadie-map-hint').textContent.startsWith('Click the area\'s corners'));
+    assert.ok(document.getElementById('cutfill-map-hint').textContent.startsWith('Click the area\'s corners'));
     clickMap(browser, page, [20, 20]);
     clickMap(browser, page, [60, 20]);
     clickMap(browser, page, [60.5, 20]);
@@ -188,7 +188,7 @@ test('the map page', async (context) => {
     fire(browser, svg, 'dblclick');
     assert.deepEqual([page.marks.length, page.marks[3].name, page.marks[3].kind, page.drawing], [4, 'Exclusion 2', 'area', null]);
     assert.deepEqual(rounded(page.marks[3].points), [[20, 20], [60, 20], [60, 60]]);
-    assert.equal(document.querySelector('#roadie-map-selection h2').textContent, 'Area to avoid');
+    assert.equal(document.querySelector('#cutfill-map-selection h2').textContent, 'Area to avoid');
 
     // Draw a road - Enter finishes it - and a road that's cancelled
     fire(browser, document.querySelector('[data-tool="road"]'), 'click');
@@ -210,20 +210,20 @@ test('the map page', async (context) => {
     assert.deepEqual(page.marks.slice(5).map((mark) => mark.name), ['Place 2', 'Place 3']);
 
     // Delete the last place - a click where it was adds it again
-    document.getElementById('roadie-map-delete').click();
-    assert.deepEqual([page.marks.length, page.selected, document.getElementById('roadie-map-selection').innerHTML], [6, null, '']);
+    document.getElementById('cutfill-map-delete').click();
+    assert.deepEqual([page.marks.length, page.selected, document.getElementById('cutfill-map-selection').innerHTML], [6, null, '']);
     clickMap(browser, page, [220, 100]);
     assert.deepEqual([page.marks.length, page.marks[6].name, page.selected], [7, 'Place 3', 6]);
-    document.getElementById('roadie-map-delete').click();
+    document.getElementById('cutfill-map-delete').click();
     assert.deepEqual([page.marks.length, page.selected], [6, null]);
 
     // The keys of the selection's name are its own - and keys without a drawing do nothing
     fire(browser, document.querySelector('[data-tool="select"]'), 'click');
     clickMap(browser, page, [200, 100]);
-    document.getElementById('roadie-map-name').focus();
-    fire(browser, document.getElementById('roadie-map-name'), 'keydown', {'key': 'Escape'});
+    document.getElementById('cutfill-map-name').focus();
+    fire(browser, document.getElementById('cutfill-map-name'), 'keydown', {'key': 'Escape'});
     assert.equal(page.selected, 5);
-    document.getElementById('roadie-map-name').blur();
+    document.getElementById('cutfill-map-name').blur();
     fire(browser, document, 'keydown', {'key': 'Backspace'});
     fire(browser, document, 'keydown', {'key': 'Enter'});
     assert.deepEqual([page.selected, page.marks.length], [5, 6]);
@@ -252,12 +252,12 @@ test('the map page', async (context) => {
     assert.equal(Math.round(page.view.scale * 100) / 100, 1.03);
 
     // The map is resized with its window
-    Object.defineProperty(document.getElementById('roadie-map'), 'clientWidth', {'value': 800, 'configurable': true});
+    Object.defineProperty(document.getElementById('cutfill-map'), 'clientWidth', {'value': 800, 'configurable': true});
     fire(browser, window, 'resize');
     assert.deepEqual([svg.getAttribute('width'), svg.getAttribute('height')], ['800', '520']);
 
     // Done - the marks are the loaded plan's config's: the author's edits, the unchanged road as it was, and the new marks
-    document.getElementById('roadie-map-done').click();
+    document.getElementById('cutfill-map-done').click();
     await flush();
     assert.equal(window.location.hash, '#var=');
     const {site} = app.loaded;
@@ -269,7 +269,7 @@ test('the map page', async (context) => {
     assert.deepEqual(site.passThrough, [
         {'name': 'North Gate', ...latLong(300, 50)}, {'name': 'Place 2', ...site.passThrough[1]}
     ]);
-    assert.ok(document.getElementById('roadie-loaded').innerHTML.includes(
+    assert.ok(document.getElementById('cutfill-loaded').innerHTML.includes(
         '<strong>Exclusion areas:</strong> 2. <strong>Existing roads:</strong> 2. <strong>Places to pass through:</strong> 2.'
     ));
 });
@@ -280,13 +280,13 @@ test('the map page, its backdrops', async (context) => {
     const image = 'data:image/png;base64,iVBORw==';
     const {browser, page} = await startMap(context, {...placedPlan, image, 'site': siteConfig});
     const {document} = browser;
-    const backdrop = document.getElementById('roadie-map-backdrop');
+    const backdrop = document.getElementById('cutfill-map-backdrop');
     assert.deepEqual([...backdrop.options].map((option) => [option.value, option.disabled]), [
         ['contours', false], ['map', false], ['relief', false]
     ]);
     backdrop.value = 'map';
     fire(browser, backdrop, 'change');
-    const imageElement = () => document.querySelector('#roadie-map-backdrop-layer image');
+    const imageElement = () => document.querySelector('#cutfill-map-backdrop-layer image');
     assert.deepEqual([imageElement().getAttribute('href'), imageElement().getAttribute('width')], [image, '400']);
     assert.equal(imageElement().parentElement.getAttribute('transform'), 'translate(0 300) scale(1 -1)');
     backdrop.value = 'relief';
@@ -302,14 +302,14 @@ test('the map page, its backdrops', async (context) => {
 
     // A plan without a map image has no map backdrop - nor does a plan whose map image's file is missing
     const noImage = await startMap(context);
-    assert.equal(noImage.browser.document.querySelector('#roadie-map-backdrop option[value="map"]').disabled, true);
+    assert.equal(noImage.browser.document.querySelector('#cutfill-map-backdrop option[value="map"]').disabled, true);
     const missing = await startMap(context, {...placedPlan, 'image': 'road.png', 'site': siteConfig});
-    assert.equal(missing.browser.document.querySelector('#roadie-map-backdrop option[value="map"]').disabled, true);
+    assert.equal(missing.browser.document.querySelector('#cutfill-map-backdrop option[value="map"]').disabled, true);
 
     // A plan's map image file is a local file - its object URL is made once
     const fileImage = await startMap(context, {...placedPlan, 'image': 'plans/road.png', 'site': siteConfig}, 'road.png');
     assert.equal(fileImage.page.imageURL, 'blob:http://localhost/1');
-    assert.equal(fileImage.browser.document.querySelector('#roadie-map-backdrop option[value="map"]').disabled, false);
+    assert.equal(fileImage.browser.document.querySelector('#cutfill-map-backdrop option[value="map"]').disabled, false);
     assert.deepEqual(await fileImage.app.imageURL(null, 'plans/road.png'), {'url': 'blob:http://localhost/1', 'missing': false});
     assert.equal(fileImage.browser.objectURLs.length, 1);
 });
@@ -322,7 +322,7 @@ test('the map page, a plan without a site, and Cancel', async (context) => {
     assert.equal(app, undefined);
 
     // The map of a loaded plan that has no site - its config, alone
-    const config = fakeBrowser(context, {'hash': '#var.vMap=true', 'storage': {'roadieLoaded': JSON.stringify({
+    const config = fakeBrowser(context, {'hash': '#var.vMap=true', 'storage': {'cutfillLoaded': JSON.stringify({
         'name': null, 'file': null, 'site': siteConfig, 'changed': false, 'saved': false
     })}});
     await startApp(config);
@@ -343,13 +343,13 @@ test('the map page, a plan without a site, and Cancel', async (context) => {
     // Cancel - the marks aren't the loaded plan's, and Done without changes doesn't change the loaded plan
     const {browser: cancel, app: cancelApp, page} = await startMap(context);
     clickMap(cancel, page, [300, 50]);
-    cancel.document.getElementById('roadie-map-delete').click();
-    cancel.window.location.hash = cancel.document.querySelector('a.roadie-button').getAttribute('href');
+    cancel.document.getElementById('cutfill-map-delete').click();
+    cancel.window.location.hash = cancel.document.querySelector('a.cutfill-button').getAttribute('href');
     await flush();
     assert.deepEqual(cancelApp.loaded.site.passThrough, [gate]);
     const {browser: unchanged, app: unchangedApp} = await startMap(context);
     const {loaded} = unchangedApp;
-    unchanged.document.getElementById('roadie-map-done').click();
+    unchanged.document.getElementById('cutfill-map-done').click();
     await flush();
     assert.equal(unchangedApp.loaded, loaded);
 
@@ -390,19 +390,19 @@ test('the map page, default names and empty marks', async (context) => {
     svg.setPointerCapture = (pointerId) => captures.push(pointerId);
     clickMap(browser, page, [130, 125]);
     assert.deepEqual(captures, [1]);
-    assert.ok(document.getElementById('roadie-map-found').textContent.startsWith(
+    assert.ok(document.getElementById('cutfill-map-found').textContent.startsWith(
         'A run found it for the notes\' place "Barn". The model "test-model" found it on the site\'s map. Edit it'
     ));
     clickMap(browser, page, [290, 210]);
-    assert.equal(document.getElementById('roadie-map-name').value, 'Exclusion 2');
+    assert.equal(document.getElementById('cutfill-map-name').value, 'Exclusion 2');
     clickMap(browser, page, [300, 50]);
-    assert.ok(document.getElementById('roadie-map-found').textContent.includes(' Its coordinates are the notes\'. '));
+    assert.ok(document.getElementById('cutfill-map-found').textContent.includes(' Its coordinates are the notes\'. '));
 
     // Rename the place - it's the author's - and a new place's default name is the next that isn't a mark's
-    const name = document.getElementById('roadie-map-name');
+    const name = document.getElementById('cutfill-map-name');
     name.value = 'Place 2';
     fire(browser, name, 'input');
-    assert.equal(document.getElementById('roadie-map-found'), null);
+    assert.equal(document.getElementById('cutfill-map-found'), null);
     fire(browser, document.querySelector('[data-tool="place"]'), 'click');
     clickMap(browser, page, [200, 100]);
     assert.deepEqual(page.marks.filter((mark) => mark.kind === 'place').map((mark) => mark.name), ['Place 2', 'Place 3']);
@@ -411,9 +411,9 @@ test('the map page, default names and empty marks', async (context) => {
     fire(browser, document.querySelector('[data-tool="select"]'), 'click');
     for (const point of [[200, 100], [300, 50]]) {
         clickMap(browser, page, point);
-        document.getElementById('roadie-map-delete').click();
+        document.getElementById('cutfill-map-delete').click();
     }
-    document.getElementById('roadie-map-done').click();
+    document.getElementById('cutfill-map-done').click();
     await flush();
     const {site} = app.loaded;
     assert.deepEqual(['exclusions' in site, 'roads' in site, 'passThrough' in site], [true, false, false]);

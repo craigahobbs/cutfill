@@ -1,9 +1,9 @@
-# Roadie Planning Tools
+# Cutfill Planning Tools
 
-The Roadie road planning tools - they build a road's site from USGS lidar terrain and engineer its road options. The
-Roadie application ([../app/](../app/README.md)) runs them in the browser. The tools are JavaScript (ES modules in
+The Cutfill road planning tools - they build a road's site from USGS lidar terrain and engineer its road options. The
+Cutfill application ([../app/](../app/README.md)) runs them in the browser. The tools are JavaScript (ES modules in
 `lib/`) built with [javascript-build](https://github.com/craigahobbs/javascript-build#readme), and they use the
-[Roadie viewer](../viewer/README.md)'s road plan model. See the project's [README](../README.md).
+[Cutfill viewer](../viewer/README.md)'s road plan model. See the project's [README](../README.md).
 
 `bin/plan.js` is the tools' command line, for their development - it checks the tools against the USGS's services,
 and compares their plans when they change. It doesn't ask a model. Every command has a `-h` argument.
@@ -58,7 +58,7 @@ don't name any more is removed (`--fresh` finds them again). The model's answers
 (`decisions.json`) - the notes' answer while the notes and the model are the same, and a place's while the site's
 grid is the same, too - so a place it didn't find isn't asked again.
 
-`lib/browser/` is the tools in a web browser, for the Roadie application's page: `io.js` is the tools' input and
+`lib/browser/` is the tools in a web browser, for the Cutfill application's page: `io.js` is the tools' input and
 output functions there - files in memory, the USGS's services, its elevation models, and Ollama by `fetch`, and a
 plot's PNG image by a canvas - and `planRoad`, which runs a plan config with `autoPlan` and returns the road plan, its
 map image a data URL (a run of the same site keeps the plan's site data and the features that were added to it - its

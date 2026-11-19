@@ -1,4 +1,4 @@
-import {roadieTypes, siteMarkFeatures, siteMarkNames, siteMarkPrefixes, validateSite} from '../lib/model.js';
+import {cutfillTypes, siteMarkFeatures, siteMarkNames, siteMarkPrefixes, validateSite} from '../lib/model.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
@@ -114,15 +114,15 @@ test('validateSite, invalid sites', () => {
 });
 
 
-test('roadieTypes, the road site model', () => {
+test('cutfillTypes, the road site model', () => {
     // The road site model, and the road plan model's types it shares
     assert.deepEqual(
         ['RoadSite', 'SitePoint', 'SiteArea', 'SiteLine', 'SitePlace', 'SiteFound', 'LatLong', 'Units', 'DesignCriteria', 'CostRates'].
-            filter((name) => !(name in roadieTypes)),
+            filter((name) => !(name in cutfillTypes)),
         []
     );
     assert.deepEqual(
-        roadieTypes.RoadSite.struct.members.map((member) => `${member.name}${member.optional ? '?' : ''}`),
+        cutfillTypes.RoadSite.struct.members.map((member) => `${member.name}${member.optional ? '?' : ''}`),
         [
             'title', 'units', 'start', 'end', 'notes?', 'exclusions?', 'roads?', 'passThrough?', 'criteria?', 'costRates?', 'margin?',
             'spacing?'

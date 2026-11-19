@@ -48,7 +48,7 @@ test('planView, a meters plan', () => {
     assert.equal(planDrawing.height, 420);
     assert.ok(planDrawing.svg.startsWith(
         '<svg width="420" height="420" viewBox="0 0 420 420" role="img" aria-label="Plan view of the Flat road plan option" ' +
-        `style="${style} cursor: crosshair;" class="roadie-plan"><path d="M`
+        `style="${style} cursor: crosshair;" class="cutfill-plan"><path d="M`
     ));
     assert.ok(planDrawing.svg.endsWith('</svg>'));
 

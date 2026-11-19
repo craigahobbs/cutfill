@@ -3,10 +3,11 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "roadie"
+name = "cutfill"
 version = "0.1.0"
-description = "Roadie engineers low-volume roads on USGS lidar terrain and views the resulting road plans"
+description = "Cutfill engineers low-volume roads on USGS lidar terrain and views the resulting road plans"
 readme = "README.md"
+license = "MIT"
 requires-python = ">=3.11"
 keywords = ["road", "grading", "lidar", "civil engineering"]
 authors = [
@@ -17,6 +18,11 @@ classifiers = [
     "Intended Audience :: End Users/Desktop",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.15",
     "Topic :: Scientific/Engineering"
 ]
 dependencies = [
@@ -25,14 +31,14 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/craigahobbs/roadie"
+Homepage = "https://github.com/craigahobbs/cutfill"
 
 [project.scripts]
-roadie = "roadie.main:main"
+cutfill = "cutfill.main:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
-packages = ["roadie"]
+packages = ["cutfill"]
 
 [tool.setuptools.package-data]
-roadie = ["static/**/*"]
+cutfill = ["static/**/*"]

@@ -1,4 +1,4 @@
-// viewPages.js - the Roadie viewer's plan pages: a road plan's report, and its 3D explorer
+// viewPages.js - the Cutfill viewer's plan pages: a road plan's report, and its 3D explorer
 
 import {escapeHtml, round} from './format.js';
 import {hitTitle, paintOps} from './canvas.js';
@@ -75,7 +75,7 @@ const refineDelay = 250;
 
 
 // The local storage key of the 3D explorer's measured terrain cell drawing cost (smoothing.js)
-export const cellCostKey = 'roadieCellCost';
+export const cellCostKey = 'cutfillCellCost';
 
 
 // Compute the report view width for the window width, in pixels
@@ -112,7 +112,7 @@ export class ReportPage {
         }
 
         // The plan view click handler - open the 3D explorer centered on the clicked ground point, zoomed in 4x
-        const planSvg = app.main.querySelector('svg.roadie-plan');
+        const planSvg = app.main.querySelector('svg.cutfill-plan');
         planSvg?.addEventListener('click', (event) => {
             const rect = planSvg.getBoundingClientRect();
             const {topo} = data;
@@ -228,7 +228,7 @@ const exploreHelp = [
 
 
 // The local storage key of whether the 3D explorer's help is hidden
-export const helpHiddenKey = 'roadieExploreHelpHidden';
+export const helpHiddenKey = 'cutfillExploreHelpHidden';
 
 
 // The 3D explorer's zoom per pixel of a wheel's scrolling, and of a trackpad's pinch (a wheel event with the control key),
@@ -253,13 +253,13 @@ export class ExplorePage {
         this.drawing = null;
         this.pointer = null;
         app.document.title = `${data.plan.title} - 3D`;
-        app.document.body.classList.toggle('roadie-explore', true);
+        app.document.body.classList.toggle('cutfill-explore', true);
         app.window.scrollTo(0, 0);
         const helpHidden = app.storageGet(helpHiddenKey) === true;
         const helpItems = exploreHelp.map(([input, action]) => `<li><strong>${input}</strong> - ${action}</li>`);
-        app.main.innerHTML = '<div class="roadie-explorer"><canvas role="img"></canvas>' +
-            `<a class="roadie-explorer-back" href="${escapeHtml(this.explorer.backURL())}">Back to the report</a>` +
-            '<div class="roadie-explorer-tools">' +
+        app.main.innerHTML = '<div class="cutfill-explorer"><canvas role="img"></canvas>' +
+            `<a class="cutfill-explorer-back" href="${escapeHtml(this.explorer.backURL())}">Back to the report</a>` +
+            '<div class="cutfill-explorer-tools">' +
             '<button type="button" data-command="in" title="Zoom in" aria-label="Zoom in">+</button>' +
             '<button type="button" data-command="out" title="Zoom out" aria-label="Zoom out">&minus;</button>' +
             '<button type="button" data-command="north" title="Face north">North</button>' +
@@ -267,8 +267,8 @@ export class ExplorePage {
             '<button type="button" data-command="reset" title="View the whole site">Reset</button>' +
             '<label title="Vertical exaggeration">Exaggeration <input type="range" min="1" max="5" step="0.25"></label>' +
             '<button type="button" data-command="help" title="Show or hide the controls" aria-label="Controls" ' +
-            `aria-controls="roadie-explorer-help" aria-expanded="${!helpHidden}">?</button></div>` +
-            `<ul id="roadie-explorer-help" class="roadie-explorer-help"${helpHidden ? ' hidden' : ''}>${helpItems.join('')}</ul></div>`;
+            `aria-controls="cutfill-explorer-help" aria-expanded="${!helpHidden}">?</button></div>` +
+            `<ul id="cutfill-explorer-help" class="cutfill-explorer-help"${helpHidden ? ' hidden' : ''}>${helpItems.join('')}</ul></div>`;
         this.root = app.main.firstElementChild;
         this.canvas = this.root.querySelector('canvas');
         this.canvas.setAttribute('style', exploreStyle);
@@ -289,7 +289,7 @@ export class ExplorePage {
             this.update(() => this.explorer.centerAt(x, y, event.shiftKey ? 0.5 : 2));
         });
         canvas.addEventListener('contextmenu', (event) => event.preventDefault());
-        this.root.querySelector('.roadie-explorer-tools').addEventListener('click', (event) => {
+        this.root.querySelector('.cutfill-explorer-tools').addEventListener('click', (event) => {
             const button = event.target.closest('button');
             if (button !== null) {
                 this.command(button.dataset.command);
@@ -328,7 +328,7 @@ export class ExplorePage {
         this.pointer = {'id': event.pointerId, 'start': drawingPoint(this.canvas, this.drawing, event)};
         this.canvas.setPointerCapture?.(event.pointerId);
         this.canvas.title = '';
-        this.root.classList.add('roadie-explorer-dragging');
+        this.root.classList.add('cutfill-explorer-dragging');
         this.explorer.updateView(...this.size());
         this.explorer.dragStart(orbit ? 'orbit' : 'move');
     }
@@ -354,7 +354,7 @@ export class ExplorePage {
     pointerUp(event) {
         if (this.pointer?.id === event.pointerId) {
             this.pointer = null;
-            this.root.classList.remove('roadie-explorer-dragging');
+            this.root.classList.remove('cutfill-explorer-dragging');
             this.update(() => this.explorer.dragEnd());
         }
     }
@@ -465,7 +465,7 @@ export class ExplorePage {
             this.app.window.cancelAnimationFrame(this.frameId);
         }
         this.app.window.clearTimeout(this.refineId);
-        this.app.document.body.classList.toggle('roadie-explore', false);
+        this.app.document.body.classList.toggle('cutfill-explore', false);
         this.app.storageSet(cellCostKey, this.app.smoothing.cellCost);
     }
 }

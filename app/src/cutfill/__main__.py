@@ -1,5 +1,5 @@
 """
-The roadie command-line script's module entry point
+The cutfill command-line script's module entry point
 """
 
 from .main import main

@@ -1,29 +1,29 @@
-# Roadie Application
+# Cutfill Application
 
-The Roadie application - a Python package (`roadie`) built with
-[python-build](https://github.com/craigahobbs/python-build#readme). Its command line, `roadie`, serves the Roadie
+The Cutfill application - a Python package (`cutfill`) built with
+[python-build](https://github.com/craigahobbs/python-build#readme). Its command line, `cutfill`, serves the Cutfill
 front end - the [viewer](../viewer/README.md)'s application, and the planning tools - in your web browser. See the
 project's [README](../README.md).
 
 ```sh
-make static              # stage the front end (the viewer and the planning tools) in the package (src/roadie/static/)
-make run [ARGS=...]      # run the application - "roadie [-p PORT] [-n] [-q]" (it logs the requests that fail)
+make static              # stage the front end (the viewer and the planning tools) in the package (src/cutfill/static/)
+make run [ARGS=...]      # run the application - "cutfill [-p PORT] [-n] [-q]" (it logs the requests that fail)
 make commit              # the pre-commit gate: test, lint, and cover (100% required)
 ```
 
 The project's `make run` runs it.
 
-The back end (`src/roadie/app.py`) is a [chisel](https://github.com/craigahobbs/chisel#readme) application, served
+The back end (`src/cutfill/app.py`) is a [chisel](https://github.com/craigahobbs/chisel#readme) application, served
 by [waitress](https://github.com/Pylons/waitress#readme) to this computer only (`127.0.0.1`). For now, it's only the
 front end's statics (and chisel's API documentation, `/doc/`) - the front end does the rest in the browser.
 
 The front end is the package's `static` directory - `make static` copies the viewer's staged application there, with
-the planning tools' modules (`plan/lib/`). It's committed, so the package is installed from the repository without
-Node.js:
+the planning tools' modules (`plan/lib/`). It's committed, so the package builds from the repository without Node.js.
+The package is installed from [PyPI](https://pypi.org/project/cutfill/):
 
 ```sh
-python3 -m venv roadie-venv
-roadie-venv/bin/pip install "git+https://github.com/craigahobbs/roadie.git#subdirectory=app"
+python3 -m venv cutfill-venv
+cutfill-venv/bin/pip install cutfill
 ```
 
 The app adds the front end's files at creation (package resources), and the page loads nothing from the internet but

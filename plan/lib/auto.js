@@ -3,7 +3,7 @@
 // they name are on the map. Each question is small, and its answer is a JSON object that's checked - a model doesn't
 // run the plan. The places it finds are the plan config's marks (its exclusion areas and its places to pass through),
 // so a plan that's made again doesn't look for them again - and a mark can be corrected. The plan is made in memory:
-// its files are its caller's (the command line's - cli.js - or the Roadie application's page's - browser/io.js).
+// its files are its caller's (the command line's - cli.js - or the Cutfill application's page's - browser/io.js).
 
 import {addDraws, drawCrossings} from './draws.js';
 import {

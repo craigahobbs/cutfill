@@ -29,7 +29,7 @@ C8_ARGS := --100 --all --src lib/ --src test/
 include Makefile.base
 
 
-# The Roadie viewer project - the planning tools use its road plan model
+# The Cutfill viewer project - the planning tools use its road plan model
 VIEWER := ../viewer
 VIEWER_BUILD := $(VIEWER)/build/npm.build
 

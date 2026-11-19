@@ -1,5 +1,5 @@
 // io.js - the planning tools' input and output functions in a web browser, and a road's plan made with them
-// (autoPlan) - for the Roadie application's page. The tools' Node modules are the page's import map's ("buffer.js" and
+// (autoPlan) - for the Cutfill application's page. The tools' Node modules are the page's import map's ("buffer.js" and
 // "zlib.js").
 //
 // A plan is made in memory - the plan config and the road plan are the page's - and the files of its work directory

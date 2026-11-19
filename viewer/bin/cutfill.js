@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-// roadie.js - the Roadie command line (see lib/cli.js)
+// cutfill.js - the Cutfill command line (see lib/cli.js)
 //
-// usage: node bin/roadie.js evaluate <plan.json> [--detail]
-//        node bin/roadie.js doc
+// usage: node bin/cutfill.js evaluate <plan.json> [--detail]
+//        node bin/cutfill.js doc
 
 import {cliMain} from '../lib/cli.js';
 import process from 'node:process';

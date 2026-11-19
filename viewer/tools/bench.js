@@ -83,7 +83,7 @@ async function main(argv) {
     const ixWindow = argv.indexOf('--window');
     const windowSize = ixWindow !== -1 ? argv[ixWindow + 1] : '1100,900';
     const port = 9300 + Math.floor(Math.random() * 500);
-    const userDir = mkdtempSync(join(tmpdir(), 'roadie-bench-'));
+    const userDir = mkdtempSync(join(tmpdir(), 'cutfill-bench-'));
     const timeoutId = setTimeout(() => {
         process.stderr.write('error: timed out\n');
         proc.kill();

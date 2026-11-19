@@ -1,39 +1,44 @@
-# Roadie
+# Cutfill
 
-Roadie engineers low-volume roads (driveways, rural access roads, and forest roads) on USGS lidar
+[![PyPI - Status](https://img.shields.io/pypi/status/cutfill)](https://pypi.org/project/cutfill/)
+[![PyPI](https://img.shields.io/pypi/v/cutfill)](https://pypi.org/project/cutfill/)
+[![GitHub](https://img.shields.io/github/license/craigahobbs/cutfill)](https://github.com/craigahobbs/cutfill/blob/main/LICENSE)
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/cutfill)](https://pypi.org/project/cutfill/)
+
+Cutfill engineers low-volume roads (driveways, rural access roads, and forest roads) on USGS lidar
 terrain, and views the resulting road grading plans in 3D.
 
-The Roadie application runs in your web browser. Make a plan - the road's start and end points (their
-latitudes and longitudes) and its planning notes - and run it: Roadie builds the site from the USGS 3D
+The Cutfill application runs in your web browser. Make a plan - the road's start and end points (their
+latitudes and longitudes) and its planning notes - and run it: Cutfill builds the site from the USGS 3D
 Elevation Program's 1 meter lidar terrain, engineers the road's options from the start point to the
 end point, and costs them, and an [Ollama](https://ollama.com) model reads what the notes ask for.
 Then view the options' report and 3D views, edit the plan and run it again, and save it to a file.
 
-**[View the example road plan](https://craigahobbs.github.io/roadie/viewer/#url=../example/example.json)** - an access road up a hill, with its road options' report,
-3D views, and 3D explorer - in the Roadie viewer, on this project's web site. There's nothing to
+**[View the example road plan](https://craigahobbs.github.io/cutfill/viewer/#url=../example/example.json)** - an access road up a hill, with its road options' report,
+3D views, and 3D explorer - in the Cutfill viewer, on this project's web site. There's nothing to
 install. See [The example](#the-example).
 
-[![The example road plan's 3D views](example/screenshot.png)](https://craigahobbs.github.io/roadie/viewer/#url=../example/example.json)
+[![The example road plan's 3D views](example/screenshot.png)](https://craigahobbs.github.io/cutfill/viewer/#url=../example/example.json)
 
-The application needs only Python 3.11 or later (and `git`, to install it). A site must be in the
-United States, where the USGS has 1 meter lidar terrain.
+The application needs only Python 3.11 or later. A site must be in the United States, where the USGS
+has 1 meter lidar terrain.
 
 
 ## Installing
 
 The application is a Python package - it needs [Python](https://www.python.org/downloads/) 3.11 or
-later, and `git`. Install it in a virtual environment, from the repository's main branch:
+later. Install it from [PyPI](https://pypi.org/project/cutfill/), in a virtual environment:
 
 ```
-python3 -m venv roadie-venv
-roadie-venv/bin/pip install "git+https://github.com/craigahobbs/roadie.git#subdirectory=app"
-roadie-venv/bin/roadie
+python3 -m venv cutfill-venv
+cutfill-venv/bin/pip install cutfill
+cutfill-venv/bin/cutfill
 ```
 
-On Windows, the virtual environment's commands are `roadie-venv\Scripts\pip` and
-`roadie-venv\Scripts\roadie` (and `py -m venv roadie-venv` makes it). `roadie` opens the application
-in your web browser (Ctrl-C stops it - `roadie -h` lists its options). To update it, run the same
-`pip install` with `--force-reinstall`.
+On Windows, the virtual environment's commands are `cutfill-venv\Scripts\pip` and
+`cutfill-venv\Scripts\cutfill` (and `py -m venv cutfill-venv` makes it). `cutfill` opens the application
+in your web browser (Ctrl-C stops it - `cutfill -h` lists its options). To update it, run the same
+`pip install` with `--upgrade`.
 
 To have a model read your plans' notes, install [Ollama](https://ollama.com) and pull a model that
 reads images. Without a model, a plan's notes aren't read.
@@ -45,7 +50,7 @@ spacing change) fetches, and Ollama, on this computer (an Ollama cloud model use
 
 ## Your first road
 
-1. Run `roadie`, and choose **New Plan**.
+1. Run `cutfill`, and choose **New Plan**.
 2. Give the plan a title, and its start and end points - copy each point's latitude and longitude from
    a map (Google Maps, say), and paste them into its latitude. Write the road's notes: what it's for,
    and what it must avoid or pass through (see [The plan's notes](#the-plans-notes)).
@@ -54,9 +59,9 @@ spacing change) fetches, and Ollama, on this computer (an Ollama cloud model use
 4. **View Plan** for its road options' report, and **Save** the plan to a file.
 
 
-## The Roadie application
+## The Cutfill application
 
-`roadie` runs the application (or `make run`, in a clone of the repository), and opens it in your web
+`cutfill` runs the application (or `make run`, in a clone of the repository), and opens it in your web
 browser (`Ctrl-C` stops it). Its home page:
 
 - **Open Plan** - choose or drop a plan's JSON file (and its source map image, to show it in the
@@ -256,7 +261,7 @@ The explorer's URL keeps its view, so it can be reloaded or shared.
 ### Viewing a road plan
 
 The application views a road plan that's opened, or made by a run. The viewer is also a web site,
-[craigahobbs.github.io/roadie/viewer/](https://craigahobbs.github.io/roadie/viewer/) (see
+[craigahobbs.github.io/cutfill/viewer/](https://craigahobbs.github.io/cutfill/viewer/) (see
 [Publishing](#publishing)), that views plans without installing anything:
 
 - **Open a local plan** - on the viewer's home page, select or drop the plan's JSON file (and its
@@ -276,7 +281,7 @@ reports the first problem it finds.
 ## The cost score
 
 The cost score is the estimated construction cost in thousands of nominal US dollars - for comparing
-plan options, not as a bid estimate. Roadie computes it from typical 2023-2025 unit rates (state DOT
+plan options, not as a bid estimate. Cutfill computes it from typical 2023-2025 unit rates (state DOT
 average bid prices and low-volume road references):
 
 - **Earthwork** by the average end area method. Cross sections every third of a grid cell model the
@@ -347,14 +352,14 @@ map of the site, for the report's source map - so the example is one file. Open 
 application and run it to make the plan again.
 
 Run the application, and open the example's file to view it - `example/example.json` in the
-repository, or [download it](https://craigahobbs.github.io/roadie/example/example.json). On the project's web site,
-[view the example](https://craigahobbs.github.io/roadie/viewer/#url=../example/example.json) - the site's viewer links to it from its home
+repository, or [download it](https://craigahobbs.github.io/cutfill/example/example.json). On the project's web site,
+[view the example](https://craigahobbs.github.io/cutfill/viewer/#url=../example/example.json) - the site's viewer links to it from its home
 page, too.
 
 
 ## Development
 
-Roadie's development runs from a clone of its repository, on macOS, Linux, and Windows. It needs
+Cutfill's development runs from a clone of its repository, on macOS, Linux, and Windows. It needs
 `make`, `git`, and `curl` (or `wget`), [Node.js](https://nodejs.org/en/download) 22 or later, and
 [Python](https://www.python.org/downloads/) 3.11 or later:
 
@@ -381,9 +386,9 @@ top-level makefile delegates to the project's subprojects - run `make` in one fo
 
 | Directory | Contents |
 | --- | --- |
-| [viewer/](viewer/) | The Roadie viewer - the web application, the road plan model (its schema, validation, earthwork, and cost analysis), and a command line (`bin/roadie.js`) that prints a plan's analysis and the model documentation. JavaScript, built with [javascript-build](https://github.com/craigahobbs/javascript-build#readme) - see its [README](viewer/README.md). |
+| [viewer/](viewer/) | The Cutfill viewer - the web application, the road plan model (its schema, validation, earthwork, and cost analysis), and a command line (`bin/cutfill.js`) that prints a plan's analysis and the model documentation. JavaScript, built with [javascript-build](https://github.com/craigahobbs/javascript-build#readme) - see its [README](viewer/README.md). |
 | `plan/` | The planning tools - the site's USGS lidar terrain and features, road engineering, and a plan's run (`auto`) - which the application runs in the browser, and a command line for their development (`bin/plan.js`). JavaScript, built with [javascript-build](https://github.com/craigahobbs/javascript-build#readme). |
-| `app/` | The Roadie application - a Python package (`roadie`), built with [python-build](https://github.com/craigahobbs/python-build#readme). Its command line, `roadie`, serves the front end (the viewer's application and the planning tools, staged in the package) with a [chisel](https://github.com/craigahobbs/chisel#readme) back end - to this computer only. |
+| `app/` | The Cutfill application - a Python package (`cutfill`), built with [python-build](https://github.com/craigahobbs/python-build#readme). Its command line, `cutfill`, serves the front end (the viewer's application and the planning tools, staged in the package) with a [chisel](https://github.com/craigahobbs/chisel#readme) back end - to this computer only. |
 | `example/` | The example - its road site model, and its plan |
 
 The planning tools' command line - `node plan/bin/plan.js site`, `options`, `route`, and `auto` -
@@ -396,7 +401,7 @@ ask a model. `CLAUDE.md` is the repository guide for Claude Code.
 `make site` stages the project's web site in `build/gh-pages/`: this README at its root (rendered by
 `index.html`, a [MarkdownUp](https://github.com/craigahobbs/markdown-up#readme) page), the example
 plan, and the viewer in `viewer/`. `make gh-pages` runs the pre-commit gate, stages the site, and
-updates a checkout of the repository's `gh-pages` branch in `../roadie.gh-pages` - commit and push it
+updates a checkout of the repository's `gh-pages` branch in `../cutfill.gh-pages` - commit and push it
 there to publish (GitHub Pages serves the branch).
 
 The published viewer is the viewer's complete source - including the earthwork and cost model - and

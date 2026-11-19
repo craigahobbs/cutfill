@@ -1,11 +1,11 @@
-import {argsLink, argsParse, argsURL, parseHash, parseLiteral, roadieArguments} from '../lib/args.js';
+import {argsLink, argsParse, argsURL, cutfillArguments, parseHash, parseLiteral} from '../lib/args.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
 
-test('roadieArguments', () => {
+test('cutfillArguments', () => {
     assert.deepEqual(
-        roadieArguments.map((argument) => [argument.name, argument.type, argument.default ?? null, argument.explicit ?? false]),
+        cutfillArguments.map((argument) => [argument.name, argument.type, argument.default ?? null, argument.explicit ?? false]),
         [
             ['file', 'string', null, false],
             ['option', 'int', 0, false],

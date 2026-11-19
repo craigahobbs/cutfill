@@ -228,7 +228,7 @@ export function planView(plan, topo, analyses, ixOption, width, outlines) {
     }
 
     const svgElement = svgOpen(
-        width, height, `Plan view of the ${option.name} road plan option`, `${svgStyle} cursor: crosshair;`, ' class="roadie-plan"'
+        width, height, `Plan view of the ${option.name} road plan option`, `${svgStyle} cursor: crosshair;`, ' class="cutfill-plan"'
     );
     const svg = `${svgElement}${elements.join('')}</svg>`;
     return {svg, scale, height};

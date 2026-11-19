@@ -1,9 +1,9 @@
 {
     "type": "module",
-    "name": "roadie-viewer",
+    "name": "cutfill-viewer",
     "version": "1.0.0",
     "private": true,
-    "description": "The Roadie road plan viewer",
+    "description": "The Cutfill road plan viewer",
     "scripts": {
         "test": "node --test test/"
     },

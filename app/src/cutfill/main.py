@@ -1,5 +1,5 @@
 """
-The roadie command-line script main module
+The cutfill command-line script main module
 """
 
 import argparse
@@ -10,16 +10,16 @@ import webbrowser
 
 import waitress
 
-from .app import Roadie
+from .app import Cutfill
 
 
 def main(argv=None):
     """
-    The roadie command-line script main entry point
+    The cutfill command-line script main entry point
     """
 
     # Command line arguments
-    argument_parser_args = {'prog': 'roadie'}
+    argument_parser_args = {'prog': 'cutfill'}
     if sys.version_info >= (3, 14): # pragma: no cover
         argument_parser_args['color'] = False
     parser = argparse.ArgumentParser(**argument_parser_args)
@@ -32,13 +32,13 @@ def main(argv=None):
     args = parser.parse_args(args=argv)
 
     # Create the back-end application
-    application = Roadie()
+    application = Cutfill()
 
     # Wrap the back end to log the requests that fail - an error status
     def application_wrap(environ, start_response):
         def log_start_response(status, response_headers):
             if not args.quiet and int(status[0:3]) >= 400:
-                print(f'roadie: {status[0:3]} {environ["REQUEST_METHOD"]} {environ["PATH_INFO"]} {environ["QUERY_STRING"]}')
+                print(f'cutfill: {status[0:3]} {environ["REQUEST_METHOD"]} {environ["PATH_INFO"]} {environ["QUERY_STRING"]}')
             return start_response(status, response_headers)
         return application(environ, log_start_response)
 
@@ -51,7 +51,7 @@ def main(argv=None):
     try:
         server = waitress.create_server(application_wrap, host=host, port=args.port)
     except OSError as exc:
-        parser.exit(1, f'roadie: Could not serve at {url} - {exc.strerror} (another port is the "-p" argument)\n')
+        parser.exit(1, f'cutfill: Could not serve at {url} - {exc.strerror} (another port is the "-p" argument)\n')
 
     # Launch the web browser on a thread (it may block)
     if args.browser:
@@ -61,5 +61,5 @@ def main(argv=None):
 
     # Serve the application
     if not args.quiet:
-        print(f'roadie: Serving at {url} ...')
+        print(f'cutfill: Serving at {url} ...')
     server.run()

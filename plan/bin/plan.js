@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// plan.js - the Roadie planning tools' command line (see lib/cli.js) - its "-h" argument prints its usage
+// plan.js - the Cutfill planning tools' command line (see lib/cli.js) - its "-h" argument prints its usage
 
 import {fetchBytes, fetchJson} from '../lib/usgs.js';
 import {mkdirSync, readFileSync, writeFileSync} from 'node:fs';
@@ -17,7 +17,7 @@ function writeFile(path, data) {
 }
 
 
-// The command line's input and output functions - it doesn't ask a model (the Roadie application does)
+// The command line's input and output functions - it doesn't ask a model (the Cutfill application does)
 process.exitCode = await cliMain(process.argv.slice(2), {
     'readFile': (path) => readFileSync(path, 'utf-8'),
     'readBytes': (path) => readFileSync(path),
@@ -26,7 +26,7 @@ process.exitCode = await cliMain(process.argv.slice(2), {
     'write': (text) => process.stdout.write(text),
     'getJson': (url) => fetchJson(fetch, sleep, url),
     'getBytes': (url) => fetchBytes(fetch, sleep, url),
-    'ask': () => Promise.reject(new Error('The command line doesn\'t ask a model - run the plan in the Roadie application')),
+    'ask': () => Promise.reject(new Error('The command line doesn\'t ask a model - run the plan in the Cutfill application')),
     sleep,
     'openImage': (url) => openElevationImage(fetch, url)
 });

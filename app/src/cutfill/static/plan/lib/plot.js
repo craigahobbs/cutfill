@@ -327,7 +327,7 @@ function gridSteps(first, last, step) {
 
 
 // Read a plan's topographic map image - its base64 text, or null if it has none. The image is a file beside the plan,
-// or a data URL - the image itself (the Roadie application's plans).
+// or a data URL - the image itself (the Cutfill application's plans).
 export function planMapBase64(io, planPath, plan) {
     const image = plan.image ?? '';
     const dataPrefix = image.match(/^data:image\/[a-z]+;base64,/i)?.[0] ?? null;

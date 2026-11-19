@@ -1,8 +1,8 @@
-# Roadie's top-level makefile - it delegates to the project's subprojects:
+# Cutfill's top-level makefile - it delegates to the project's subprojects:
 #
-#   viewer/  The Roadie viewer - a JavaScript web application (javascript-build)
+#   viewer/  The Cutfill viewer - a JavaScript web application (javascript-build)
 #   plan/    The planning tools - JavaScript (javascript-build)
-#   app/     The Roadie application - a Python package that serves the viewer and the planning tools (python-build)
+#   app/     The Cutfill application - a Python package that serves the viewer and the planning tools (python-build)
 
 .DEFAULT_GOAL := help
 
@@ -15,12 +15,12 @@ SUBMAKE = @$(MAKE) --no-print-directory -C $(1) $(2)
 help:
 	@echo "usage: make [clean|commit|gh-pages|lint|run|site|superclean|test]"
 	@echo ""
-	@echo "  make run          Run the Roadie application, in the browser - open, make, run, and save plans"
+	@echo "  make run          Run the Cutfill application, in the browser - open, make, run, and save plans"
 	@echo "  make commit       Run the viewer's, the planning tools', and the application's tests and lint"
 	@echo "  make test         Run the tests (TEST=<name> runs the viewer's and the planning tools' tests of a name)"
 	@echo "  make lint         Lint the viewer, the planning tools, and the application"
 	@echo "  make site         Stage the project's web site (build/gh-pages/)"
-	@echo "  make gh-pages     Update the project's gh-pages branch checkout (../roadie.gh-pages)"
+	@echo "  make gh-pages     Update the project's gh-pages branch checkout (../cutfill.gh-pages)"
 
 
 # The pre-commit gate, and its parts - the viewer's (tests, lint, documentation, and 100% coverage), the planning
@@ -30,11 +30,11 @@ commit test lint:
 	$(call SUBMAKE,viewer,$@)
 	$(call SUBMAKE,plan,$@)
 	$(if $(TEST),,$(call SUBMAKE,app,$@))
-	@if [ -n "$$(git status --porcelain app/src/roadie/static 2>/dev/null)" ]; then \
-		echo 'note: the application front end (app/src/roadie/static/) changed - commit it with its sources'; fi
+	@if [ -n "$$(git status --porcelain app/src/cutfill/static 2>/dev/null)" ]; then \
+		echo 'note: the application front end (app/src/cutfill/static/) changed - commit it with its sources'; fi
 
 
-# Run the Roadie application, in the browser
+# Run the Cutfill application, in the browser
 .PHONY: run
 run:
 	@$(MAKE) --no-print-directory -C app run
@@ -55,13 +55,13 @@ site:
 	$(SITE_LINKS) README.md > build/gh-pages/README.md
 	cp example/site.json example/example.json example/screenshot.png build/gh-pages/example/
 	cp -R viewer/build/app build/gh-pages/viewer
-	sed 's|<div id="roadie">|<div id="roadie" data-example="../example/example.json">|' viewer/build/app/index.html \
+	sed 's|<div id="cutfill">|<div id="cutfill" data-example="../example/example.json">|' viewer/build/app/index.html \
 		> build/gh-pages/viewer/index.html
 	grep -q 'data-example="../example/example.json"' build/gh-pages/viewer/index.html
 	$(SITE_LINKS) viewer/README.md > build/gh-pages/viewer/README.md
 
 
-# Update the project's gh-pages branch checkout (../roadie.gh-pages) with the web site - commit and push it to publish.
+# Update the project's gh-pages branch checkout (../cutfill.gh-pages) with the web site - commit and push it to publish.
 # The site is staged after the pre-commit gate (not with it, under "make -j") - both stage the viewer application.
 .PHONY: gh-pages
 gh-pages: commit

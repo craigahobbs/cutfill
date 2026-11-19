@@ -1,5 +1,5 @@
 // zlib.js - a web browser's "node:zlib" - the planning tools make a plot's terrain image (a PNG file) with its crc32
-// and deflateSync. The Roadie application's page maps "node:zlib" to this module (its import map).
+// and deflateSync. The Cutfill application's page maps "node:zlib" to this module (its import map).
 
 
 // The CRC-32 checksum's table

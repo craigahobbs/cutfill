@@ -18,7 +18,7 @@ usage: plan auto <site.json> <plan.json> [--model MODEL] [--fresh] [--fetch] [op
        plan options <plan.json> [options]
        plan route <plan.json> -n NAME [-v X,Y]... [options]
 
-  auto      Plan a road by procedure - its site, options, and descriptions - as the Roadie application does
+  auto      Plan a road by procedure - its site, options, and descriptions - as the Cutfill application does
             (without a model)
   site      Create a road plan model's site from a road site model - its topography (USGS lidar terrain),
             georeference, start and end points, features, and topographic map image
