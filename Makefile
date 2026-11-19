@@ -13,7 +13,7 @@ SUBMAKE = @$(MAKE) --no-print-directory -C $(1) $(2)
 
 .PHONY: help
 help:
-	@echo "usage: make [clean|commit|gh-pages|lint|run|site|superclean|test]"
+	@echo "usage: make [changelog|clean|commit|gh-pages|lint|run|site|superclean|test]"
 	@echo ""
 	@echo "  make run          Run the Cutfill application, in the browser - open, make, run, and save plans"
 	@echo "  make commit       Run the viewer's, the planning tools', and the application's tests and lint"
@@ -21,6 +21,7 @@ help:
 	@echo "  make lint         Lint the viewer, the planning tools, and the application"
 	@echo "  make site         Stage the project's web site (build/gh-pages/)"
 	@echo "  make gh-pages     Update the project's gh-pages branch checkout (../cutfill.gh-pages)"
+	@echo "  make changelog    Update the changelog (CHANGELOG.md) with the commits since its last"
 
 
 # The pre-commit gate, and its parts - the viewer's (tests, lint, documentation, and 100% coverage), the planning
@@ -70,6 +71,13 @@ gh-pages: commit
 	cd ../$(notdir $(CURDIR)).gh-pages && git pull
 	rsync -rv --delete --exclude=.git/ build/gh-pages/ ../$(notdir $(CURDIR)).gh-pages
 	touch ../$(notdir $(CURDIR)).gh-pages/.nojekyll
+
+
+# Update the changelog (CHANGELOG.md) - it covers the repository, and it's made by the application's python-build
+# changelog command (simple-git-changelog)
+.PHONY: changelog
+changelog:
+	$(call SUBMAKE,app,changelog)
 
 
 # Remove the build directories

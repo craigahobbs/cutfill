@@ -55,6 +55,17 @@ static:
 	rm $(STATIC)/plan/lib/cli.js
 
 
+# The changelog covers the repository, so it's the top level's (../CHANGELOG.md) - python-build's changelog command
+# updates the package directory's, so the top level's is moved here before it runs, and back after
+CHANGELOG_UTIL := changelog-$(call IMAGE_NAME_FN, $(firstword $(PYTHON_IMAGES)))-util
+$(CHANGELOG_UTIL): changelog-in
+.PHONY: changelog-in
+changelog-in:
+	if [ -f ../CHANGELOG.md ]; then mv ../CHANGELOG.md CHANGELOG.md; fi
+changelog:
+	if [ -f CHANGELOG.md ]; then mv CHANGELOG.md ../CHANGELOG.md; fi
+
+
 # Run the application
 .PHONY: run
 run: $(DEFAULT_VENV_BUILD) static

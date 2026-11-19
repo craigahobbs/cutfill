@@ -40,6 +40,7 @@ make test [TEST=name]             # the subprojects' unit tests (TEST runs the v
 make lint                         # ESLint (the viewer and the planning tools) and pylint (the application)
 make run                          # run the application, in the browser - open, make, run, view, and save plans
 make site                         # stage the web site (build/gh-pages/): README, example, and viewer/
+make changelog                    # update the changelog (CHANGELOG.md) with the commits since its last
 ```
 
 Run `make` in `viewer/` or `plan/` for a subproject's own targets (e.g.
