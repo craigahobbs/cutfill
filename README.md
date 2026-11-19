@@ -404,6 +404,7 @@ make test         # run the unit tests (TEST=name runs the viewer's and the plan
 make lint         # run ESLint on the viewer and the planning tools, and pylint on the application
 make site         # stage the project's web site (build/gh-pages/)
 make changelog    # update the changelog (CHANGELOG.md) with the commits since its last
+make publish      # publish the application's package to PyPI
 make clean        # remove the build directories
 ```
 
@@ -430,9 +431,10 @@ plan, and the viewer in `viewer/`. `make gh-pages` runs the pre-commit gate, sta
 updates a checkout of the repository's `gh-pages` branch in `../sageroad.gh-pages` - commit and push it
 there to publish (GitHub Pages serves the branch).
 
-`make -C app publish` runs the pre-commit gate, builds the package, and uploads it to PyPI (with
+`make publish` runs the pre-commit gate, builds the package, and uploads it to PyPI (with
 [twine](https://twine.readthedocs.io/) - it asks for a PyPI API token, or reads one from `~/.pypirc`).
-The package's version is `app/pyproject.toml`'s, and `make changelog` updates `CHANGELOG.md`.
+It publishes only from a working tree without changes. The package's version is
+`app/pyproject.toml`'s, and `make changelog` updates `CHANGELOG.md`.
 
 The published viewer is the viewer's complete source - including the earthwork and cost model - and
 the site is public. Road plans and map images are user data: don't add them to the site unless
