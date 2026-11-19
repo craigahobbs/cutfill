@@ -13,7 +13,7 @@ SUBMAKE = @$(MAKE) --no-print-directory -C $(1) $(2)
 
 .PHONY: help
 help:
-	@echo "usage: make [changelog|clean|commit|gh-pages|lint|run|site|superclean|test]"
+	@echo "usage: make [changelog|clean|commit|gh-pages|lint|publish|run|site|superclean|test]"
 	@echo ""
 	@echo "  make run          Run the SageRoad application, in the browser - open, make, run, and save plans"
 	@echo "  make commit       Run the viewer's, the planning tools', and the application's tests and lint"
@@ -22,6 +22,7 @@ help:
 	@echo "  make site         Stage the project's web site (build/gh-pages/)"
 	@echo "  make gh-pages     Update the project's gh-pages branch checkout (../sageroad.gh-pages)"
 	@echo "  make changelog    Update the changelog (CHANGELOG.md) with the commits since its last"
+	@echo "  make publish      Publish the application's package to PyPI (the version is app/pyproject.toml's)"
 
 
 # The pre-commit gate, and its parts - the viewer's (tests, lint, documentation, and 100% coverage), the planning
@@ -78,6 +79,16 @@ gh-pages: commit
 .PHONY: changelog
 changelog:
 	$(call SUBMAKE,app,changelog)
+
+
+# Publish the application's package to PyPI (python-build's publish command - it builds the package, checks it, and
+# uploads it with twine). It's published after the pre-commit gate, and only from a working tree without changes - the
+# package's front end is the committed one, which the gate stages again.
+.PHONY: publish
+publish: commit
+	@if [ -n "$$(git status --porcelain)" ]; then \
+		echo 'error: the working tree has changes - commit them before publishing'; git status --short; exit 1; fi
+	$(call SUBMAKE,app,publish)
 
 
 # Remove the build directories

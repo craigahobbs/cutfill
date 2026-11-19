@@ -44,6 +44,7 @@ make lint                         # ESLint (the viewer and the planning tools) a
 make run                          # run the application, in the browser - open, make, run, view, and save plans
 make site                         # stage the web site (build/gh-pages/): README, example, and viewer/
 make changelog                    # update the changelog (CHANGELOG.md) with the commits since its last
+make publish                      # publish the application's package to PyPI (after the gate, from a clean tree)
 ```
 
 Run `make` in `viewer/` or `plan/` for a subproject's own targets (e.g.
