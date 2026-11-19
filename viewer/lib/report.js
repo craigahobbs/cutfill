@@ -71,8 +71,11 @@ export function buildReport(data, globals, args, width, canvasViews = false) {
     html.push(heading(2, 'Plan Options'));
     html.push(optionsTable(plan, analyses, ixOption, globals));
 
-    // The selected option
+    // The selected option - its 3D explorer link is the overview's view
+    const views = data.reportViews(ixOption, width);
+    const exploreArgs = {...views[0].args, 'explore': true};
     html.push(heading(2, option.name));
+    html.push(`<p>${argsLink(globals, 'Explore the plan in 3D', exploreArgs)} (full window, with mouse controls)</p>`);
     if ('description' in option) {
         html.push(markdownHtml(option.description));
     }
@@ -82,7 +85,6 @@ export function buildReport(data, globals, args, width, canvasViews = false) {
         `warning${warnings.length === 1 ? '' : 's'}</p>`);
 
     // The 3D views - the whole site, then views along the road from its start to its end, as needed
-    const views = data.reportViews(ixOption, width);
     const outlines = [];
     for (let ixView = 1; ixView < views.length; ixView++) {
         const reportView = views[ixView];
@@ -106,9 +108,7 @@ export function buildReport(data, globals, args, width, canvasViews = false) {
     html.push(data.drawing(`profile/${ixOption}/${width}`, () => profileView(plan, option, analysis, width, 320)));
 
     // 3D views
-    const exploreArgs = {...views[0].args, 'explore': true};
     html.push(heading(3, '3D Views'));
-    html.push(`<p>${argsLink(globals, 'Explore the plan in 3D', exploreArgs)} (full window, with mouse controls)</p>`);
     const views3D = [];
     for (let ixView = 0; ixView < views.length; ixView++) {
         const reportView = views[ixView];

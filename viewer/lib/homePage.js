@@ -6,6 +6,7 @@ import {defaultRates, orderPlan, planCriteria, planText, sageRoadTypes, unitScal
 import {escapeHtml, number, unitLabel} from './format.js';
 import {formHtml, formPastePoint, formPlaceholders, formValue, memberWords} from './form.js';
 import {latLongDistance, latLongText} from './geo.js';
+import {ollamaMissingHtml} from './modelsPage.js';
 
 
 // The local storage key of the last model chosen to run a plan
@@ -73,7 +74,7 @@ export class HomePage {
         this.globals = globals;
         this.closed = false;
         this.tools = null;
-        this.models = null;
+        this.models = undefined;
         this.runResult = null;
         const example = app.main.dataset.example ?? null;
         const html = [
@@ -180,7 +181,9 @@ export class HomePage {
                 '<p class="sageroad-actions"><label>Model: <select id="sageroad-run-model"><option value="">No model - the notes ' +
                     'aren\'t read</option></select></label>' +
                     `${button('sageroad-run', 'Run Plan', true)}${hasOptions ? button('sageroad-clear', 'Clear Road Options') : ''}` +
-                    '</p>',
+                    `<a id="sageroad-models" class="sageroad-button" href="${escapeHtml(argsURL(globals, {'models': true}))}" hidden>` +
+                    'Ollama Models</a></p>',
+                '<p id="sageroad-model-message" hidden></p>',
                 ...(value !== null ? ['<p><label><input type="checkbox" id="sageroad-run-fetch"> Fetch the site\'s data from the USGS ' +
                     'again - its terrain, streams, roads, and map (a site with other points, units, margin, or spacing is fetched ' +
                     'anyway)</label></p>'] : []),
@@ -260,18 +263,51 @@ export class HomePage {
             }
             return;
         }
-        this.models ??= await app.modelList(this.tools.ollamaHostDefault);
+        // The models that answer questions - null if Ollama doesn't answer
+        if (this.models === undefined) {
+            const models = await app.modelList();
+            this.models = models === null ? null : models.filter(({isChat}) => isChat !== false);
+        }
         const {models} = this;
         const select = this.closed ? null : document.getElementById('sageroad-run-model');
         if (select !== null) {
             // The model is the last model chosen, if Ollama has it
             const lastModel = app.storageGet(modelKey);
-            select.insertAdjacentHTML('beforeend', models.map((model) => (
-                `<option${model === lastModel ? ' selected' : ''}>${escapeHtml(model)}</option>`
+            select.insertAdjacentHTML('beforeend', (models ?? []).map(({id}) => (
+                `<option${id === lastModel ? ' selected' : ''}>${escapeHtml(id)}</option>`
             )).join(''));
-            select.addEventListener('change', () => app.storageSet(modelKey, select.value !== '' ? select.value : null));
+            const messageElement = document.getElementById('sageroad-model-message');
+            const showMessage = () => {
+                messageElement.innerHTML = this.modelMessageHtml(select.value);
+                messageElement.hidden = messageElement.innerHTML === '';
+            };
+            select.addEventListener('change', () => {
+                app.storageSet(modelKey, select.value !== '' ? select.value : null);
+                showMessage();
+            });
+            showMessage();
+            document.getElementById('sageroad-models').hidden = false;
             document.getElementById('sageroad-run').disabled = false;
         }
+    }
+
+
+    // Create the run's model message HTML - why the notes can't be read, or won't be, or why their places can't be found.
+    // "id" is the chosen model's ID ("" for no model).
+    modelMessageHtml(id) {
+        const {app, globals, models} = this;
+        if (models === null) {
+            return ollamaMissingHtml('a model can\'t read the plan\'s notes');
+        } else if (models.length === 0) {
+            return 'Ollama has no models that answer questions, so the plan\'s notes can\'t be read - ' +
+                `<a href="${escapeHtml(argsURL(globals, {'download': true}))}">download a model</a> that reads images.`;
+        } else if (id === '') {
+            return (app.loaded.site.notes ?? []).length > 0 ? 'No model is chosen - the plan\'s notes won\'t be read.' : '';
+        } else if (models.find((model) => model.id === id).isVision === false) {
+            return `The model "${escapeHtml(id)}" doesn't read images - it reads the notes, but it can't find their places on the ` +
+                'site\'s map.';
+        }
+        return '';
     }
 
 
@@ -300,6 +336,7 @@ export class HomePage {
         stopButton.className = 'sageroad-button';
         stopButton.textContent = 'Stop';
         runButton.replaceWith(stopButton);
+        document.getElementById('sageroad-models').hidden = true;
 
         // The run's steps - the notes are read only with a model
         const steps = tools.autoSteps.filter(({isModel}) => model !== null || !isModel);

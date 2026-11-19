@@ -304,7 +304,7 @@ export class ExplorePage {
 
     size() {
         const {window} = this.app;
-        return [Math.max(320, window.innerWidth - 3 * fontSize), Math.max(240, window.innerHeight - 3 * fontSize)];
+        return [Math.max(320, window.innerWidth), Math.max(240, window.innerHeight)];
     }
 
 

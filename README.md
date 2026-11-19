@@ -40,12 +40,14 @@ On Windows, the virtual environment's commands are `sageroad-venv\Scripts\pip` a
 in your web browser (Ctrl-C stops it - `sageroad -h` lists its options). To update it, run the same
 `pip install` with `--upgrade`.
 
-To have a model read your plans' notes, install [Ollama](https://ollama.com) and pull a model that
-reads images. Without a model, a plan's notes aren't read.
+To have a model read your plans' notes, install [Ollama](https://ollama.com), and download a model
+that reads images on the application's **Ollama Models** page. Without a model, a plan's notes aren't
+read.
 
 The application runs offline - its page and its planning tools are the package's - except for the
 USGS's site data, which a plan's first run (or a run after its site's points, units, margin, or
-spacing change) fetches, and Ollama, on this computer (an Ollama cloud model uses the internet).
+spacing change) fetches, the list of Ollama's models to download, and Ollama, on this computer (a
+model's download, and an Ollama cloud model, use the internet).
 
 
 ## Your first road
@@ -89,7 +91,9 @@ criteria, and marks), and what can be done with it:
   for the notes is dashed - edit it to correct it (it's yours then). Run the plan again to engineer
   its road options with the marks - its site's data is kept, so the USGS isn't asked for it again.
 - **Run Plan** - choose an Ollama model to read its notes (or none - the last model chosen is the
-  default). The run's steps are shown as it goes, with its time, and its result and report when it's
+  default). If the notes can't be read - Ollama isn't running, or it has no models - or won't be
+  (no model is chosen), or the model doesn't read images (it can't find the notes' places on the
+  map), it says so. The run's steps are shown as it goes, with its time, and its result and report when it's
   done. **Stop** stops it, when its current step's work is done - and its work is thrown away. The
   road options it engineers are the plan's, and so are the places it found for the notes (see
   Planning a road, below). A plan that's run again keeps its site's data (its terrain,
@@ -100,8 +104,17 @@ criteria, and marks), and what can be done with it:
   to duplicate it (and run it with another config, say). A plan with road options keeps its config
   and its map image, so it's one file - and a plan without road options is its config's file.
 - **Close** it - if it has changes that aren't saved, you're asked first.
+- **Ollama Models** - Ollama's models on this computer: whether each reads images, its parameters,
+  size, and modified date. **Delete** a model, or **Update** it (download it again), and see a
+  download's progress (**Stop** stops it). **Download Models** lists the models of Ollama's library -
+  filter them by how recent they are, whether your computer runs them (**Compatible** - a local
+  model needs about a byte of memory for each of its parameters), and their type (local, cloud, or
+  MLX - a Mac with Apple silicon's), sort them, and download one of a model's sizes. It starts with
+  the compatible local models of the last 6 months, the most recently modified first. A download
+  stops if the page is closed or reloaded - you're asked first.
 
-Ollama answers the application's page when it runs on this computer (`http://127.0.0.1:11434`).
+Ollama answers the application's page when it runs on this computer (`http://127.0.0.1:11434`) - the
+page asks Ollama itself, for its models, their downloads, and a run's questions.
 
 
 ## Planning a road
@@ -154,10 +167,13 @@ A run of the plan:
      that way (named for its side - "West Corridor"), if it's a real choice: within the grade limit,
      apart from them, and at most three times the least-cost option's cost score. Otherwise the
      plan's description says why there isn't one.
-   - **Via PLACE** - a road through each place the road must pass through
+   - **Via PLACE** - a road through each place the road must pass through. A place that's a dead
+     end off the road's way - the road would go out to it and return the way it came - is passed
+     by: the plan's description says how near the road passes it.
 
    A road is found by a least-cost lattice search (with radius-constrained turns, and grade, side
-   slope, stream crossing, rock, and exclusion costs), its vertical profile is designed by dynamic
+   slope, stream crossing, rock, and exclusion costs) - a road doesn't cross itself, run back along
+   itself, or run in a stream's channel - its vertical profile is designed by dynamic
    programming (the least earthwork within the grade limits, flatter on switchbacks), and its
    culverts, retaining walls, bridges, and turnouts are placed. Each road is searched with three
    weights of the penalty for ground steeper than the design grade, and it's the one with the lowest
