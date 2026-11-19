@@ -1,4 +1,4 @@
-// app.js - the Roadie viewer web application - its pages' routing, its local files, and its loaded plan
+// app.js - the Cutfill viewer web application - its pages' routing, its local files, and its loaded plan
 
 import {EditPage, HomePage} from './homePage.js';
 import {ExplorePage, ReportPage, cellCostKey} from './viewPages.js';
@@ -13,7 +13,7 @@ import {planImageURL} from './report.js';
 
 
 // The local storage key of the loaded plan
-const loadedKey = 'roadieLoaded';
+const loadedKey = 'cutfillLoaded';
 
 
 //
@@ -21,7 +21,7 @@ const loadedKey = 'roadieLoaded';
 //
 
 
-const dbName = 'roadie-viewer';
+const dbName = 'cutfill-viewer';
 const dbStore = 'files';
 
 
@@ -56,11 +56,11 @@ function dbRequest(db, mode, fn) {
 }
 
 
-export class RoadieApp {
+export class CutfillApp {
     constructor(window) {
         this.window = window;
         this.document = window.document;
-        this.main = this.document.getElementById('roadie');
+        this.main = this.document.getElementById('cutfill');
         this.plans = new Map();
         this.localFiles = new Map();
         this.dbPromise = null;
@@ -70,7 +70,7 @@ export class RoadieApp {
         this.printing = false;
         this.debug = window.location.search.includes('debug');
 
-        // Import the planning tools - they run a plan in the browser. The tools are the Roadie application's (the
+        // Import the planning tools - they run a plan in the browser. The tools are the Cutfill application's (the
         // project's web site doesn't have them), and its page's import map has their Node modules. The runs' files are
         // kept - the terrain cache, and the model's saved answers - so a plan run again doesn't fetch them again.
         this.importPlan = () => import('../../plan/lib/browser/io.js');
@@ -113,16 +113,16 @@ export class RoadieApp {
         // Open dropped plan files anywhere
         this.document.addEventListener('dragover', (event) => {
             event.preventDefault();
-            this.document.body.classList.add('roadie-drop');
+            this.document.body.classList.add('cutfill-drop');
         });
         this.document.addEventListener('dragleave', (event) => {
             if (event.relatedTarget === null) {
-                this.document.body.classList.remove('roadie-drop');
+                this.document.body.classList.remove('cutfill-drop');
             }
         });
         this.document.addEventListener('drop', (event) => {
             event.preventDefault();
-            this.document.body.classList.remove('roadie-drop');
+            this.document.body.classList.remove('cutfill-drop');
             if (this.confirmReplace()) {
                 this.openFiles(event.dataTransfer.files);
             }
@@ -321,7 +321,7 @@ export class RoadieApp {
         // Load the road plan
         const timeBegin = performance.now();
         if (!this.plans.has(file)) {
-            this.render('Roadie', '<h1>Roadie</h1><p class="roadie-loading">Loading the road plan…</p>');
+            this.render('Cutfill', '<h1>Cutfill</h1><p class="cutfill-loading">Loading the road plan…</p>');
         }
         const data = await this.loadPlan(file);
         if (routeCount !== this.routeCount) {
@@ -330,8 +330,8 @@ export class RoadieApp {
         if ('message' in data) {
             const detailHtml = 'detail' in data ? `<p>${escapeHtml(data.detail)}</p>` : '';
             this.render(
-                'Roadie',
-                `<h1>Roadie</h1><p><strong>Error:</strong> ${escapeHtml(data.message)}</p>${detailHtml}` +
+                'Cutfill',
+                `<h1>Cutfill</h1><p><strong>Error:</strong> ${escapeHtml(data.message)}</p>${detailHtml}` +
                     '<p><a href="#var=">Open another road plan</a></p>'
             );
             return;
@@ -375,7 +375,7 @@ export class RoadieApp {
 
     logTime(name, timeBegin) {
         if (this.debug) {
-            this.window.console.log(`Roadie: ${name} in ${(performance.now() - timeBegin).toFixed(1)} ms`);
+            this.window.console.log(`Cutfill: ${name} in ${(performance.now() - timeBegin).toFixed(1)} ms`);
         }
     }
 
@@ -383,7 +383,7 @@ export class RoadieApp {
     // Render a page's HTML
     render(title, html, headerId = null) {
         this.document.title = title;
-        this.document.body.classList.toggle('roadie-explore', false);
+        this.document.body.classList.toggle('cutfill-explore', false);
         this.main.innerHTML = html;
         if (headerId !== null) {
             this.document.getElementById(headerId)?.scrollIntoView();
@@ -500,13 +500,13 @@ export class RoadieApp {
         }
         const {window} = this;
         if (typeof window.showOpenFilePicker !== 'function') {
-            this.document.getElementById('roadie-file').click();
+            this.document.getElementById('cutfill-file').click();
             return;
         }
         let handles;
         try {
             handles = await window.showOpenFilePicker({'multiple': true, 'types': [{
-                'description': 'Roadie plans and map images',
+                'description': 'Cutfill plans and map images',
                 'accept': {
                     'application/json': ['.json'], 'image/*': ['.png', '.jpg', '.jpeg', '.gif', '.webp'], 'application/pdf': ['.pdf']
                 }
