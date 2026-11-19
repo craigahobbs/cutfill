@@ -172,8 +172,8 @@ A run of the plan:
      by: the plan's description says how near the road passes it.
 
    A road is found by a least-cost lattice search (with radius-constrained turns, and grade, side
-   slope, stream crossing, rock, and exclusion costs) - a road doesn't cross itself, or run back
-   along itself - its vertical profile is designed by dynamic
+   slope, stream crossing, rock, and exclusion costs) - a road doesn't cross itself, run back along
+   itself, or run in a stream's channel - its vertical profile is designed by dynamic
    programming (the least earthwork within the grade limits, flatter on switchbacks), and its
    culverts, retaining walls, bridges, and turnouts are placed. Each road is searched with three
    weights of the penalty for ground steeper than the design grade, and it's the one with the lowest

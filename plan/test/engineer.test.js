@@ -151,11 +151,11 @@ test('route, via points, streams, rock, and an exclusion area', () => {
     assert.equal(expected.commands['route-hill'].lines[0],
         'Option "Hill Road": 900 meters long, 241 alignment points, max grade 9.0%, max cut 2.9, max fill 4.2');
     assert.deepEqual(result, {'code': 0, 'lines': [
-        'Option "Hill Road": 291 meters long, 79 alignment points, max grade 9.0%, max cut 1.7, max fill 1.8',
+        'Option "Hill Road": 290 meters long, 79 alignment points, max grade 9.0%, max cut 1.7, max fill 1.8',
         'Structures: 1 bridge, 1 culvert, 2 turnouts',
         'Cost score: 269.1, design warnings: 0',
         'NOTE: the via point 110,90 is a dead end off the road\'s way - the road would go out to it and return, so it passes it ' +
-            'by, 49 meters from it (station 168)',
+            'by, 49 meters from it (station 167)',
         'Wrote plan.json - run "plan evaluate plan.json" for the full analysis and cost'
     ]});
     const [option] = plan.options;
@@ -297,21 +297,22 @@ test('route, the grade penalty weights', () => {
     const routed = (args) => run(hillPlan(), ['route', 'plan.json', '-n', 'Hill', ...args]);
     const road = routed([]);
     assert.deepEqual(road.result.lines.slice(0, 3), [
-        'Option "Hill": 261 meters long, 71 alignment points, max grade 9.0%, max cut 1.8, max fill 2.2',
+        'Option "Hill": 267 meters long, 73 alignment points, max grade 9.0%, max cut 1.8, max fill 2.5',
         'Structures: 2 culverts, 2 turnouts',
-        'Cost score: 92.9, design warnings: 0'
+        'Cost score: 94.7, design warnings: 0'
     ]);
     assert.deepEqual(routed(['--grade-weight', '1']).result.lines.slice(0, 3), [
         'Option "Hill": 298 meters long, 81 alignment points, max grade 8.4%, max cut 1.7, max fill 1.8',
         'Structures: 2 culverts, 2 turnouts',
-        'Cost score: 97.8, design warnings: 0'
+        'Cost score: 98.0, design warnings: 0'
     ]);
     assert.deepEqual(routed(['--grade-weight', '0.5']).plan, road.plan);
 
-    // With a design grade of 7%, the weight of 1's road costs the least
-    assert.equal(routed(['-g', '7']).result.lines[2], 'Cost score: 99.0, design warnings: 0');
-    assert.deepEqual(routed(['-g', '7']).plan, routed(['-g', '7', '--grade-weight', '1']).plan);
-    assert.equal(routed(['-g', '7', '--grade-weight', '0.25']).result.lines[2], 'Cost score: 105.8, design warnings: 0');
+    // With a design grade of 6.5%, the weight of 1's road costs the least
+    assert.equal(routed(['-g', '6.5']).result.lines[2], 'Cost score: 99.4, design warnings: 0');
+    assert.deepEqual(routed(['-g', '6.5']).plan, routed(['-g', '6.5', '--grade-weight', '1']).plan);
+    assert.equal(routed(['-g', '6.5', '--grade-weight', '0.5']).result.lines[2], 'Cost score: 99.5, design warnings: 0');
+    assert.equal(routed(['-g', '6.5', '--grade-weight', '0.25']).result.lines[2], 'Cost score: 105.2, design warnings: 0');
 });
 
 
@@ -333,18 +334,14 @@ test('bestRoad', () => {
 
 
 test('route, the design arguments', () => {
-    // The Python planning tools' road crossed a stream on a turning move, which they didn't charge a culvert for - a
-    // culvert is a culvert, so the road is shorter, with a culvert less
+    // The Python planning tools' road, but where it crosses the east-west stream - it crosses it in one move (its road
+    // doesn't run in the stream's channel), so its culvert there is half a meter sooner
     const {result, plan} = runExpected(hillPlan(), 'route-hill-custom');
-    const {lines} = expected.commands['route-hill-custom'];
-    assert.deepEqual(pythonResult(result), {'code': 0, 'lines': [
-        'Option "Wide": 299 meters long, 81 alignment points, max grade 7.0%, max cut 0.9, max fill 3.1',
-        'Existing road: stations 0.0 to 30.0',
-        'Structures: 1 existing road, 2 culverts',
-        'Cost score: 162.6, design warnings: 0',
-        'Wrote plan.json - run "plan evaluate plan.json" for the full analysis and cost'
-    ]});
-    assert.equal(result.lines[1], 'Existing road: stations 0.0 to 30.0 - its grade averages 0.0%, 5.4% over its steepest 12 meters');
+    const {code, lines, options} = expected.commands['route-hill-custom'];
+    assert.deepEqual(pythonResult(result), {code, 'lines': [...lines.slice(0, 3), 'Cost score: 176.6, design warnings: 0', lines[4]]});
+    assert.equal(result.lines[1], 'Existing road: stations 0.0 to 30.0 - its grade averages 0.2%, 5.4% over its steepest 12 meters');
+    const culverts = ({structures}) => structures.filter(({type}) => type === 'culvert').map(({station}) => station);
+    assert.deepEqual([culverts(plan.options[0]), culverts(options[0])], [[46.7, 70.4, 269.3], [46.7, 70.4, 269.8]]);
     const [option] = plan.options;
     assert.deepEqual(option.section, {'width': 6, 'cutSlope': 0.75, 'fillSlope': 2, 'surface': 'asphalt'});
     assert.deepEqual(option.structures[0], {'type': 'existingRoad', 'station': 0, 'endStation': 30, 'name': 'Existing road'});

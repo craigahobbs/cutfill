@@ -414,30 +414,22 @@ test('routeSearch, a large site and a lattice searched again', () => {
 
 
 test('routeSearch, streams, rock, and an exclusion area', () => {
-    // The Python planning tools' route crossed the site's east-west stream (at y 150) on a turning move, which they didn't
-    // charge a culvert for - a culvert is a culvert, so the route crosses it on a straight move. The route is the
-    // Python planning tools' to the stream's valley, and they cross the streams as many times.
+    // The route crosses the site's east-west stream (at y 150) in one move, and it crosses it straight - its road doesn't
+    // run in the stream's channel. The Python planning tools' route ended a move 0.9 meters from the stream (at 180,150),
+    // and crossed it from there. It's the same route otherwise, and they cross the streams as many times.
     const route = search(hillPlan(), designArgs(), [20, 20], [180, 185], 1, 1);
     const pythonRoute = expected['route-hill'];
-    assert.deepEqual(route.path.slice(0, 15), pythonRoute.path.slice(0, 15));
-    const north = (x, y, count) => Array.from({'length': count}, (unused, ix) => [x, y + ix * 7.5]);
-    assert.deepEqual(route.path.slice(15), [...north(180, 97.5, 12), [180, 185]]);
-    assert.deepEqual(pythonRoute.path.slice(14, 23), [
-        [172.5, 82.5], [172.5, 90], [172.5, 97.5], [172.5, 105], [172.5, 112.5], [172.5, 120], [172.5, 127.5], [172.5, 135], [180, 150]
-    ]);
+    assert.deepEqual(route.path.slice(0, 22), pythonRoute.path.slice(0, 22));
+    assert.deepEqual(route.path.slice(22), [[172.5, 142.5], [180, 157.5], [180, 165], [180, 172.5], [180, 180], [180, 185]]);
+    assert.deepEqual(pythonRoute.path.slice(21, 24), [[172.5, 135], [180, 150], [180, 157.5]]);
     assert.deepEqual([route.lattice, route.heading], [pythonRoute.lattice, pythonRoute.heading]);
     assert.deepEqual([streamCrossings(route.path), streamCrossings(pythonRoute.path)], [2, 2]);
 
     // The route is around the exclusion area
     assert.ok(route.path.every(([x, y]) => !(x > 70 && x < 90 && y > 30 && y < 60)));
 
-    // The other way, with a wider road - it crosses the stream straight, too
-    const west = search(hillPlan(), designArgs({'width': 6}), [180, 185], [20, 20], 1, 1);
-    const pythonWest = expected['route-hill-west'];
-    assert.deepEqual(west.path.slice(0, 13), [[180, 185], ...north(180, 97.5, 12).reverse()]);
-    assert.deepEqual(west.path.slice(14), pythonWest.path.slice(14));
-    assert.deepEqual(pythonWest.path.slice(4, 6), [[180, 157.5], [172.5, 142.5]]);
-    assert.deepEqual([streamCrossings(west.path), streamCrossings(pythonWest.path)], [2, 2]);
+    // The other way, with a wider road
+    assert.deepEqual(search(hillPlan(), designArgs({'width': 6}), [180, 185], [20, 20], 1, 1), expected['route-hill-west']);
 });
 
 
@@ -457,6 +449,39 @@ function streamCrossings(path) {
     }
     return count;
 }
+
+
+test('routeSearch, a stream\'s channel', () => {
+    // A flat site, with a creek 3 feet north of the line between the road's points (its road is 14 feet wide)
+    const creek = {'type': 'stream', 'name': 'Creek', 'points': [{'x': 0, 'y': 97}, {'x': 400, 'y': 97}]};
+    const plan = planePlan({'size': 41, 'rise': 0});
+    const design = createDesign(plan, designArgs());
+    const lattice = (features, isRoads = false) => {
+        plan.topography.features = features;
+        const topo = planTopo(plan);
+        return routeLattice(topo, design, 1, isRoads ? lineIndex(topo.features, 'road', 100) : null);
+    };
+    const row = (y, x1, x2) => Array.from({'length': Math.round((x2 - x1) / 23.5) + 1}, (unused, ix) => [x1 + ix * 23.5, y]);
+    assert.deepEqual(routeSearch(lattice([]), design, [47, 94], [329, 94], 1).path, row(94, 47, 329));
+
+    // A move along the creek, within the road's half-width of it, runs in its channel - a move across it doesn't (it
+    // has a culvert)
+    const routeNodes = lattice([creek]);
+    const node = 4 * routeNodes.nX + 3;
+    assert.deepEqual([design.halfWidth, routeNodes.lattice, routeNodes.nX], [7, 23.5, 18]);
+    assert.deepEqual([routeNodes.moveChannels[0][node], routeNodes.moveCulverts[0][node]], [1, 0]);
+    assert.deepEqual([routeNodes.moveChannels[4][node], routeNodes.moveCulverts[4][node]], [0, 1]);
+
+    // The road keeps out of the creek's channel - it leaves its start point, and comes to its end point, in it (a road's
+    // point may be on a stream)
+    assert.deepEqual(routeSearch(routeNodes, design, [47, 94], [329, 94], 1).path, [[47, 94], ...row(70.5, 94, 282), [329, 94]]);
+
+    // An existing road along the creek is as it's built - the route follows it
+    const road = {'type': 'road', 'name': 'Creek Rd', 'points': [{'x': 0, 'y': 94}, {'x': 400, 'y': 94}]};
+    const roadNodes = lattice([creek, road], true);
+    assert.deepEqual([roadNodes.moveRoads[0][node], roadNodes.moveChannels[0][node]], [1, 0]);
+    assert.deepEqual(routeSearch(roadNodes, design, [47, 94], [329, 94], 1).path, row(94, 47, 329));
+});
 
 
 test('routeSearch, no route', () => {

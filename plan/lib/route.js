@@ -35,10 +35,13 @@ const headingCount = moves.length + 1;
 // the route follows the existing roads where that's cheaper than a new road, and joins and leaves them where it's
 // cheapest.
 //
+// A new road's surface doesn't overlie a stream, but where it crosses it - a move that comes within the road's half-width
+// of a stream, and doesn't cross it, runs in the stream's channel (routeSearch doesn't take it).
+//
 // Returns the lattice object for the routeSearch function - the "lattice" spacing, its "nX" by "nY" nodes, and each
 // move's arrays of its cost from every node ("moveCosts" - infinite where there's no move), the ground's grade along it
-// ("moveGrades"), whether it's along an existing road ("moveRoads"), and the number of streams it crosses
-// ("moveCulverts").
+// ("moveGrades"), whether it's along an existing road ("moveRoads"), the number of streams it crosses ("moveCulverts"),
+// and whether it runs in a stream's channel ("moveChannels").
 export function routeLattice(topo, design, slopeWeight, roads = null) {
     // The lattice is as fine as the minimum radius' turns allow (a turn is 22.5 degrees a step) - a finer lattice finds
     // a cheaper road, on gentler ground
@@ -81,8 +84,8 @@ export function routeLattice(topo, design, slopeWeight, roads = null) {
         (fraction) => nearestLine(roads, x1 + fraction * (x2 - x1), y1 + fraction * (y2 - y1), roadTolerance) !== null
     );
 
-    // A move is at most two lattice steps, so only the nodes near a stream segment can cross it
-    const margin = 3 * lattice;
+    // A move is at most two lattice steps, so only the nodes near a stream segment can cross it, or run in its channel
+    const margin = 3 * lattice + design.halfWidth;
     const latticeFirst = (v1, v2) => Math.max(0, Math.floor((Math.min(v1, v2) - margin) / lattice));
     const latticeEnd = (v1, v2, count) => Math.min(count, Math.ceil((Math.max(v1, v2) + margin) / lattice) + 1);
 
@@ -92,6 +95,7 @@ export function routeLattice(topo, design, slopeWeight, roads = null) {
     const moveGrades = [];
     const moveRoads = [];
     const moveCulverts = [];
+    const moveChannels = [];
     const section = new Float64Array(6);
     for (const [dx, dy] of moves) {
         const length = Math.sqrt(dx * dx + dy * dy) * lattice;
@@ -101,6 +105,7 @@ export function routeLattice(topo, design, slopeWeight, roads = null) {
         const grades = new Float64Array(nodeCount);
         const roadMoves = new Uint8Array(nodeCount);
         const culverts = new Uint8Array(nodeCount);
+        const channels = new Uint8Array(nodeCount);
         for (let row = 0; row < nY; row++) {
             for (let col = 0; col < nX; col++) {
                 // The move's end is within the topography, and neither it nor the node is within an exclusion area?
@@ -139,8 +144,11 @@ export function routeLattice(topo, design, slopeWeight, roads = null) {
             }
         }
 
-        // The streams the move crosses - each needs a culvert (an existing road has its own)
+        // The streams the move crosses - each needs a culvert (an existing road has its own) - and the streams it runs in
+        // the channel of: it's within the road's half-width of the stream, and it doesn't cross it
         for (const {points} of streams) {
+            const crossing = new Set();
+            const near = new Set();
             for (let ixPoint = 1; ixPoint < points.length; ixPoint++) {
                 const point1 = points[ixPoint - 1];
                 const point2 = points[ixPoint];
@@ -148,15 +156,26 @@ export function routeLattice(topo, design, slopeWeight, roads = null) {
                 const colEnd = latticeEnd(point1.x, point2.x, nX);
                 for (let row = latticeFirst(point1.y, point2.y); row < rowEnd; row++) {
                     for (let col = latticeFirst(point1.x, point2.x); col < colEnd; col++) {
+                        const node = row * nX + col;
+                        if (roadMoves[node]) {
+                            continue;
+                        }
                         const x1 = col * lattice;
                         const y1 = row * lattice;
                         const x2 = x1 + dx * lattice;
                         const y2 = y1 + dy * lattice;
-                        if (!roadMoves[row * nX + col] &&
-                            segmentIntersect(x1, y1, x2, y2, point1.x, point1.y, point2.x, point2.y) !== null) {
-                            culverts[row * nX + col] += 1;
+                        if (segmentIntersect(x1, y1, x2, y2, point1.x, point1.y, point2.x, point2.y) !== null) {
+                            culverts[node] += 1;
+                            crossing.add(node);
+                        } else if (segmentDistance(x1, y1, x2, y2, point1.x, point1.y, point2.x, point2.y) < design.halfWidth) {
+                            near.add(node);
                         }
                     }
+                }
+            }
+            for (const node of near) {
+                if (!crossing.has(node)) {
+                    channels[node] = 1;
                 }
             }
         }
@@ -165,8 +184,9 @@ export function routeLattice(topo, design, slopeWeight, roads = null) {
         moveGrades.push(grades);
         moveRoads.push(roadMoves);
         moveCulverts.push(culverts);
+        moveChannels.push(channels);
     }
-    return {lattice, nX, nY, moveLengths, moveCosts, moveGrades, moveRoads, moveCulverts};
+    return {lattice, nX, nY, moveLengths, moveCosts, moveGrades, moveRoads, moveCulverts, moveChannels};
 }
 
 
@@ -175,7 +195,8 @@ export function routeLattice(topo, design, slopeWeight, roads = null) {
 // the lattice's and its climb beyond the design grade, weighted by "gradeWeight" - the climb must be absorbed by
 // earthwork (soft, up to "softBand" over the design grade, less "gradeMargin") or it makes the end unreachable (hard).
 // A turning move is limited to the switchback grade, and a move that crosses a stream has a culvert - a turning move's,
-// too. "startHeading" is the heading at the start (the previous leg's final heading), or null.
+// too. A new road's move doesn't run in a stream's channel, but from the start point or to the end point (a road's
+// point may be on a stream). "startHeading" is the heading at the start (the previous leg's final heading), or null.
 //
 // The lattice's "barrier", if it has one, is its nodes that the route doesn't go through (corridorBarrier).
 //
@@ -188,7 +209,7 @@ export function routeLattice(topo, design, slopeWeight, roads = null) {
 export function routeSearch(
     routeNodes, design, start, end, gradeWeight, startHeading = null, softBand = 0.03, gradeMargin = 0, endHeading = null
 ) {
-    const {lattice, nX, nY, moveLengths, moveCosts, moveGrades, moveRoads, moveCulverts, barrier = null} = routeNodes;
+    const {lattice, nX, nY, moveLengths, moveCosts, moveGrades, moveRoads, moveCulverts, moveChannels, barrier = null} = routeNodes;
     const {costLength, costCulvert} = design;
     const moveCount = moves.length;
     const nodeCount = nX * nY;
@@ -246,6 +267,11 @@ export function routeSearch(
             if (turn > 1 && !roadMove) {
                 continue;
             }
+            const [dx, dy] = moves[nextHeading];
+            const nextNode = node + dy * nX + dx;
+            if (!roadMove && moveChannels[nextHeading][node] === 1 && node !== startNode && nextNode !== endNode) {
+                continue;
+            }
             let moveCost = moveCosts[nextHeading][node];
             if (moveCost === Infinity) {
                 continue;
@@ -263,8 +289,6 @@ export function routeSearch(
                     moveCost += costCulvert;
                 }
             }
-            const [dx, dy] = moves[nextHeading];
-            const nextNode = node + dy * nX + dx;
             if (barrier !== null && barrier[nextNode] === 1) {
                 continue;
             }

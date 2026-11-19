@@ -124,8 +124,12 @@ limits, within the maximum cut and fill depth of the ground), and places the str
 in for the earthwork a road needs there - it isn't a cost, so no one weight of it is right. A route is searched with
 three weights (1, 0.5, and 0.25), each search's road is designed, and the route's road is the one with the lowest
 cost score - it's never worse than the first weight's road, by its cost score or its design warnings
-(`--grade-weight` searches with one weight). It's a port of the project's first planning tools, which were Python (they
-digitized a topographic map image) - their results are the engineering tests' expectations
+(`--grade-weight` searches with one weight). A move that crosses a stream is charged its culvert, whether it turns or
+not, and a new road's move doesn't run in a stream's channel - within the road's half-width of a stream, without crossing
+it - but from a leg's start point or to its end point (a road's point may be on a stream). An existing road is as it's
+built. The search can't see what a road's profile will need - its sags' cross drains, or borrow - so it's the road's
+cost score, not its search, that chooses between the weights' roads. It's a port of the project's first planning tools,
+which were Python (they digitized a topographic map image) - their results are the engineering tests' expectations
 (`test/expected/pythonTools.json`).
 
 The route search follows the plan's existing roads (its `road` features, `lib/roads.js`) where that costs less than

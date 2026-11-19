@@ -233,7 +233,7 @@ test('planRoad', async () => {
     assert.deepEqual(result.lines.filter((line) => /^Notes|^Option \d|^Wrote/.test(line)), [
         'Notes: avoid "Barn" - an exclusion area from x 300 to 380, y 60 to 120',
         'Option 0: "New Road" - cost score 72.4, design warnings: 0',
-        'Option 1: "North Corridor" - cost score 85.0, design warnings: 0'
+        'Option 1: "North Corridor" - cost score 85.1, design warnings: 0'
     ]);
     assert.deepEqual(Object.keys(result), ['code', 'lines', 'plan']);
     assert.deepEqual([statuses[0], statuses.at(-1)], [

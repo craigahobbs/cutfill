@@ -102,10 +102,10 @@ export const optionsLines = `\
 Option "New Road": 377 meters long, 102 alignment points, max grade 3.6%, max cut 0.0, max fill 0.1
 Structures: 1 culvert, 3 turnouts
 Cost score: 72.5, design warnings: 0
-Option "North Corridor": 463 meters long, 125 alignment points, max grade 2.5%, max cut 0.1, max fill 0.1
-Structures: 2 culverts, 3 turnouts
-Cost score: 93.3, design warnings: 0
-Other corridor: "North Corridor" (through 270,352) - its middle is an average of 95 meters from the standard options
+Option "North Corridor": 464 meters long, 125 alignment points, max grade 2.0%, max cut 0.1, max fill 0.1
+Structures: 1 culvert, 3 turnouts
+Cost score: 85.1, design warnings: 0
+Other corridor: "North Corridor" (through 262,352) - its middle is an average of 105 meters from the standard options
 `;
 
 
