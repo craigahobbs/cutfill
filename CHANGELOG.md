@@ -2,6 +2,8 @@
 
 ## 1.0.1 (2026-11-19)
 
+- [e89c718](https://github.com/craigahobbs/sageroad/commit/e89c718) - Remove the icon from the README
+
 - [d83b8f0](https://github.com/craigahobbs/sageroad/commit/d83b8f0) - Enlarge the README's icon to 128 pixels
 
 - [2b201f6](https://github.com/craigahobbs/sageroad/commit/2b201f6) - Enlarge the README's icon
