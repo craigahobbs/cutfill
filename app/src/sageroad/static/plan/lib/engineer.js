@@ -1,9 +1,10 @@
 // engineer.js - engineer a plan's road options: a road option (its route's alignment, its profile, and its structures),
 // the plan's standard options, and another corridor (a port of the Python planning tools', but for the existing roads
-// the route follows, and the other corridor)
+// the route follows, the other corridor, and the via points a road passes by - a road doesn't overlap itself)
 
 import {
-    corridorBarrier, followRoads, polylineStations, resamplePolyline, routeLattice, routeSearch, smoothCurves, viaTurnBacks
+    corridorBarrier, followRoads, halfCircleMoves, polylineStations, resamplePolyline, roadOverlaps, routeLattice, routeSearch,
+    smoothCurves, viaTurnBacks
 } from './route.js';
 import {designStructures, existingMask} from './structures.js';
 import {drawAreaText, drawCrossings} from './draws.js';
@@ -301,7 +302,8 @@ const topoLattices = new WeakMap();
 // of their roads (bestRoad). The option is added to the plan's options, or it replaces the option of its name. Returns
 // the report's "lines" and the "error" - null, or why there's no option (the plan is as it was - "isGrade" is true if
 // there's no road within the grade limit) - and if there's an option, whether it's at the site's edge ("atEdge" - the
-// site may be too small for it), and whether it turns back at a via point ("turnsBack").
+// site may be too small for it), whether it passes by a via point or turns back at one ("turnsBack"), and the via points
+// it passes by ("passed" - routeAlignment's).
 export function engineerOption(plan, topo, commandArgs) {
     const design = createDesign(plan, commandArgs);
     const planOptions = plan.options;
@@ -322,17 +324,22 @@ export function engineerOption(plan, topo, commandArgs) {
         const lines = [];
         const designed = routeAlignment(plan, topo, design, roads, latticeNodes, {...commandArgs, gradeWeight}, lines, pathDesigns);
 
-        // A road that isn't within the grade limit isn't a road
+        // A road that overlaps itself, or isn't within the grade limit, isn't a road
         let error = null;
+        let isGrade = false;
         if (designed === null) {
             error = 'no route found (blocked by exclusion areas or the topography boundary?)';
+        } else if (designed.overlap !== null) {
+            error = `no road that doesn't overlap itself - it turns back over itself at station ${pyFixed(designed.overlap, 0)} ` +
+                '(try other via points)';
         } else if (designed.failure !== null) {
             const grade = `${fixedTrim(design.grade * 100, 1)}% grade limit`;
             error = `no road within the ${grade} - the profile ${designed.failure} (try other via points, a longer corridor, or a ` +
                 'steeper grade)';
+            isGrade = true;
         }
         if (error !== null) {
-            failed ??= {lines, error, 'isGrade': designed !== null};
+            failed ??= {lines, error, isGrade};
         } else {
             // Structures (the existing roads within the road's length, measured along the option's alignment points as
             // the viewer does - an existing road to the road's end is to its last station, so nothing is placed between
@@ -375,7 +382,7 @@ export function engineerOption(plan, topo, commandArgs) {
     // Report
     lines.push(...optionReport(plan, topo, design, roads, option, designed, existingRoads), ...designed.notes);
     const atEdge = edgeStation(topo, design, designed.x, designed.y) !== null;
-    return {lines, 'error': null, atEdge, 'turnsBack': designed.notes.length > 0};
+    return {lines, 'error': null, atEdge, 'turnsBack': designed.notes.length > 0, 'passed': designed.passed};
 }
 
 
@@ -412,62 +419,60 @@ export function bestRoad(roads) {
 
 
 // Design a route's alignment and its profile - the least-cost alignment of a route lattice ("routeNodes") from the
-// plan's start point, through the via points, to its end point. If the profile can't meet the grade limits
+// plan's start point, through the via points, to its end point (routePath). If the profile can't meet the grade limits
 // (gradeFailure), the route is searched again with stricter grade penalties (a line of "lines" reports each). Returns
 // the alignment's "x" and "y" coordinates and "stations", its "profile", "ground", and "sideSlope" (designProfile), its
-// "existingRoads" ([station, end station] ranges), its "notes" (the report's lines for the via points it turns back
-// at), and its "failure" (the last search's gradeFailure) - or null if there's no route. "pathDesigns" are the designs
-// of the paths that were searched before (a map) - the searches with other grade penalty weights often find the same
-// path, and a path's design is the same.
+// "existingRoads" ([station, end station] ranges), its "notes" (the report's lines for the via points it passes by, or
+// turns back at), the via points it passes by ("passed" - each one's "via" index, its "distance" from the road, and
+// the "station" where the road is nearest it), and its "failure" (the last search's gradeFailure) - or null if there's
+// no route. A road that overlaps itself isn't designed - it has no profile, and its "overlap" is the station where it
+// first overlaps itself (it's null for a road). "pathDesigns" are the designs of the paths that were searched before
+// (a map) - the searches with other grade penalty weights often find the same path, and a path's design is the same.
 function routeAlignment(plan, topo, design, roads, routeNodes, commandArgs, lines, pathDesigns) {
     // The existing roads are the argument's ranges, or the plan's existing roads that the route follows
     const followsRoads = !commandArgs.allNew && commandArgs.existingRoads === null;
-    let existingRoads = commandArgs.existingRoads ?? [];
 
-    // Search for the horizontal alignment through the via points - each leg starts with the previous leg's heading.
-    // The legs, and the searches with stricter grades, search one lattice.
-    const waypoints = [[plan.start.x, plan.start.y], ...commandArgs.via, [plan.end.x, plan.end.y]];
+    // A path's alignment: its runs along existing roads are the roads' lines - the rest is smoothed to the minimum radius
     const {lattice} = routeNodes;
-    let alignment;
-    let designed;
-    let failure;
-    for (const [ixSearch, [softBand, gradeMargin]] of routeSearches.entries()) {
-        const path = [];
-        const existing = [];
-        let heading = null;
-        for (let ixWaypoint = 1; ixWaypoint < waypoints.length; ixWaypoint++) {
-            const leg = routeSearch(
-                routeNodes, design, waypoints[ixWaypoint - 1], waypoints[ixWaypoint], commandArgs.gradeWeight, heading, softBand,
-                gradeMargin
-            );
-            if (leg === null) {
-                return null;
-            }
-            ({heading} = leg);
-            path.push(...(path.length === 0 ? leg.path : leg.path.slice(1)));
-            existing.push(...(existing.length === 0 ? leg.existing : leg.existing.slice(1)));
-        }
-
-        // The route's runs along existing roads are the roads' lines - the rest is smoothed to the minimum radius
+    const interval = Math.max(design.stationInterval, Math.min(lattice, topo.spacing) * 0.5);
+    const pathDesign = (path, existing) => {
         const pathKey = `${path.join(' ')}|${existing.join('')}`;
-        let pathDesign = pathDesigns.get(pathKey);
-        if (pathDesign === undefined) {
-            const interval = Math.max(design.stationInterval, Math.min(lattice, topo.spacing) * 0.5);
+        if (!pathDesigns.has(pathKey)) {
             const followed = followRoads(path, existing, roads, lattice, 2 * design.minRadius, design.minRadius);
             const smooth = smoothCurves(followed.points, interval, design.minRadius, followed.ranges);
-            const pathAlignment = resamplePolyline(smooth.x, smooth.y, interval);
-            const pathRoads = followsRoads ? smooth.ranges : existingRoads;
-            pathDesign = {
-                'alignment': pathAlignment,
-                'existingRoads': pathRoads,
-                'designed': designProfile(
-                    topo, design, pathAlignment.x, pathAlignment.y, pathAlignment.stations, existingMask(pathAlignment.stations, pathRoads)
-                )
-            };
-            pathDesigns.set(pathKey, pathDesign);
+            pathDesigns.set(pathKey, {
+                'alignment': resamplePolyline(smooth.x, smooth.y, interval),
+                'existingRoads': followsRoads ? smooth.ranges : (commandArgs.existingRoads ?? []),
+                'designed': null
+            });
         }
-        ({alignment, existingRoads, designed} = pathDesign);
-        failure = gradeFailure(design, alignment.stations, designed, plan.units);
+        return pathDesigns.get(pathKey);
+    };
+
+    // Search for the horizontal alignment through the via points. The legs, and the searches with stricter grades,
+    // search one lattice.
+    const waypoints = [[plan.start.x, plan.start.y], ...commandArgs.via, [plan.end.x, plan.end.y]];
+    let routed;
+    let failure = null;
+    for (const [ixSearch, [softBand, gradeMargin]] of routeSearches.entries()) {
+        routed = routePath(
+            (start, end, heading, endHeading) => routeSearch(
+                routeNodes, design, start, end, commandArgs.gradeWeight, heading, softBand, gradeMargin, endHeading
+            ),
+            waypoints, design, pathDesign
+        );
+        if (routed === null) {
+            return null;
+        } else if (routed.overlap !== null) {
+            break;
+        }
+
+        // The path's profile
+        const {alignment, existingRoads} = routed.design;
+        routed.design.designed ??= designProfile(
+            topo, design, alignment.x, alignment.y, alignment.stations, existingMask(alignment.stations, existingRoads)
+        );
+        failure = gradeFailure(design, alignment.stations, routed.design.designed, plan.units);
         if (failure === null) {
             break;
         }
@@ -475,13 +480,124 @@ function routeAlignment(plan, topo, design, roads, routeNodes, commandArgs, line
             lines.push(`The profile ${failure} - searching with stricter grades`);
         }
     }
+    const {alignment, existingRoads, designed} = routed.design;
+    const {x, y, stations} = alignment;
 
-    // A via point the road turns back at is off its corridor - the road goes out to it and returns
-    const notes = viaTurnBacks(alignment.x, alignment.y, alignment.stations, commandArgs.via, 10 * design.minRadius).map(
-        ({via, station}) => `NOTE: the road turns back at the via point ${commandArgs.via[via].join(',')} (station ` +
-            `${pyFixed(station, 0)}) - if it isn't a switchback you meant, move the via point along the road's corridor, or drop it`
-    );
-    return {...alignment, ...designed, existingRoads, notes, failure};
+    // A via point that's a dead end off the road's way is passed by - the road doesn't go out to it and return
+    const {via} = commandArgs;
+    const passed = routed.passed.map((ixVia) => {
+        const [viaX, viaY] = via[ixVia];
+        const ixNearest = nearestPoint(x, y, via[ixVia]);
+        return {'via': ixVia, 'distance': Math.hypot(x[ixNearest] - viaX, y[ixNearest] - viaY), 'station': stations[ixNearest]};
+    });
+    const notes = passed.map(({'via': ixVia, distance, station}) => (
+        `NOTE: the via point ${via[ixVia].join(',')} is a dead end off the road's way - the road would go out to it and return, ` +
+            `so it passes it by, ${pyFixed(distance, 0)} ${plan.units} from it (station ${pyFixed(station, 0)})`
+    ));
+
+    // A via point the road turns back at is off its corridor, too
+    for (const {'via': ixVia, station} of viaTurnBacks(x, y, stations, via, 10 * design.minRadius)) {
+        if (!routed.passed.includes(ixVia)) {
+            notes.push(
+                `NOTE: the road turns back at the via point ${via[ixVia].join(',')} (station ${pyFixed(station, 0)}) - if it isn't a ` +
+                    'switchback you meant, move the via point along the road\'s corridor, or drop it'
+            );
+        }
+    }
+    return {
+        ...alignment, ...designed, existingRoads, notes, passed, failure,
+        'overlap': routed.overlap !== null ? stations[routed.overlap] : null
+    };
+}
+
+
+// Search for a route's path through its waypoints (the start point, the via points, and the end point - [x, y] arrays) -
+// each leg starts with the previous leg's heading. "searchLeg" is the legs' search function (routeSearch - its
+// arguments are a leg's start point, end point, start heading, and end heading), and "pathDesign" is a function that
+// returns a path's design: an object with its "alignment".
+//
+// A road doesn't overlap itself (roadOverlaps). A road whose leg to a via point and leg from it overlap goes out to the
+// via point and returns the way it came - the via point is a dead end off the road's way. So the road passes it by:
+// its way out and back is cut from its path, from a half circle of moves before the legs overlap to a half circle of
+// moves after (the legs turn to the dead end, and from it), and the path's ends are joined by the least-cost route
+// between them, with their headings.
+//
+// Returns the path's "design", the indexes of the via points it passes by ("passed"), and its "overlap" - null, or the
+// alignment point where it first overlaps itself, if it does yet (it's not a road). Returns null if there's no route.
+function routePath(searchLeg, waypoints, design, pathDesign) {
+    const points = [...waypoints];
+    const vias = waypoints.map((unused, ixPoint) => ixPoint - 1);
+    const legs = [];
+    const passed = [];
+    for (;;) {
+        // Search the legs that aren't searched yet
+        for (let ixLeg = legs.length; ixLeg < points.length - 1; ixLeg++) {
+            const leg = searchLeg(points[ixLeg], points[ixLeg + 1], legs[ixLeg - 1]?.heading ?? null, null);
+            if (leg === null) {
+                return null;
+            }
+            legs.push(leg);
+        }
+        const path = legs.flatMap((leg, ixLeg) => (ixLeg === 0 ? leg.path : leg.path.slice(1)));
+        const existing = legs.flatMap((leg, ixLeg) => (ixLeg === 0 ? leg.existing : leg.existing.slice(1)));
+        const pathDesigned = pathDesign(path, existing);
+        const {x, y, stations} = pathDesigned.alignment;
+        const overlaps = roadOverlaps(x, y, stations, design.width, Math.PI * design.minRadius);
+        if (overlaps === null) {
+            return {'design': pathDesigned, passed, 'overlap': null};
+        }
+
+        // The first via point that's a dead end - the first and last alignment points of its legs' overlap
+        const ixPoints = points.map((point) => nearestPoint(x, y, point));
+        let ixPassed = null;
+        let ixFirst = null;
+        let ixLast = null;
+        for (let ixPoint = 1; ixPoint < points.length - 1 && ixPassed === null; ixPoint++) {
+            const [ixBefore, ixVia, ixAfter] = ixPoints.slice(ixPoint - 1, ixPoint + 2);
+            for (let ix = ixBefore; ix < ixVia; ix++) {
+                if (overlaps[ix] > ixVia) {
+                    ixPassed = ixPoint;
+                    ixFirst ??= ix;
+                    ixLast = Math.max(ixLast, Math.min(overlaps[ix], ixAfter));
+                }
+            }
+        }
+        if (ixPassed === null) {
+            return {'design': pathDesigned, passed, 'overlap': overlaps.findIndex((ixOverlap) => ixOverlap !== -1)};
+        }
+
+        // Cut the way out and back from the path, and join its ends - the leg to the via point and the leg from it are
+        // one leg, to the next waypoint. If it's joined at the next waypoint, its heading there is its own, and the
+        // legs after it are searched again.
+        const legTo = legs[ixPassed - 1];
+        const legFrom = legs[ixPassed];
+        const pathPoint = (leg, ix) => nearestPoint(leg.path.map((point) => point[0]), leg.path.map((point) => point[1]), [x[ix], y[ix]]);
+        const ixCut = Math.max(0, pathPoint(legTo, ixFirst) - halfCircleMoves);
+        const ixJoin = Math.min(legFrom.path.length - 1, pathPoint(legFrom, ixLast) + halfCircleMoves);
+        const isEnd = ixJoin === legFrom.path.length - 1;
+        const joined = searchLeg(legTo.path[ixCut], legFrom.path[ixJoin], legTo.headings[ixCut], isEnd ? null : legFrom.headings[ixJoin]);
+        legs.splice(ixPassed - 1, isEnd ? legs.length : 2, {
+            'path': [...legTo.path.slice(0, ixCut + 1), ...joined.path.slice(1), ...legFrom.path.slice(ixJoin + 1)],
+            'existing': [...legTo.existing.slice(0, ixCut + 1), ...joined.existing.slice(1), ...legFrom.existing.slice(ixJoin + 1)],
+            'headings': [...legTo.headings.slice(0, ixCut + 1), ...joined.headings.slice(1), ...legFrom.headings.slice(ixJoin + 1)],
+            'heading': isEnd ? joined.heading : legFrom.heading
+        });
+        passed.push(vias[ixPassed]);
+        points.splice(ixPassed, 1);
+        vias.splice(ixPassed, 1);
+    }
+}
+
+
+// Find the alignment point (of "x" and "y" coordinate arrays) nearest a point (an [x, y] array) - returns its index
+function nearestPoint(x, y, [pointX, pointY]) {
+    let ixNearest = 0;
+    for (let ix = 1; ix < x.length; ix++) {
+        if (Math.hypot(x[ix] - pointX, y[ix] - pointY) < Math.hypot(x[ixNearest] - pointX, y[ixNearest] - pointY)) {
+            ixNearest = ix;
+        }
+    }
+    return ixNearest;
 }
 
 

@@ -9,6 +9,7 @@ import {addDraws, drawCrossings} from './draws.js';
 import {
     corridorNames, corridorOption, engineerOption, keepOptions, roadArguments, roadSurfaces, standardOptions
 } from './engineer.js';
+import {number as formatNumber, round} from '../../viewer/lib/format.js';
 import {layoutPoint, siteLayout} from './terrain.js';
 import {orderPlan, planCriteria, planTopo, siteMarkNames, validateSitePlan} from '../../viewer/lib/model.js';
 import {planMapBase64, planPlot} from './plot.js';
@@ -18,7 +19,6 @@ import {describePlan} from './draft.js';
 import {existingMask} from './structures.js';
 import {planLatLong} from '../../viewer/lib/geo.js';
 import {polylineStations} from './route.js';
-import {round} from '../../viewer/lib/format.js';
 
 
 // The steps of a plan - their keys (the status function's), and what they do. The notes are read only with a model.
@@ -278,6 +278,7 @@ export async function autoPlan(io, planPath, site, planValue, options = {}) {
     let corridor;
     let names;
     let placeLines;
+    let placeNotes;
     let placeUnhandled;
     const draws = [];
     const addCrossedDraws = (optionNames) => {
@@ -326,6 +327,7 @@ export async function autoPlan(io, planPath, site, planValue, options = {}) {
 
         // The options through the places to pass through
         placeLines = [];
+        placeNotes = [];
         placeUnhandled = [];
         const layout = siteLayout(config);
         const placeNames = siteMarkNames(config, 'passThrough');
@@ -339,9 +341,18 @@ export async function autoPlan(io, planPath, site, planValue, options = {}) {
             }
             await status('options', `Engineering the option "${name}"`);
             const routed = engineerOption(plan, topo, {...roadArgs, name, 'via': [[x, y]]});
-            if (routed.error === null) {
+            if (routed.error === null && routed.passed.length === 0) {
                 names.push(name);
                 placeLines.push(...routed.lines, `Notes: "${name}" passes through "${placeName}"`);
+            } else if (routed.error === null) {
+                // The place is a dead end off the road's way - the road passes it by
+                const passes = `"${name}" passes ${formatNumber(routed.passed[0].distance, 0)} ${units} from "${placeName}"`;
+                names.push(name);
+                placeLines.push(...routed.lines, `Notes: ${passes} - it's a dead end off the road's way`);
+                placeNotes.push(
+                    `${passes} - the place is a dead end off the road's way (the road would go out to it and return), so the road ` +
+                        'passes it by.'
+                );
             } else {
                 placeUnhandled.push(`pass through "${placeName}" - ${routed.error}`);
             }
@@ -391,7 +402,7 @@ export async function autoPlan(io, planPath, site, planValue, options = {}) {
     describePlan(plan, topo, {
         'purpose': directives.purpose,
         'featureNotes': [...markNotes(config, directives), ...(draws.length > 0 ? [drawsNote] : [])],
-        'optionNotes': corridor.note !== null ? [corridor.note] : [],
+        'optionNotes': [...placeNotes, ...(corridor.note !== null ? [corridor.note] : [])],
         limitations
     });
     return result(0, lines);

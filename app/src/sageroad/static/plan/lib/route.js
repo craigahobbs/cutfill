@@ -1,6 +1,6 @@
 // route.js - the road's horizontal alignment: the least-cost route search (which follows the plan's existing roads
 // where that's cheaper than a new road), curve smoothing, and polyline utilities (a port of the Python planning
-// tools', but for the existing roads)
+// tools', but for the existing roads, and a road's overlaps of itself)
 
 import {
     crossSection, featureStreams, groundElevation, groundGradient, sectionCut, sectionFill, sectionSlopeWidth, sectionWall
@@ -15,6 +15,10 @@ const moves = [
     [1, 0], [2, 1], [1, 1], [1, 2], [0, 1], [-1, 2], [-1, 1], [-2, 1],
     [-1, 0], [-2, -1], [-1, -1], [-1, -2], [0, -1], [1, -2], [1, -1], [2, -1]
 ];
+
+
+// The moves of a route's half circle - a route turns a direction a move, so it reverses its heading in no fewer
+export const halfCircleMoves = moves.length / 2;
 
 
 // The number of heading states of a route search node - the 16 move directions, and no heading (the start)
@@ -175,9 +179,15 @@ export function routeLattice(topo, design, slopeWeight, roads = null) {
 //
 // The lattice's "barrier", if it has one, is its nodes that the route doesn't go through (corridorBarrier).
 //
+// "endHeading" is the heading at the end, or null for any - the route's last move is in its direction (the route joins
+// another route's path at one of its points, with the path's heading there).
+//
 // Returns the route's "path" (an array of [x, y] points), its points' "existing" flags (the move to the point is along
-// an existing road), the "lattice" spacing, and the final "heading" - or null if there's no route.
-export function routeSearch(routeNodes, design, start, end, gradeWeight, startHeading = null, softBand = 0.03, gradeMargin = 0) {
+// an existing road) and "headings" (the heading of the move to the point - the start's is the start heading), the
+// "lattice" spacing, and the final "heading" - or null if there's no route.
+export function routeSearch(
+    routeNodes, design, start, end, gradeWeight, startHeading = null, softBand = 0.03, gradeMargin = 0, endHeading = null
+) {
     const {lattice, nX, nY, moveLengths, moveCosts, moveGrades, moveRoads, moveCulverts, barrier = null} = routeNodes;
     const {costLength, costCulvert} = design;
     const moveCount = moves.length;
@@ -216,7 +226,7 @@ export function routeSearch(routeNodes, design, start, end, gradeWeight, startHe
         }
         const node = Math.floor(state / headingCount);
         const heading = state % headingCount;
-        if (node === endNode) {
+        if (node === endNode && (endHeading === null || heading === endHeading)) {
             finalState = state;
             break;
         }
@@ -274,16 +284,20 @@ export function routeSearch(routeNodes, design, start, end, gradeWeight, startHe
     // Trace the path - it starts and ends at the start and end points
     const path = [];
     const existing = [];
+    const headings = [];
     for (let state = finalState; state !== -1; state = parent[state]) {
         const node = Math.floor(state / headingCount);
+        const heading = state % headingCount;
         path.push([(node % nX) * lattice, Math.floor(node / nX) * lattice]);
-        existing.push(parent[state] !== -1 && moveRoads[state % headingCount][Math.floor(parent[state] / headingCount)] === 1);
+        existing.push(parent[state] !== -1 && moveRoads[heading][Math.floor(parent[state] / headingCount)] === 1);
+        headings.push(heading === moveCount ? null : heading);
     }
     path.reverse();
     existing.reverse();
+    headings.reverse();
     path[0] = [start[0], start[1]];
     path[path.length - 1] = [end[0], end[1]];
-    return {path, existing, lattice, 'heading': finalState % headingCount};
+    return {path, existing, headings, lattice, 'heading': finalState % headingCount};
 }
 
 
@@ -397,6 +411,62 @@ export function viaTurnBacks(x, y, stations, vias, reach) {
         }
     });
     return turnBacks;
+}
+
+
+// Find where a road overlaps itself - a road doesn't cross itself, or run along itself. "x", "y", and "stations" are the
+// road's alignment, and "width" is the road's width: two parts of the road overlap where their center lines are within
+// the width of each other (their beds share ground). The parts of a curve are that near each other, so two parts
+// overlap only if they're more than "minGap" apart along the road - a half circle of the minimum radius (a road's
+// curves are no tighter, so parts that far apart are a full turn's width apart, at least). Returns the alignment
+// points' overlaps (an Int32Array - the last point of the last part that overlaps the part that begins at a point, or -1
+// if none does), or null if the road doesn't overlap itself.
+export function roadOverlaps(x, y, stations, width, minGap) {
+    // The road's parts are its alignment's segments - each is in its first point's cell, and the first points of two
+    // segments that are within the width of each other are within a cell's size
+    let maxLength = 0;
+    for (let ix = 1; ix < x.length; ix++) {
+        maxLength = Math.max(maxLength, stations[ix] - stations[ix - 1]);
+    }
+    const cellSize = width + 2 * maxLength;
+    const cells = new Map();
+    let overlaps = null;
+    for (let ix = 0; ix < x.length - 1; ix++) {
+        const row = Math.floor(y[ix] / cellSize);
+        const col = Math.floor(x[ix] / cellSize);
+        for (let cellRow = row - 1; cellRow <= row + 1; cellRow++) {
+            for (let cellCol = col - 1; cellCol <= col + 1; cellCol++) {
+                for (const ixOther of cells.get(`${cellRow},${cellCol}`) ?? []) {
+                    if (stations[ix] - stations[ixOther + 1] > minGap && segmentDistance(
+                        x[ix], y[ix], x[ix + 1], y[ix + 1], x[ixOther], y[ixOther], x[ixOther + 1], y[ixOther + 1]
+                    ) < width) {
+                        overlaps ??= new Int32Array(x.length).fill(-1);
+                        overlaps[ixOther] = ix + 1;
+                    }
+                }
+            }
+        }
+        const key = `${row},${col}`;
+        if (!cells.has(key)) {
+            cells.set(key, []);
+        }
+        cells.get(key).push(ix);
+    }
+    return overlaps;
+}
+
+
+// Get the distance between two segments - zero if they cross
+function segmentDistance(x1, y1, x2, y2, x3, y3, x4, y4) {
+    if (segmentIntersect(x1, y1, x2, y2, x3, y3, x4, y4) !== null) {
+        return 0;
+    }
+    const first = {x1, y1, x2, y2};
+    const second = {'x1': x3, 'y1': y3, 'x2': x4, 'y2': y4};
+    return Math.min(
+        segmentNearest(second, x1, y1)[0], segmentNearest(second, x2, y2)[0], segmentNearest(first, x3, y3)[0],
+        segmentNearest(first, x4, y4)[0]
+    );
 }
 
 

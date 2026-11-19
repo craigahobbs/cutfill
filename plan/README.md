@@ -113,7 +113,7 @@ Another corridor is the least-cost road outside a band around the other standard
 the points are outside it). Its road's middle point is its via point, and its option is `route`'s road through the via
 point (without the band, and with one grade penalty weight, 0.5), named for its middle's side of the least-cost road's
 middle ("West Corridor"). It's kept if
-it's a real choice: it's within the grade limit, it doesn't turn back at its via point, its middle is an average of
+it's a real choice: it's within the grade limit, it doesn't pass its via point by or turn back at it, its middle is an average of
 the band's half-width from the other standard options, at least, and it costs at most three times the least-cost
 standard option. If it isn't kept, `options` says why, and the plan's description does, too.
 
@@ -138,10 +138,19 @@ A road is within its grade limit. Where a route's profile can't be - at the desi
 point's ground, or an existing road's - `route` searches again with stricter grades, and if there's still no road,
 it's an error and no option is written.
 
+A road doesn't overlap itself - it doesn't cross itself, or run back along itself (`roadOverlaps` - its center line
+isn't within its width of itself, but for the parts within a half circle of the minimum radius of each other, along
+the road). A route's legs are searched one at a time, each from the last one's end - so a road through a via point
+that's a dead end off its way goes out to it and returns the way it came, and overlaps itself. That road passes the
+via point by (`routePath`): its way out and back is cut from its path, from a half circle of moves before its legs
+overlap to a half circle of moves after, and the path's ends are joined by the least-cost route between them, with
+their headings. If a road overlaps itself yet, it's an error and no option is written.
+
 `route` reports the option's existing roads (and their grades as they're built, which aren't designed), structure
 counts, cost score, and design warning count - and notes a road within its minimum radius of the site's edge (the
-site may be too small for the best route), a via point that the road turns back at (the straight line between the
-road's points 10 minimum radii before and after the via point is less than half their distance along the road), and
+site may be too small for the best route), a via point that the road passes by (and how near it passes), a via point
+that the road turns back at (the straight line between the road's points 10 minimum radii before and after the via
+point is less than half their distance along the road), and
 the unmapped draws that the road crosses - a draw that isn't a stream of the plan has no culvert there.
 
 The descriptions' draft (`lib/draft.js`) has the facts the tools know: the site's points and criteria, the features

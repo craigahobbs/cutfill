@@ -116,6 +116,42 @@ test('auto, the plan config\'s marks', async () => {
 });
 
 
+test('auto, a place to pass through that\'s a dead end', async () => {
+    // The plan config's place to pass through is at the end of its road that's a dead end, off the road's way - the road
+    // would go out to it along the road and return, so its option passes it by. The report and the descriptions say so.
+    const base = autoSite();
+    const site = autoSite({
+        'roads': [{'name': 'Mine Rd', 'points': [[300, 261], [420, 100]].map(([x, y]) => siteLatLong(base, x, y))}],
+        'passThrough': [{'name': 'Mine', ...siteLatLong(base, 420, 100)}]
+    });
+    const io = await runAuto(site);
+    assert.equal(io.code, 0);
+    const lines = io.output.join('').split('\n');
+    assert.deepEqual(lines.filter((line) => /^Option|^Notes|^NOTE: the via/.test(line)), [
+        'Option "New Road": 377 meters long, 102 alignment points, max grade 3.6%, max cut 0.1, max fill 0.1',
+        'Option "North Corridor": 401 meters long, 108 alignment points, max grade 3.6%, max cut 0.1, max fill 0.1',
+        'Option "Via Mine": 388 meters long, 105 alignment points, max grade 3.6%, max cut 0.0, max fill 0.1',
+        'NOTE: the via point 420,100 is a dead end off the road\'s way - the road would go out to it and return, so it passes it ' +
+            'by, 166 meters from it (station 224)',
+        'Notes: "Via Mine" passes 166 meters from "Mine" - it\'s a dead end off the road\'s way',
+        'Option 0: "New Road" - cost score 72.6, design warnings: 0',
+        'Option 1: "Via Mine" - cost score 74.3, design warnings: 0',
+        'Option 2: "North Corridor" - cost score 76.9, design warnings: 0'
+    ]);
+    assert.deepEqual(io.descriptions.filter((line) => /^- (Existing|Places)/.test(line) || line.startsWith('**Options.**')), [
+        '- Existing roads: Mine Rd',
+        '- Places to pass through: Mine',
+        '**Options.** "Via Mine" passes 166 meters from "Mine" - the place is a dead end off the road\'s way (the road would go out ' +
+            'to it and return), so the road passes it by.'
+    ]);
+
+    // The option doesn't follow the dead end's road - it's a new road, near the standard option's
+    const option = io.plan.options.find(({name}) => name === 'Via Mine');
+    assert.deepEqual(option.structures.filter(({type}) => type === 'existingRoad'), []);
+    assert.ok(Math.min(...option.alignment.map(({x, y}) => Math.hypot(x - 420, y - 100))) > 160);
+});
+
+
 test('auto, the options\' limit', async () => {
     // The site has an existing road from the start point to the end point, and the notes' four places to pass through -
     // the plan keeps its four best options. The site has no topographic map image, so the model is asked of its terrain.

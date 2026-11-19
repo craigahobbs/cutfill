@@ -1,8 +1,10 @@
 import {bestRoad, corridorReason} from '../lib/engineer.js';
-import {blockedPlan, expected, hillPlan, planePlan, roadPlan} from './roadFixtures.js';
+import {blockedPlan, designArgs, expected, hillPlan, planePlan, roadPlan} from './roadFixtures.js';
 import {optionsCommand, optionsUsage, routeCommand, routeUsage} from '../lib/cli.js';
 import {planText, validatePlan} from '../../viewer/lib/model.js';
+import {polylineStations, roadOverlaps} from '../lib/route.js';
 import assert from 'node:assert/strict';
+import {createDesign} from '../lib/design.js';
 import test from 'node:test';
 
 
@@ -142,26 +144,150 @@ test('route, a switchback road', () => {
 
 
 test('route, via points, streams, rock, and an exclusion area', () => {
-    // The Python planning tools' report, then the notes - the road goes out to its second via point and returns, and
-    // it's along the site's edge
+    // The Python planning tools' road went out to its via points and returned - it was 900 meters long, and it crossed
+    // itself. The via points are dead ends off the road's way, so the road passes them by.
     const {result, plan} = runExpected(hillPlan(), 'route-hill');
-    const {code, lines, options} = expected.commands['route-hill'];
-    assert.deepEqual(result, {code, 'lines': [
-        ...lines.slice(0, -1),
-        'NOTE: the road is 5 meters from the site\'s edge at station 431 - the site may be too small for the best route (the site ' +
-            'model\'s "margin")',
-        'NOTE: the road turns back at the via point 150,60 (station 645) - if it isn\'t a switchback you meant, move the via point ' +
-            'along the road\'s corridor, or drop it',
-        lines.at(-1)
+    assert.equal(expected.commands['route-hill'].lines[0],
+        'Option "Hill Road": 900 meters long, 241 alignment points, max grade 9.0%, max cut 2.9, max fill 4.2');
+    assert.deepEqual(result, {'code': 0, 'lines': [
+        'Option "Hill Road": 289 meters long, 79 alignment points, max grade 8.8%, max cut 2.0, max fill 2.4',
+        'Structures: 1 bridge, 2 culverts, 2 turnouts',
+        'Cost score: 321.5, design warnings: 0',
+        'NOTE: the via point 110,90 is a dead end off the road\'s way - the road would go out to it and return, so it passes it ' +
+            'by, 75 meters from it (station 215)',
+        'NOTE: the via point 150,60 is a dead end off the road\'s way - the road would go out to it and return, so it passes it ' +
+            'by, 107 meters from it (station 237)',
+        'Wrote plan.json - run "plan evaluate plan.json" for the full analysis and cost'
     ]});
-    assert.deepEqual(summarize(plan.options, 10), options);
     const [option] = plan.options;
     assert.deepEqual(option.description, ['A road', 'Second line']);
     assert.deepEqual(option.section, {'width': 4.3, 'cutSlope': 1, 'fillSlope': 1.5, 'surface': 'gravel'});
-    assert.equal(lines[0], 'Option "Hill Road": 900 meters long, 241 alignment points, max grade 9.0%, max cut 2.9, max fill 4.2');
-    assert.deepEqual(lines.slice(1, 3), ['Structures: 1 bridge, 7 culverts, 7 turnouts', 'Cost score: 545.8, design warnings: 0']);
+    assert.deepEqual([option.alignment[0], option.alignment.at(-1)], [{'x': 20, 'y': 20, 'z': 51.61}, {'x': 180, 'y': 185, 'z': 64.8}]);
+    assert.equal(alignmentOverlaps(plan, option), null);
     assert.deepEqual([...new Set(option.structures.map(({type}) => type))].sort(), ['bridge', 'culvert', 'turnout']);
     assert.ok('plan' in validatePlan(plan));
+});
+
+
+// Find where an option's road overlaps itself (roadOverlaps) - null if it doesn't
+function alignmentOverlaps(plan, option) {
+    const x = option.alignment.map((point) => point.x);
+    const y = option.alignment.map((point) => point.y);
+    const {minRadius} = createDesign(plan, designArgs());
+    return roadOverlaps(x, y, polylineStations(x, y), option.section.width, Math.PI * minRadius);
+}
+
+
+// A flat plan, 1,600 feet square, with an existing road north from the middle of its road's way - a dead end
+function spurPlan(end) {
+    const plan = planePlan({'size': 81, 'spacing': 20, 'rise': 0});
+    plan.start = {'x': 100, 'y': 400};
+    plan.end = {'x': end, 'y': 400};
+    plan.topography.features = [{'type': 'road', 'name': 'Spur Rd', 'points': [{'x': 800, 'y': 400}, {'x': 800, 'y': 1200}]}];
+    delete plan.options;
+    return plan;
+}
+
+
+test('route, a via point that\'s a dead end', () => {
+    // A via point at the end of an existing road that's a dead end - the road would go out to it along the existing road,
+    // and return along it. The road passes it by: its way out and back is cut, and its ends are joined - it bends
+    // toward the dead end, where it turned to it and from it.
+    const {result, plan} = run(spurPlan(1500), ['route', 'plan.json', '-n', 'Road', '-v', '800,1200']);
+    assert.deepEqual(result, {'code': 0, 'lines': [
+        'Option "Road": 1499 feet long, 151 alignment points, max grade 0.0%, max cut 0.0, max fill 0.0',
+        'Structures: 3 turnouts',
+        'Cost score: 72.8, design warnings: 0',
+        'NOTE: the via point 800,1200 is a dead end off the road\'s way - the road would go out to it and return, so it passes it ' +
+            'by, 589 feet from it (station 750)',
+        'Wrote plan.json'
+    ]});
+    const [option] = plan.options;
+    const ends = ({alignment}) => [alignment[0], alignment.at(-1)].map(({x, y}) => [x, y]);
+    assert.deepEqual(ends(option), [[100, 400], [1500, 400]]);
+    assert.equal(Math.max(...option.alignment.map((point) => point.y)), 611);
+    assert.equal(alignmentOverlaps(plan, option), null);
+    assert.deepEqual(option.structures.map(({type}) => type), ['turnout', 'turnout', 'turnout']);
+
+    // The road without the via point is straight
+    const straight = run(spurPlan(1500), ['route', 'plan.json', '-n', 'Road']);
+    assert.equal(
+        straight.result.lines[0], 'Option "Road": 1400 feet long, 142 alignment points, max grade 0.0%, max cut 0.0, max fill 0.0'
+    );
+
+    // A dead end near the road's end - the road's way back is cut to its end, where its heading is its own
+    const near = run(spurPlan(900), ['route', 'plan.json', '-n', 'Road', '-v', '800,1200']);
+    assert.deepEqual(near.result.lines.slice(0, 4), [
+        'Option "Road": 1045 feet long, 106 alignment points, max grade 0.0%, max cut 0.0, max fill 0.0',
+        'Structures: 2 turnouts',
+        'Cost score: 50.8, design warnings: 0',
+        'NOTE: the via point 800,1200 is a dead end off the road\'s way - the road would go out to it and return, so it passes it ' +
+            'by, 529 feet from it (station 667)'
+    ]);
+    assert.deepEqual(ends(near.plan.options[0]), [[100, 400], [900, 400]]);
+    assert.equal(alignmentOverlaps(near.plan, near.plan.options[0]), null);
+
+    // A dead end, and a via point on the road's way - the road passes through it
+    const two = run(spurPlan(1500), ['route', 'plan.json', '-n', 'Road', '-v', '800,1200', '-v', '1200,700']);
+    assert.deepEqual(two.result.lines.filter((line) => line.startsWith('NOTE:')), [
+        'NOTE: the via point 800,1200 is a dead end off the road\'s way - the road would go out to it and return, so it passes it ' +
+            'by, 448 feet from it (station 795)'
+    ]);
+    assert.ok(two.plan.options[0].alignment.some(({x, y}) => Math.hypot(x - 1200, y - 700) < 5));
+    assert.equal(alignmentOverlaps(two.plan, two.plan.options[0]), null);
+});
+
+
+test('route, a via point the road turns back at', () => {
+    // A via point far north of the road's way, on open ground - the road goes out to it and returns another way, so it
+    // doesn't overlap itself. It turns back at the via point.
+    const plan = spurPlan(500);
+    plan.start = {'x': 100, 'y': 100};
+    plan.end = {'x': 500, 'y': 100};
+    plan.topography.features = [];
+    const {result, 'plan': routed} = run(plan, ['route', 'plan.json', '-n', 'Road', '-v', '300,900']);
+    assert.deepEqual(result, {'code': 0, 'lines': [
+        'Option "Road": 1833 feet long, 185 alignment points, max grade 0.0%, max cut 0.0, max fill 0.0',
+        'Structures: 4 turnouts',
+        'Cost score: 89.4, design warnings: 0',
+        'NOTE: the road turns back at the via point 300,900 (station 847) - if it isn\'t a switchback you meant, move the via point ' +
+            'along the road\'s corridor, or drop it',
+        'Wrote plan.json'
+    ]});
+    assert.equal(alignmentOverlaps(routed, routed.options[0]), null);
+    assert.equal(Math.max(...routed.options[0].alignment.map((point) => point.y)), 937.02);
+});
+
+
+test('route, a road that overlaps itself', () => {
+    // A site whose exclusion areas leave one way from the start point to the end point - its lattice nodes are east along
+    // a row, around a turn to the right (a direction a move), and north up a column, across the row. The road crosses
+    // itself, so it isn't a road.
+    const open = [
+        ...Array.from({'length': 8}, (unused, col) => [col, 10]),
+        [9, 9], [10, 8], [11, 6], [11, 5], [10, 3], [9, 2], [7, 1], [6, 1], [4, 2], [3, 3], [2, 5],
+        [2, 6], [2, 7], [2, 8], [2, 9], [2, 11], [2, 12]
+    ];
+    const plan = planePlan({'size': 31, 'rise': 0});
+    plan.start = {'x': 0, 'y': 235};
+    plan.end = {'x': 47, 'y': 282};
+    plan.topography.features = [];
+    for (let row = 0; row < 13; row++) {
+        for (let col = 0; col < 13; col++) {
+            if (!open.some(([openCol, openRow]) => openCol === col && openRow === row)) {
+                const [x, y] = [col * 23.5, row * 23.5];
+                plan.topography.features.push({'type': 'exclusion', 'points': [
+                    {'x': x - 5, 'y': y - 5}, {'x': x + 5, 'y': y - 5}, {'x': x + 5, 'y': y + 5}, {'x': x - 5, 'y': y + 5}
+                ]});
+            }
+        }
+    }
+    assert.equal(plan.topography.features.length, 144);
+    const {result, written} = run(plan, ['route', 'plan.json', '-n', 'Road']);
+    assert.deepEqual(result, {'code': 1, 'lines': [
+        'error: no road that doesn\'t overlap itself - it turns back over itself at station 30 (try other via points)'
+    ]});
+    assert.equal(written, null);
 });
 
 

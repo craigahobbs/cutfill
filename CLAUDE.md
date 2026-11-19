@@ -73,6 +73,9 @@ Run `make` in `viewer/` or `plan/` for a subproject's own targets (e.g.
   questions (Ollama's - `plan/lib/ollama.js`) with checked JSON answers: what the notes ask for, and where their places
   are on the site's map. A model doesn't run the plan, and its question is asked without thinking, with a limited
   answer.
+- A road doesn't overlap itself - it doesn't cross itself, or run back along itself (`plan/lib/route.js`'s
+  `roadOverlaps`). A place to pass through that's a dead end off a road's way is passed by (`plan/lib/engineer.js`'s
+  `routePath`), and the plan says how near - a road that overlaps itself yet isn't an option.
 - A run makes its plan in memory (`plan/lib/auto.js`'s `autoPlan`): the tools' functions take a plan and change it or
   return one, and only the command line's commands (`plan/lib/cli.js` - the one module that parses arguments, which
   isn't the browser's) and the application's page read and write a plan. What the tools add to a plan is made in the

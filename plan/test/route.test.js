@@ -1,6 +1,7 @@
 import {blockedPlan, designArgs, expected, hillPlan, plain, planePlan, roadPlan} from './roadFixtures.js';
 import {
-    followRoads, polylineStations, resamplePolyline, routeLattice, routeSearch, smoothCurves, turnRadius, viaTurnBacks
+    followRoads, halfCircleMoves, polylineStations, resamplePolyline, roadOverlaps, routeLattice, routeSearch, smoothCurves,
+    turnRadius, viaTurnBacks
 } from '../lib/route.js';
 import assert from 'node:assert/strict';
 import {createDesign} from '../lib/design.js';
@@ -16,14 +17,16 @@ function searchTopo(topo, design, start, end, gradeWeight, slopeWeight, startHea
 }
 
 
-// Search for a plan's route - without existing roads, none of the path is one
+// Search for a plan's route - without existing roads, none of the path is one. Its points' headings are the start
+// heading, then each move's - the last is the route's.
 function search(plan, args, ...searchArgs) {
     const route = searchTopo(planTopo(plan), createDesign(plan, args), ...searchArgs);
     if (route === null) {
         return null;
     }
-    const {existing, ...pathRoute} = route;
+    const {existing, headings, ...pathRoute} = route;
     assert.deepEqual(existing, new Array(route.path.length).fill(false));
+    assert.deepEqual([headings.length, headings[0], headings.at(-1)], [route.path.length, searchArgs[4] ?? null, route.heading]);
     return pathRoute;
 }
 
@@ -144,6 +147,46 @@ test('viaTurnBacks', () => {
     // Within a shorter reach of the first via point, the road's ends - the road before and after it is compared
     assert.deepEqual(viaTurnBacks(x, y, stations, [[5, 0], [5, 20]], 2500), [{'via': 0, 'station': 5}, {'via': 1, 'station': 2015}]);
     assert.deepEqual(viaTurnBacks(x, y, stations, [], 500), []);
+});
+
+
+test('roadOverlaps', () => {
+    // A road's alignment at a 5 foot interval, from its points - returns its coordinate arrays and its stations
+    const road = (points) => {
+        const {x, y, stations} = resamplePolyline(points.map((point) => point[0]), points.map((point) => point[1]), 5);
+        return [x, y, stations];
+    };
+    const overlapStations = (points, width, minGap) => {
+        const [x, y, stations] = road(points);
+        const overlaps = roadOverlaps(x, y, stations, width, minGap);
+        return overlaps === null ? null : [...overlaps.entries()].filter(([, ixLast]) => ixLast !== -1).map(([ix, ixLast]) => (
+            [stations[ix], stations[ixLast]]
+        ));
+    };
+
+    // A road that doesn't overlap itself - a straight road, and a road that turns back 20 feet from itself (it's 14
+    // feet wide)
+    assert.equal(overlapStations([[0, 0], [1000, 0]], 14, 150), null);
+    const hairpin = [[0, 0], [1000, 0], [1000, 20], [0, 20]];
+    assert.equal(overlapStations(hairpin, 14, 150), null);
+
+    // A wider road's bed overlaps itself there - but for its parts within the gap of each other, along the road (its
+    // turn's: the part from station 935 to 940 is more than 150 feet from the part that ends at station 1100). Each
+    // part's overlap is the last point of the last part that it overlaps.
+    const wide = overlapStations(hairpin, 24, 150);
+    assert.deepEqual([wide[0], wide.at(-1)], [[0, 2020], [935, 1100]]);
+    assert.equal(wide.length, 188);
+    assert.equal(overlapStations(hairpin, 24, 2100), null);
+
+    // A road that crosses itself, at its stations 250 and 1350 - its parts at the crossing overlap, however narrow it is
+    const crossing = [[0, 0], [500, 0], [500, 300], [250, 300], [250, -200]];
+    assert.deepEqual(overlapStations(crossing, 14, 150), [[235, 1360], [240, 1365], [245, 1365], [250, 1365], [255, 1365], [260, 1360]]);
+    assert.deepEqual(overlapStations(crossing, 0.1, 150), [[245, 1355], [250, 1355]]);
+
+    // A road that runs back along itself, 5 feet from itself - its first part overlaps its last. Its turn's sides are 10
+    // feet apart, and they overlap too, where they're more than the gap apart along the road.
+    const back = overlapStations([[0, 0], [1000, 0], [1000, 200], [990, 200], [990, 5], [0, 5]], 14, 150);
+    assert.deepEqual([back[0], back.at(-1)], [[0, 2395], [1125, 1295]]);
 });
 
 
@@ -350,6 +393,23 @@ test('routeSearch, a large site and a lattice searched again', () => {
     assert.deepEqual(leg.path.slice(0, 2), [[1900, 1700], [1927, 1739]]);
     assert.deepEqual(leg.path.at(-1), [1900, 1900]);
     assert.deepEqual(routeSearch(routeNodes, design, [1900, 1700], [1900, 1900], 1).path.slice(0, 2), [[1900, 1700], [1903.5, 1715.5]]);
+
+    // The points' headings are the start heading (none), and each move's - northeast, but for the moves between it and
+    // east (the headings are the 16 move directions' indexes, counterclockwise from east)
+    assert.deepEqual([halfCircleMoves, route.headings.length, route.headings[0]], [8, 73, null]);
+    assert.deepEqual([...new Set(route.headings.slice(1))].sort(), [1, 2]);
+    assert.deepEqual([leg.headings[0], leg.headings[1]], [2, 3]);
+
+    // A route to a point with an end heading - a route east ends heading east, and a route that ends heading west goes
+    // around to its end, a direction a move: it's longer, and its last move is west
+    const east = routeSearch(routeNodes, design, [470, 940], [940, 940], 1, null, 0.03, 0, 0);
+    assert.deepEqual(east.path, routeSearch(routeNodes, design, [470, 940], [940, 940], 1).path);
+    assert.deepEqual([east.path.length, east.heading], [21, 0]);
+    const west = routeSearch(routeNodes, design, [470, 940], [940, 940], 1, null, 0.03, 0, 8);
+    assert.deepEqual(west.headings, [null, ...new Array(9).fill(15), 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8]);
+    assert.deepEqual([west.heading, west.path.at(-2), west.path.at(-1)], [8, [963.5, 940], [940, 940]]);
+    const pathLength = ({path}) => polylineStations(path.map((point) => point[0]), path.map((point) => point[1])).at(-1);
+    assert.deepEqual([pathLength(east), Math.round(pathLength(west))], [470, 867]);
 });
 
 

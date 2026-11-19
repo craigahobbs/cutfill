@@ -167,10 +167,13 @@ A run of the plan:
      that way (named for its side - "West Corridor"), if it's a real choice: within the grade limit,
      apart from them, and at most three times the least-cost option's cost score. Otherwise the
      plan's description says why there isn't one.
-   - **Via PLACE** - a road through each place the road must pass through
+   - **Via PLACE** - a road through each place the road must pass through. A place that's a dead
+     end off the road's way - the road would go out to it and return the way it came - is passed
+     by: the plan's description says how near the road passes it.
 
    A road is found by a least-cost lattice search (with radius-constrained turns, and grade, side
-   slope, stream crossing, rock, and exclusion costs), its vertical profile is designed by dynamic
+   slope, stream crossing, rock, and exclusion costs) - a road doesn't cross itself, or run back
+   along itself - its vertical profile is designed by dynamic
    programming (the least earthwork within the grade limits, flatter on switchbacks), and its
    culverts, retaining walls, bridges, and turnouts are placed. Each road is searched with three
    weights of the penalty for ground steeper than the design grade, and it's the one with the lowest
