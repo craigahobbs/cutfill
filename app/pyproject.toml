@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sageroad"
-version = "0.1.0"
+version = "1.0.0"
 description = "SageRoad engineers low-volume roads on USGS lidar terrain and views the resulting road plans"
 readme = "PYPI.md"
 license = "MIT"
@@ -14,7 +14,7 @@ authors = [
     {name = "Craig A. Hobbs"}
 ]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: End Users/Desktop",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",

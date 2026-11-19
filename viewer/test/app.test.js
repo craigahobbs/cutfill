@@ -468,7 +468,7 @@ test('running a plan without the planning tools', async (context) => {
     await flush();
     const {document} = browser;
     assert.equal(document.getElementById('sageroad-run-message').textContent, 'A plan is run by the SageRoad application - this page ' +
-        'doesn\'t have its planning tools. Run the application with "make run".');
+        'doesn\'t have its planning tools. Install it ("pip install sageroad"), and run "sageroad".');
     assert.equal(document.getElementById('sageroad-run').disabled, true);
     assert.deepEqual(browser.fetches, []);
 });

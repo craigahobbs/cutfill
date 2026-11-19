@@ -192,6 +192,28 @@ test('inlineHtml links and images', () => {
 });
 
 
+test('inlineHtml, a link\'s URL', () => {
+    // Web addresses, email addresses, and relative URLs are links
+    assert.equal(
+        inlineHtml('[a](HTTPS://x.com/a:b) [b](mailto:a@x.com) [c](#var.vFile=\'a:b.json\') [d](plan/a.json?b=c:d) [e](//x.com/)'),
+        '<a href="HTTPS://x.com/a:b">a</a> <a href="mailto:a@x.com">b</a> <a href="#var.vFile=&#039;a:b.json&#039;">c</a> ' +
+            '<a href="plan/a.json?b=c:d">d</a> <a href="//x.com/">e</a>'
+    );
+
+    // A URL of another scheme isn't a link - it's the link's text, or the image's
+    assert.equal(
+        inlineHtml('[a **b**](javascript:alert%281%29) [c](JaVaScRiPt:x) [d](\u0001javascript:x) [e](data:text/html,x) [f](vbscript:x)'),
+        'a <strong>b</strong> c d e f'
+    );
+    assert.equal(inlineHtml('![a *b*](javascript:x) ![c](data:text/html,x) ![d](https://x.com/d.png)'),
+        'a *b* c <img src="https://x.com/d.png" alt="d">');
+
+    // An image's data is an image's URL, but not a link's
+    assert.equal(inlineHtml('![e](data:image/png;base64,AAAA) [f](data:image/png;base64,AAAA)'),
+        '<img src="data:image/png;base64,AAAA" alt="e"> f');
+});
+
+
 test('inlineHtml emphasis', () => {
     assert.equal(inlineHtml('__bold__ _em_ ~~del~~ **a *b* c**'),
         '<strong>bold</strong> <em>em</em> <del>del</del> <strong>a <em>b</em> c</strong>');

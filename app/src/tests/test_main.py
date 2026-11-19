@@ -59,6 +59,18 @@ class TestMain(unittest.TestCase):
             application_wrap(environ, lambda status, headers: statuses.append(status))
             self.assertListEqual(statuses, ['200 OK', '404 Not Found'])
             self.assertEqual(stdout.getvalue(), 'sageroad: Serving at http://127.0.0.1:8080/ ...\nsageroad: 404 GET /unknown a=1\n')
+
+            # A logged request's control characters are escaped - an escape sequence, and a line of its own
+            environ = {
+                'REQUEST_METHOD': 'GET', 'PATH_INFO': '/\x1b]0;title\x07\nsageroad: Serving', 'QUERY_STRING': '',
+                'wsgi.url_scheme': 'http'
+            }
+            application_wrap(environ, lambda status, headers: statuses.append(status))
+            self.assertListEqual(statuses, ['200 OK', '404 Not Found', '404 Not Found'])
+            self.assertEqual(
+                stdout.getvalue().splitlines()[2:],
+                ['sageroad: 404 GET /\\x1b]0;title\\x07\\nsageroad: Serving ']
+            )
             self.assertEqual(stderr.getvalue(), '')
 
 
@@ -80,6 +92,23 @@ class TestMain(unittest.TestCase):
             self.assertListEqual(statuses, ['404 Not Found'])
             self.assertEqual(stdout.getvalue(), '')
             self.assertEqual(stderr.getvalue(), '')
+
+
+    def test_main_port(self):
+        # A port that isn't one is an error - the server isn't created
+        for port in ('0', '-1', '65536', 'abc'):
+            with unittest.mock.patch('threading.Thread') as mock_thread, \
+                 unittest.mock.patch('waitress.create_server') as mock_serve, \
+                 unittest.mock.patch('sys.stdout', StringIO()) as stdout, \
+                 unittest.mock.patch('sys.stderr', StringIO()) as stderr:
+                with self.assertRaises(SystemExit) as cm_exc:
+                    main(['-p', port])
+                self.assertEqual(cm_exc.exception.code, 2)
+                mock_thread.assert_not_called()
+                mock_serve.assert_not_called()
+                self.assertEqual(stdout.getvalue(), '')
+                self.assertIn('sageroad: error: argument -p: ', stderr.getvalue())
+        self.assertTrue(stderr.getvalue().endswith('sageroad: error: argument -p: invalid int value: \'abc\'\n'))
 
 
     def test_main_port_in_use(self):

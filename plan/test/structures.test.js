@@ -168,6 +168,14 @@ test('designStructures, bridges', () => {
 
     // A shallower fill has a culvert
     assert.deepEqual(levelStructures('bridge-shallow', {depths, 'args': designArgs({'bridgeFill': 13})})[0].type, 'culvert');
+
+    // A fill of one station (a gully) is bridged from the station before it to the station after - a bridge has a span
+    const {topo, design, x, y, stations} = levelFixture(args);
+    const gully = (ixGully) => designStructures(
+        topo, design, x, y, stations, stations.map((stationValue, ix) => 100 + (ix === ixGully ? 12 : 0)), stations.map(() => 0), []
+    ).filter(({type}) => type === 'bridge');
+    assert.deepEqual(gully(20), [{'type': 'bridge', 'station': 95, 'endStation': 105, 'name': 'stream bridge'}]);
+    assert.deepEqual(gully(21), []);
 });
 
 

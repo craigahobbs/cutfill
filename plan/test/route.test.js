@@ -1,7 +1,7 @@
 import {blockedPlan, designArgs, expected, hillPlan, plain, planePlan, roadPlan} from './roadFixtures.js';
 import {
-    followRoads, halfCircleMoves, polylineStations, resamplePolyline, roadOverlaps, routeLattice, routeSearch, smoothCurves,
-    turnRadius, viaTurnBacks
+    followRoads, halfCircleMoves, polylineStations, resamplePolyline, roadOverlaps, routeLattice, routeNode, routeSearch,
+    smoothCurves, turnRadius, viaTurnBacks
 } from '../lib/route.js';
 import {planTopo, segmentIntersect} from '../../viewer/lib/model.js';
 import assert from 'node:assert/strict';
@@ -481,6 +481,36 @@ test('routeSearch, a stream\'s channel', () => {
     const roadNodes = lattice([creek, road], true);
     assert.deepEqual([roadNodes.moveRoads[0][node], roadNodes.moveChannels[0][node]], [1, 0]);
     assert.deepEqual(routeSearch(roadNodes, design, [47, 94], [329, 94], 1).path, row(94, 47, 329));
+});
+
+
+test('routeNode', () => {
+    // A lot with a slot in it that's narrower than the lattice
+    const plan = planePlan({'rise': 0.02, 'size': 41});
+    const lot = [[100, 90], [150, 90], [150, 120], [154, 120], [154, 90], [200, 90], [200, 200], [100, 200]];
+    plan.topography.features = [{'type': 'exclusion', 'points': lot.map(([x, y]) => ({x, y}))}];
+    const design = createDesign(plan, designArgs());
+    const routeNodes = routeLattice(planTopo(plan), design, 1);
+    const {lattice, nX, nY, blocked} = routeNodes;
+    assert.deepEqual([lattice, nX, nY], [23.5, 18, 18]);
+    const node = (point) => {
+        const pointNode = routeNode(routeNodes, point);
+        return [pointNode % nX, Math.floor(pointNode / nX), blocked[pointNode]];
+    };
+
+    // A point's node is its nearest - within the lattice
+    assert.deepEqual([[60, 60], [0, 0], [400, 400], [-50, 500]].map(node), [[3, 3, 0], [0, 0, 0], [17, 17, 0], [0, 17, 0]]);
+
+    // A point beside the lot, whose nearest node is within it - its node is the nearest of its cell's nodes that isn't.
+    // The route starts at the point.
+    assert.deepEqual(node([150, 86]), [6, 3, 0]);
+    assert.deepEqual(routeSearch(routeNodes, design, [150, 86], [300, 300], 1).path.slice(0, 3), [[150, 86], [164.5, 70.5], [211.5, 94]]);
+    assert.deepEqual(routeSearch(routeNodes, design, [300, 300], [150, 86], 1).path.at(-1), [150, 86]);
+
+    // A point within the lot, and a point in its slot (its cell's nodes are within the lot) - there's no route
+    assert.deepEqual([[150, 96], [141, 94], [152, 105]].map(node), [[6, 4, 1], [6, 4, 1], [6, 4, 1]]);
+    assert.equal(routeSearch(routeNodes, design, [150, 96], [300, 300], 1), null);
+    assert.equal(routeSearch(routeNodes, design, [152, 105], [300, 300], 1), null);
 });
 
 

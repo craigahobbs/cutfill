@@ -32,6 +32,7 @@ The source is ES modules in `lib/`, loaded by `index.html`:
 | `app.js` | The application - routing on the URL hash, plan loading (URLs and local files), the local files, and the loaded plan |
 | `homePage.js`, `form.js` | The home page - open or make a plan, and view, edit, run, save, and close the loaded plan - the plan config editor page, and its form (made from the model's types) |
 | `viewPages.js` | The report page and the 3D explorer page |
+| `modelsPage.js`, `models.js` | The Ollama model pages - the models on this computer, and the models to download - and Ollama's models: list, download, and delete them |
 | `mapPage.js` | The map page - the loaded plan's site, to draw its config's marks on (its areas to avoid, roads, and places to pass through) |
 | `model.js` | The road plan model and the road site model (a plan's config) - their schema and validation, a plan file's text, and the earthwork, structure, and cost analysis |
 | `report.js`, `tables.js`, `planView.js`, `view3d.js` | The report, its cost and structures tables, the plan and profile views, and the 3D views |

@@ -92,16 +92,17 @@ test('auto, the plan config\'s marks', async () => {
     ]);
     assert.deepEqual(io.site, site);
 
-    // Again - the plan's site data is kept, and the plan config's marks are the plan's
+    // Again - the plan's site data is kept, and the plan config's marks are the plan's. Its features are in the
+    // first run's order, and its description is the first run's (its draws are the plan's).
     const again = await runAuto(null, {io});
     assert.deepEqual(again.output.slice(0, 2).join('').split('\n').slice(0, 2), [
         'Site: the plan\'s site data is kept - its terrain, streams, roads, trails, and map (its grid is the site\'s - fetch them ' +
             'again with --fetch)',
         'Features: 1 exclusion area, 1 road from the site'
     ]);
-    assert.deepEqual(again.plan.topography.features.map(({type, name}) => [type, name]), [
-        ['stream', 'Draw 1'], ['exclusion', 'Barn'], ['road', 'Farm track']
-    ]);
+    assert.deepEqual(again.plan.topography.features, io.plan.topography.features);
+    assert.deepEqual(again.plan.description, io.plan.description);
+    assert.ok(io.plan.description.some((line) => line.includes('unmapped draws')));
 
     // The descriptions - the plan's added features, its places to pass through, and the other corridor that isn't an option
     const {descriptions} = io;

@@ -30,15 +30,19 @@ def main(argv=None):
     parser.add_argument('-q', dest='quiet', action='store_true',
                         help="don't display messages - the requests that fail, say")
     args = parser.parse_args(args=argv)
+    if not 1 <= args.port <= 65535:
+        parser.error('argument -p: the port is 1 to 65535')
 
     # Create the back-end application
     application = SageRoad()
 
-    # Wrap the back end to log the requests that fail - an error status
+    # Wrap the back end to log the requests that fail - an error status. A request's text is any web page's to make
+    # (its path is decoded), so its control characters are escaped - they aren't the terminal's.
     def application_wrap(environ, start_response):
         def log_start_response(status, response_headers):
             if not args.quiet and int(status[0:3]) >= 400:
-                print(f'sageroad: {status[0:3]} {environ["REQUEST_METHOD"]} {environ["PATH_INFO"]} {environ["QUERY_STRING"]}')
+                request = f'{environ["REQUEST_METHOD"]} {environ["PATH_INFO"]} {environ["QUERY_STRING"]}'
+                print(f'sageroad: {status[0:3]} {request.encode("unicode_escape").decode("ascii")}')
             return start_response(status, response_headers)
         return application(environ, log_start_response)
 

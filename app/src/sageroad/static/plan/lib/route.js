@@ -186,7 +186,7 @@ export function routeLattice(topo, design, slopeWeight, roads = null) {
         moveCulverts.push(culverts);
         moveChannels.push(channels);
     }
-    return {lattice, nX, nY, moveLengths, moveCosts, moveGrades, moveRoads, moveCulverts, moveChannels};
+    return {lattice, nX, nY, moveLengths, moveCosts, moveGrades, moveRoads, moveCulverts, moveChannels, blocked, exclusions};
 }
 
 
@@ -223,12 +223,9 @@ export function routeSearch(
         return gradeWeight * (soft * costLength * 15 + (excess - soft) * costLength * 300);
     };
 
-    // The nearest nodes to the start and end points
-    const nearestNode = ([x, y]) => (
-        Math.min(nY - 1, Math.max(0, pyRound(y / lattice))) * nX + Math.min(nX - 1, Math.max(0, pyRound(x / lattice)))
-    );
-    const startNode = nearestNode(start);
-    const endNode = nearestNode(end);
+    // The start and end points' nodes
+    const startNode = routeNode(routeNodes, start);
+    const endNode = routeNode(routeNodes, end);
 
     // Dijkstra over the (node, heading) states - equal-cost states are taken in state order (row, column, heading)
     const best = new Float64Array(nodeCount * headingCount).fill(Infinity);
@@ -322,6 +319,28 @@ export function routeSearch(
     path[0] = [start[0], start[1]];
     path[path.length - 1] = [end[0], end[1]];
     return {path, existing, headings, lattice, 'heading': finalState % headingCount};
+}
+
+
+// Get a point's node of a route's lattice (routeLattice) - the nearest node. A point beside an exclusion area isn't
+// within it, though its nearest node may be: its node is then the nearest of its lattice cell's nodes that isn't
+// within an area (if there's one - a point in a gap that's narrower than the lattice has no route).
+export function routeNode({lattice, nX, nY, blocked, exclusions}, [x, y]) {
+    const nodeAt = (col, row) => Math.min(nY - 1, Math.max(0, row)) * nX + Math.min(nX - 1, Math.max(0, col));
+    let node = nodeAt(pyRound(x / lattice), pyRound(y / lattice));
+    if (blocked[node] === 1 && !pointInPolygons(x, y, exclusions)) {
+        const col = Math.floor(x / lattice);
+        const row = Math.floor(y / lattice);
+        let nodeDistance = Infinity;
+        for (const cellNode of [nodeAt(col, row), nodeAt(col + 1, row), nodeAt(col, row + 1), nodeAt(col + 1, row + 1)]) {
+            const distance = hypot((cellNode % nX) * lattice - x, Math.floor(cellNode / nX) * lattice - y);
+            if (blocked[cellNode] === 0 && distance < nodeDistance) {
+                node = cellNode;
+                nodeDistance = distance;
+            }
+        }
+    }
+    return node;
 }
 
 

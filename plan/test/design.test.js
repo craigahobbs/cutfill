@@ -37,6 +37,9 @@ function pythonDesign(design) {
         // An existing road's upgrade - the Python tools' route search didn't follow existing roads
         'costExisting': design.width * (design.feet ? 13 * 0.3048 * 0.3048 : 13),
         'shrink': design.shrink,
+
+        // The most a road's cut or fill is deep - the Python tools' profile design's depth limit
+        'maxDepth': design.feet ? 60 : 18,
         'turnoutSpacing': design.turnout_spacing,
         'bridgeFill': design.bridge_fill,
         'tieTolerance': design.tie_tolerance

@@ -399,9 +399,13 @@ export async function autoPlan(io, planPath, site, planValue, options = {}) {
         const texts = directives.unhandled.map((text) => text.replace(/[.\s]+$/, ''));
         limitations.push(`These of the site's notes weren't acted on: ${texts.join('; ')}.`);
     }
+
+    // The plan's draws are this run's, and the runs' before it (a plan that's made again has them - its site data is
+    // kept). A plan's added streams are its draws.
+    const hasDraws = draws.length > 0 || topo.features.some((feature) => feature.type === 'stream' && feature.added === true);
     describePlan(plan, topo, {
         'purpose': directives.purpose,
-        'featureNotes': [...markNotes(config, directives), ...(draws.length > 0 ? [drawsNote] : [])],
+        'featureNotes': [...markNotes(config, directives), ...(hasDraws ? [drawsNote] : [])],
         'optionNotes': [...placeNotes, ...(corridor.note !== null ? [corridor.note] : [])],
         limitations
     });

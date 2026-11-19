@@ -47,15 +47,18 @@ const sectionCellLimit = 6000000;
 // station mask, or null), the profile follows the ground. Returns the "profile" (the grade elevations), the "ground"
 // elevations, and the ground's "sideSlope" (its rise per unit of offset to the left) at the stations - and the index
 // of the first existing road station that the grade limits can't reach ("unreachable" - the profile breaks grade
-// there), or null. A profile that the grade limits can't take to the end's ground ends at the nearest level they can.
+// there), or null. A profile that the grade limits can't take to the end's ground ends at the nearest level they can,
+// and a profile that they can't keep within the design's maximum depth of the ground is "deep" (it isn't a road's).
 // "cellLimit" is the most station level cells whose cross sections the design keeps (it's faster, and the same).
 export function designProfile(topo, design, x, y, stations, existing = null, cellLimit = sectionCellLimit) {
     // The profile is within the maximum cut and fill depth of the ground - its design's work is the stations times the
-    // depth, not times the site's relief. Where the grade limits can't keep it there, it's designed with a deeper limit.
+    // depth, not times the site's relief. Where the grade limits can't keep it there, it's designed with a deeper limit
+    // - it's deep.
     let result = null;
     for (const depthLimit of depthLimits) {
         result = designProfileDepth(topo, design, x, y, stations, existing, depthLimit, cellLimit);
         if (result !== null) {
+            result.deep = depthLimit !== depthLimits[0];
             break;
         }
     }
@@ -103,7 +106,7 @@ function designProfileDepth(topo, design, x, y, stations, existing, depthLimit, 
 
     // The elevation levels - the resolution makes the design grade's window a whole number of levels
     const resolution = design.grade * ds / 24;
-    const maxDepth = design.feet ? 60 : 18;
+    const {maxDepth} = design;
     let zMin = Infinity;
     let zMax = -Infinity;
     for (const z of ground) {

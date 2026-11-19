@@ -47,6 +47,10 @@ export function createDesign(plan, args) {
         'costExisting': width * rates.existingRoad * scale2,
         'shrink': rates.shrink,
 
+        // The most a road's cut or fill is deep, at its center line - a profile that the grade limits can't keep within it
+        // of the ground isn't a road's
+        'maxDepth': feet ? 60 : 18,
+
         // Turnouts - a single-lane road has them
         'turnoutSpacing': args.turnouts ?? (width < (feet ? 16 : 4.9) ? (feet ? 400 : 120) : 0),
         'bridgeFill': args.bridgeFill,

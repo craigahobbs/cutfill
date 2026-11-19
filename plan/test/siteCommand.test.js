@@ -438,8 +438,9 @@ Wrote plans/road.json
         [kept.georeference, kept.topography.elevations, kept.image], [plan.georeference, plan.topography.elevations, plan.image]
     );
 
-    // The site's exclusion areas replace the plan's site's - the plan's other exclusion areas are kept
-    assert.deepEqual(kept.topography.features.map(({type, name}) => `${type} ${name}`), ['exclusion Pond', 'exclusion Shed']);
+    // The site's exclusion areas replace the plan's site's - the plan's other exclusion areas are kept, after them (a
+    // new site's order)
+    assert.deepEqual(kept.topography.features.map(({type, name}) => `${type} ${name}`), ['exclusion Shed', 'exclusion Pond']);
 
     // A plan without options
     delete plan.options;
@@ -465,7 +466,7 @@ Wrote plans/road.json
     const plain = await runSite(coarseSite(), {'files': {...files, 'plans/road.json': JSON.stringify(oldPlan)}});
     const plainPlan = JSON.parse(plain.files['plans/road.json']);
     assert.deepEqual([plain.urls, 'criteria' in plainPlan, 'costRates' in plainPlan], [[], false, false]);
-    assert.deepEqual(plainPlan.topography.features.map(({type, name}) => `${type} ${name}`), ['exclusion Pond', 'exclusion Shed']);
+    assert.deepEqual(plainPlan.topography.features.map(({type, name}) => `${type} ${name}`), ['exclusion Shed', 'exclusion Pond']);
 
     // There's no site file - it's written from the plan's own site model
     const noSite = testIo({'files': {'plans/road.json': JSON.stringify(kept)}});

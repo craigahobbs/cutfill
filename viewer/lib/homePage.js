@@ -259,7 +259,7 @@ export class HomePage {
         } catch {
             if (!this.closed) {
                 document.getElementById('sageroad-run-message').textContent = 'A plan is run by the SageRoad application - this ' +
-                    'page doesn\'t have its planning tools. Run the application with "make run".';
+                    'page doesn\'t have its planning tools. Install it ("pip install sageroad"), and run "sageroad".';
             }
             return;
         }

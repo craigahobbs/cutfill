@@ -142,6 +142,16 @@ function tableCells(line) {
 const rBlockStart = /^\s*(```|~~~|#{1,6}\s|>|[-*+]\s|\d+[.)]\s)/;
 
 
+// Is a link's or an image's URL one to link to? It's a web address, an email address, or a relative URL - or, for an
+// image, the image's data. A URL of another scheme (a script's, say) isn't, so its link is only its text. A browser
+// ignores a URL's control characters and spaces.
+function isLinkURL(url, isImage) {
+    const urlScheme = Array.from(url).filter((char) => char > ' ').join('');
+    return !/^[a-z][a-z0-9+.-]*:/i.test(urlScheme) || /^(?:https?|mailto):/i.test(urlScheme) ||
+        (isImage && /^data:image\//i.test(urlScheme));
+}
+
+
 // Render Markdown inline text as HTML
 export function inlineHtml(text) {
     let html = '';
@@ -171,7 +181,9 @@ export function inlineHtml(text) {
             const mLink = text.slice(ix).match(/^(!?)\[((?:\\.|[^\]\\])*)\]\(\s*([^)\s]*)(?:\s+"([^"]*)")?\s*\)/);
             if (mLink !== null) {
                 const [linkText, isImage, label, href] = mLink;
-                if (isImage !== '') {
+                if (!isLinkURL(href, isImage !== '')) {
+                    html += isImage !== '' ? escapeHtml(label) : inlineHtml(label);
+                } else if (isImage !== '') {
                     html += `<img src="${escapeHtml(href)}" alt="${escapeHtml(label)}">`;
                 } else {
                     html += `<a href="${escapeHtml(href)}">${inlineHtml(label)}</a>`;

@@ -86,6 +86,12 @@ export function designStructures(topo, design, x, y, stations, profile, sideSlop
                         ixEnd += 1;
                     }
                 }
+
+                // A bridge has a span - over a fill of one station, it's from the station before to the station after
+                if (ixStart === ixEnd) {
+                    ixStart = Math.max(0, ixStart - 1);
+                    ixEnd = Math.min(count - 1, ixEnd + 1);
+                }
                 bridges.push([stations[ixStart], stations[ixEnd]]);
                 structures.push({
                     'type': 'bridge',

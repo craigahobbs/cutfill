@@ -1,7 +1,7 @@
 import {autoSite, item, notesAnswer, optionsLines, runAuto, siteLatLong, siteLines, siteRoad, valley, wroteLine} from './autoHelpers.js';
 import {autoUsage, cliMain} from '../lib/cli.js';
 import {orderPlan, planText, validatePlan} from '../../viewer/lib/model.js';
-import {testImage, testIo, testPages} from './terrainHelpers.js';
+import {siteNorth, testImage, testIo, testPages} from './terrainHelpers.js';
 import assert from 'node:assert/strict';
 import {autoSteps} from '../lib/auto.js';
 import test from 'node:test';
@@ -65,6 +65,13 @@ ${wroteLine}`);
     const plain = await runAuto(autoSite());
     assert.equal(plain.output.join(''), io.output.join('').replace('Notes: not read - there\'s no model (--model)\n', ''));
     assert.ok(plain.descriptions.find((line) => line.startsWith('**Limitations.**')).endsWith(' bid estimates.'));
+
+    // The plan's description says what its draws are - a plan on a plane has none
+    const drawsNote = (lines) => lines.filter((line) => line.includes('unmapped draws')).length;
+    const plane = await runAuto(autoSite(), {'elevation': (east, north) => 1700 + 0.02 * (north - siteNorth)});
+    assert.deepEqual(plane.plan.options.map(({name}) => name), ['New Road', 'South Corridor']);
+    assert.deepEqual([plane.plan.topography.features, drawsNote(plane.descriptions)], [[], 0]);
+    assert.equal(drawsNote(plain.descriptions), 1);
 });
 
 

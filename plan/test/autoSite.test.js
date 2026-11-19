@@ -61,17 +61,17 @@ test('auto, the notes\' coordinates and bridges', async () => {
         '- Gate: the notes\' place to pass through (the gate). Its coordinates are the notes\'. Verify it.'
     ]);
 
-    // A bridge - the notes' fill depth is the options', in a steep-sided valley
+    // A bridge - the notes' fill depth is the options', in a steep-sided valley (the road crosses it on a 12 meter fill)
     const valleySite = autoSite({'notes': ['Bridge the creek.']});
-    const steepValley = (east, north) => 1700 + 0.4 * Math.abs(east - siteEast - 40) + 0.02 * (north - siteNorth);
+    const steepValley = (east, north) => 1700 + 0.36 * Math.abs(east - siteEast - 40) + 0.02 * (north - siteNorth);
     const structures = async (bridgeFill) => {
         const bridged = await runAuto(valleySite, {
             'args': ['--model', 'test-model'], 'answers': {'notes': notesAnswer({bridgeFill})}, 'elevation': steepValley
         });
         return bridged.plan.options[0].structures.map(({type}) => type).filter((type) => type === 'bridge' || type === 'culvert');
     };
-    assert.deepEqual(await structures(null), ['culvert', 'culvert']);
-    assert.deepEqual(await structures(2), ['bridge', 'culvert']);
+    assert.deepEqual(await structures(null), ['culvert']);
+    assert.deepEqual(await structures(2), ['bridge']);
 
     // A longitude the notes give west is negative
     const west = await runAuto(autoSite({'notes': [`Pass the gate at ${gate.latitude} N, ${-gate.longitude} W.`]}), {

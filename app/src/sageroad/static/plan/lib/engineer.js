@@ -3,7 +3,7 @@
 // the route follows, the other corridor, and the via points a road passes by - a road doesn't overlap itself)
 
 import {
-    corridorBarrier, followRoads, halfCircleMoves, polylineStations, resamplePolyline, roadOverlaps, routeLattice, routeSearch,
+    corridorBarrier, followRoads, halfCircleMoves, polylineStations, resamplePolyline, roadOverlaps, routeLattice, routeNode, routeSearch,
     smoothCurves, viaTurnBacks
 } from './route.js';
 import {designStructures, existingMask} from './structures.js';
@@ -258,12 +258,18 @@ export function corridorReason(engineered, distanceFn, halfWidth, scoreFn, least
 
 
 // Get an option's alignment's middle (the corridor's part of it), resampled at an interval - its "x" and "y"
-// coordinate arrays
+// coordinate arrays (one point, at least)
 function alignmentMiddle(alignment, interval) {
     const resampled = resamplePolyline(alignment.map(({x}) => x), alignment.map(({y}) => y), interval);
     const length = resampled.stations.at(-1);
     const [first, last] = corridorMiddle.map((fraction) => fraction * length);
     const indexes = [...resampled.stations.keys()].filter((ix) => resampled.stations[ix] >= first && resampled.stations[ix] <= last);
+
+    // A road that's shorter than the interval may have no point in its middle - its middle is then its nearest point
+    if (indexes.length === 0) {
+        const nearness = resampled.stations.map((station) => Math.abs(station - 0.5 * length));
+        indexes.push(nearness.indexOf(Math.min(...nearness)));
+    }
     return {'x': indexes.map((ix) => resampled.x[ix]), 'y': indexes.map((ix) => resampled.y[ix])};
 }
 
@@ -320,6 +326,16 @@ export function engineerOption(plan, topo, commandArgs) {
     const pathDesigns = new Map();
     const designedRoads = [];
     let failed = null;
+
+    // The start and end points are one point of the route search's? There's no road between them.
+    const {'start': roadStart, 'end': roadEnd} = plan;
+    if (routeNode(latticeNodes, [roadStart.x, roadStart.y]) === routeNode(latticeNodes, [roadEnd.x, roadEnd.y])) {
+        plan.options = planOptions;
+        const apart = fixedTrim(Math.hypot(roadEnd.x - roadStart.x, roadEnd.y - roadStart.y), 1);
+        const error = `no road - the start and end points are ${apart} ${plan.units} apart, which is one point of the route ` +
+            `search's (its points are ${fixedTrim(latticeNodes.lattice, 1)} ${plan.units} apart)`;
+        return {'lines': [], error, 'isGrade': false};
+    }
     for (const gradeWeight of (commandArgs.gradeWeight === null ? gradeWeights : [commandArgs.gradeWeight])) {
         const lines = [];
         const designed = routeAlignment(plan, topo, design, roads, latticeNodes, {...commandArgs, gradeWeight}, lines, pathDesigns);
@@ -472,7 +488,7 @@ function routeAlignment(plan, topo, design, roads, routeNodes, commandArgs, line
         routed.design.designed ??= designProfile(
             topo, design, alignment.x, alignment.y, alignment.stations, existingMask(alignment.stations, existingRoads)
         );
-        failure = gradeFailure(design, alignment.stations, routed.design.designed, plan.units);
+        failure = gradeFailure(topo, design, alignment, routed.design.designed, existingRoads, plan.units);
         if (failure === null) {
             break;
         }
@@ -602,14 +618,37 @@ function nearestPoint(x, y, [pointX, pointY]) {
 
 
 // Get a designed profile's failure to meet the grade limits - the report's text of what the profile can't do within
-// them: reach an existing road's ground, or end at the end point's - or null if it meets them
-function gradeFailure(design, stations, {profile, ground, unreachable}, units) {
+// them: reach an existing road's ground, stay within the maximum depth of the ground (but on a bridge), or end at the
+// end point's - or null if it meets them. "alignment" is the profile's alignment, and "existingRoads" its existing
+// roads' ranges.
+function gradeFailure(topo, design, {x, y, stations}, {profile, ground, sideSlope, unreachable, deep}, existingRoads, units) {
     if (unreachable !== null) {
         return `can't reach the existing road at station ${pyFixed(stations[unreachable], 0)}`;
     }
     const endDepth = ground.at(-1) - profile.at(-1);
-    return Math.abs(endDepth) <= design.tieTolerance ? null :
-        `ends ${pyFixed(Math.abs(endDepth), 1)} ${units} ${endDepth > 0 ? 'below' : 'above'} the end point`;
+    if (Math.abs(endDepth) > design.tieTolerance) {
+        return `ends ${pyFixed(Math.abs(endDepth), 1)} ${units} ${endDepth > 0 ? 'below' : 'above'} the end point`;
+    }
+    if (deep) {
+        // The deepest station that isn't on a bridge - a fill is above the ground, and a cut below it
+        const bridges = designStructures(topo, design, x, y, stations, profile, sideSlope, existingRoads).filter(
+            ({type}) => type === 'bridge'
+        );
+        let depth = 0;
+        let station = 0;
+        for (let ix = 0; ix < profile.length; ix++) {
+            const isBridge = bridges.some((bridge) => stations[ix] >= bridge.station - 0.1 && stations[ix] <= bridge.endStation + 0.1);
+            if (!isBridge && Math.abs(profile[ix] - ground[ix]) > Math.abs(depth)) {
+                depth = profile[ix] - ground[ix];
+                station = stations[ix];
+            }
+        }
+        if (Math.abs(depth) > design.maxDepth) {
+            return `is ${pyFixed(Math.abs(depth), 1)} ${units} ${depth > 0 ? 'above' : 'below'} the ground at station ` +
+                `${pyFixed(station, 0)} (a road's cut or fill is ${design.maxDepth} ${units} deep, at most)`;
+        }
+    }
+    return null;
 }
 
 

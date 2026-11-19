@@ -41,8 +41,8 @@ in your web browser (Ctrl-C stops it - `sageroad -h` lists its options). To upda
 `pip install` with `--upgrade`.
 
 To have a model read your plans' notes, install [Ollama](https://ollama.com), and download a model
-that reads images on the application's **Ollama Models** page. Without a model, a plan's notes aren't
-read.
+that reads images on the application's **Ollama Models** page (a plan's **Run Plan** section links to
+it). Without a model, a plan's notes aren't read.
 
 The application runs offline - its page and its planning tools are the package's - except for the
 USGS's site data, which a plan's first run (or a run after its site's points, units, margin, or
@@ -52,12 +52,13 @@ model's download, and an Ollama cloud model, use the internet).
 
 ## Your first road
 
-1. Run `sageroad`, and choose **New Plan**.
+1. Run the application (`sageroad-venv/bin/sageroad`), and choose **New Plan**.
 2. Give the plan a title, and its start and end points - copy each point's latitude and longitude from
    a map (Google Maps, say), and paste them into its latitude. Write the road's notes: what it's for,
-   and what it must avoid or pass through (see The plan's notes, below).
-3. **Run Plan**, with an Ollama model to read the notes. The first run fetches the site's data from
-   the USGS, so it takes a few minutes.
+   and what it must avoid or pass through (see The plan's notes, below). **Done** makes the plan.
+3. **Run Plan**, with an Ollama model to read the notes (**Ollama Models**, beside it, downloads
+   one). The first run fetches the site's data from the USGS - it takes a minute or two, and longer
+   for a large site.
 4. **View Plan** for its road options' report, and **Save** the plan to a file.
 
 
@@ -88,8 +89,9 @@ criteria, and marks), and what can be done with it:
   streams, roads, and road options. Scroll to zoom, and drag to move. Draw an area's corners or a
   road's points with clicks (double-click or Enter finishes, Backspace removes the last point), or
   click a place. Select a mark to rename or delete it, or drag its points. A mark that a run found
-  for the notes is dashed - edit it to correct it (it's yours then). Run the plan again to engineer
-  its road options with the marks - its site's data is kept, so the USGS isn't asked for it again.
+  for the notes is dashed - edit it to correct it (it's yours then). **Done** makes the marks the
+  plan's. Run the plan again to engineer its road options with the marks - its site's data is kept,
+  so the USGS isn't asked for it again.
 - **Run Plan** - choose an Ollama model to read its notes (or none - the last model chosen is the
   default). If the notes can't be read - Ollama isn't running, or it has no models - or won't be
   (no model is chosen), or the model doesn't read images (it can't find the notes' places on the
@@ -101,7 +103,8 @@ criteria, and marks), and what can be done with it:
   or spacing changed, or "Fetch the site's data from the USGS again" is checked. **Clear Road
   Options** clears them - the plan keeps its site's data.
 - **Save** the plan to its file - the file it was opened from, or saved to - or **Save As** another,
-  to duplicate it (and run it with another config, say). A plan with road options keeps its config
+  to duplicate it (and run it with another config, say). In a browser that can't write to a file
+  (Firefox and Safari), a save downloads the plan's file. A plan with road options keeps its config
   and its map image, so it's one file - and a plan without road options is its config's file.
 - **Close** it - if it has changes that aren't saved, you're asked first.
 - **Ollama Models** - Ollama's models on this computer: whether each reads images, its parameters,
@@ -177,10 +180,14 @@ A run of the plan:
    programming (the least earthwork within the grade limits, flatter on switchbacks), and its
    culverts, retaining walls, bridges, and turnouts are placed. Each road is searched with three
    weights of the penalty for ground steeper than the design grade, and it's the one with the lowest
-   cost score. The terrain's unmapped draws that a road crosses are added as streams, with culverts,
-   and the roads are engineered again. If the Existing Roads or New Road option runs to the site's
-   edge, or there's no road within the grade limit, the site's margin is enlarged by half, and the
-   plan is made again - at most twice.
+   cost score (the other corridor's road is searched with one). A road's cut or fill is 60 feet (18
+   meters) deep at most, at its center line (but for a bridge's span) - where the grade limits need
+   more, the road is searched again with stricter grades, and if it still does, it isn't a road. The
+   terrain's unmapped draws that a road crosses are added as streams, with culverts, and the roads
+   are engineered again. If the Existing Roads or New Road option runs to the site's edge, or
+   there's no road within the grade limit, the site's margin is enlarged by half, and the plan is
+   made again - at most twice. On ground too steep for a road at the maximum grade - a canyon's
+   walls, say - a run ends with no road, and says where the road it found is too deep.
 4. **Keeps the best options** - at most four, in cost score order (another corridor is the first
    that isn't kept) - and writes their descriptions: the plan's facts, what the notes asked for, and
    what the run did with them.
@@ -324,8 +331,10 @@ The default rates:
 | Borrow (import) | $20 / CY |
 | Waste (export) | $8 / CY |
 | Overhaul (beyond 500 ft free haul) | about $3 / CY-mile |
+| Native surface finish grading | about $1.25 / SY |
 | Aggregate surfacing | about $16 / SY |
 | Asphalt paving (with base) | about $33 / SY |
+| Concrete paving | about $75 / SY |
 | Ditches and cross drains | about $14 / LF of road |
 | Culverts | about $120 / LF (18 in) to $250 / LF (36 in), plus $3,000 per end |
 | Retaining walls | about $60 / SF of face |
@@ -394,6 +403,7 @@ make commit       # the pre-commit gate: the viewer's, the planning tools', and 
 make test         # run the unit tests (TEST=name runs the viewer's and the planning tools' tests of a name)
 make lint         # run ESLint on the viewer and the planning tools, and pylint on the application
 make site         # stage the project's web site (build/gh-pages/)
+make changelog    # update the changelog (CHANGELOG.md) with the commits since its last
 make clean        # remove the build directories
 ```
 
@@ -419,6 +429,10 @@ ask a model. `CLAUDE.md` is the repository guide for Claude Code.
 plan, and the viewer in `viewer/`. `make gh-pages` runs the pre-commit gate, stages the site, and
 updates a checkout of the repository's `gh-pages` branch in `../sageroad.gh-pages` - commit and push it
 there to publish (GitHub Pages serves the branch).
+
+`make -C app publish` runs the pre-commit gate, builds the package, and uploads it to PyPI (with
+[twine](https://twine.readthedocs.io/) - it asks for a PyPI API token, or reads one from `~/.pypirc`).
+The package's version is `app/pyproject.toml`'s, and `make changelog` updates `CHANGELOG.md`.
 
 The published viewer is the viewer's complete source - including the earthwork and cost model - and
 the site is public. Road plans and map images are user data: don't add them to the site unless

@@ -144,8 +144,15 @@ and it turns as the road does. The route's runs along existing roads are the roa
 leaves it, so a junction's curve is new road. `--all-new` searches for an all-new road.
 
 A road is within its grade limit. Where a route's profile can't be - at the design grade, it can't reach the end
-point's ground, or an existing road's - `route` searches again with stricter grades, and if there's still no road,
-it's an error and no option is written.
+point's ground, or an existing road's, or stay within the maximum depth of the ground (`design.js`'s `maxDepth` -
+60 feet, or 18 meters, at the center line, but for a bridge's span) - `route` searches again with stricter grades,
+and if there's still no road, it's an error and no option is written. The profile's design falls back to deeper
+limits so that it can say how deep the road would be - a deep profile isn't a road's (a fill 147 meters deep was
+a canyon site's only option, before it was a failure).
+
+A road's start and end points are apart - points that are one point of the route search's lattice have no road
+between them (it's an error). A point beside an exclusion area isn't within it: its lattice node is the nearest of
+its cell's nodes that isn't within an area (`routeNode`).
 
 A road doesn't overlap itself - it doesn't cross itself, or run back along itself (`roadOverlaps` - its center line
 isn't within its width of itself, but for the parts within a half circle of the minimum radius of each other, along

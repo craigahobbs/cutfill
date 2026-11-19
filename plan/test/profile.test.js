@@ -27,7 +27,11 @@ test('designProfile, the Python planning tools\' profiles', () => {
     for (const name of Object.keys(alignments)) {
         const {designed} = profileFixture(name);
         const {profile, ground, sideSlope} = expected[name];
-        assert.deepEqual(plain(designed), {profile, ground, sideSlope, 'unreachable': unreachables[name] ?? null}, name);
+        // (the profiles that the grade limits can't keep within the design's maximum depth of the ground are deep - the
+        // profiles across the valley's 80 foot fill, and those that can't reach their existing roads' ground)
+        const unreachable = unreachables[name] ?? null;
+        const deep = unreachable !== null || name.startsWith('profile-valley');
+        assert.deepEqual(plain(designed), {profile, ground, sideSlope, unreachable, deep}, name);
     }
 });
 
@@ -102,6 +106,7 @@ test('designProfile, an existing road', () => {
         const steepDesigned = designProfile(steep.topo, steep.design, steep.x, steep.y, steep.stations, steep.existing);
         assert.equal(plain(steep.existing).join(''), '000000000011111111111');
         assert.equal(steepDesigned.unreachable, 10);
+        assert.equal(steepDesigned.deep, true);
         assert.deepEqual(plain(steepDesigned.profile.slice(10)), plain(steepDesigned.ground.slice(10)));
         assert.ok(Math.max(...grades(steepDesigned.profile.slice(0, 10), 5)) <= steep.design.grade + 1e-9);
         assert.ok(Math.abs(steepDesigned.ground[9] - steepDesigned.profile[9] - depth) < 0.001, `${rise}`);

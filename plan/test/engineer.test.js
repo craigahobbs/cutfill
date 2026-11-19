@@ -1,5 +1,5 @@
 import {bestRoad, corridorReason} from '../lib/engineer.js';
-import {blockedPlan, designArgs, expected, hillPlan, planePlan, roadPlan} from './roadFixtures.js';
+import {blockedPlan, designArgs, expected, hillPlan, planePlan, roadPlan, valleyPlan} from './roadFixtures.js';
 import {optionsCommand, optionsUsage, routeCommand, routeUsage} from '../lib/cli.js';
 import {planText, validatePlan} from '../../viewer/lib/model.js';
 import {polylineStations, roadOverlaps} from '../lib/route.js';
@@ -823,6 +823,70 @@ test('route, no road within the grade limit', () => {
         'error: no road within the 11% grade limit - the profile can\'t reach the existing road at station 53 (try other via ' +
             'points, a longer corridor, or a steeper grade)'
     ]);
+});
+
+
+test('route, a road that\'s deeper than the maximum depth', () => {
+    // A road across a steep-sided valley is on an 82 foot fill - the grade limits can't keep its profile within the
+    // design's maximum depth of the ground, so it isn't a road
+    const deepError = (height, side) => (
+        `error: no road within the 11% grade limit - the profile is ${height} feet ${side} the ground at station 258 (a road's ` +
+            'cut or fill is 60 feet deep, at most) (try other via points, a longer corridor, or a steeper grade)'
+    );
+    const valley = () => ({...valleyPlan(), 'start': {'x': 60, 'y': 100}, 'end': {'x': 340, 'y': 300}});
+    const {result, written} = run(valley(), ['route', 'plan.json', '-n', 'Test']);
+    assert.deepEqual(result, {'code': 1, 'lines': [
+        ...new Array(3).fill(
+            'The profile is 82.1 feet above the ground at station 258 (a road\'s cut or fill is 60 feet deep, at most) - searching ' +
+                'with stricter grades'
+        ),
+        deepError('82.1', 'above')
+    ]});
+    assert.equal(written, null);
+
+    // A bridge over the valley's stream spans its deep fill - the road's fill isn't deeper than the maximum depth
+    const bridged = run(valley(), ['route', 'plan.json', '-n', 'Test', '--bridge-fill', '20']);
+    assert.deepEqual([bridged.result.code, bridged.result.lines[0]], [
+        0, 'Option "Test": 406 feet long, 83 alignment points, max grade 11.0%, max cut 0.0, max fill 82.1'
+    ]);
+    assert.deepEqual(bridged.plan.options[0].structures.filter(({type}) => type === 'bridge'), [
+        {'type': 'bridge', 'station': 178.5, 'endStation': 327.2, 'name': 'Creek bridge'}
+    ]);
+
+    // A road across a steep-sided ridge is in a cut as deep
+    const ridge = valley();
+    ridge.topography.elevations = ridge.topography.elevations.map((row) => row.map((elevation) => 400 - elevation));
+    ridge.topography.features = [];
+    assert.equal(run(ridge, ['route', 'plan.json', '-n', 'Test']).result.lines.at(-1), deepError('82.1', 'below'));
+});
+
+
+test('route, the start and end points are one point', () => {
+    // The start and end points are one point of the route search's lattice - there's no road between them
+    const near = (end) => ({...planePlan({'rise': 0.02, 'size': 41}), 'start': {'x': 20, 'y': 20}, end});
+    const error = 'error: no road - the start and end points are 5.4 feet apart, which is one point of the route search\'s (its ' +
+        'points are 23.5 feet apart)';
+    const route = ['route', 'plan.json', '-n', 'Test'];
+    for (const argv of [route, [...route, '--via', '200,200'], ['options', 'plan.json']]) {
+        const {result, written} = run(near({'x': 25, 'y': 22}), argv);
+        assert.deepEqual([result, written], [{'code': 1, 'lines': [error]}, null], argv.join(' '));
+    }
+
+    // Farther apart, there's a short road
+    const short = run(near({'x': 40, 'y': 40}), ['route', 'plan.json', '-n', 'Test']);
+    assert.deepEqual([short.result.code, short.result.lines[0]], [
+        0, 'Option "Test": 28 feet long, 7 alignment points, max grade 2.3%, max cut 0.1, max fill 0.0'
+    ]);
+
+    // A short road's other corridor isn't one - a road that's shorter than the corridors' interval has a middle, too
+    const options = run(near({'x': 50, 'y': 30}), ['options', 'plan.json']);
+    assert.equal(options.result.code, 0);
+    assert.deepEqual(options.result.lines.filter((line) => line.startsWith('No other corridor')), [
+        'No other corridor: "East Corridor" (through 50,30) is in the standard options\' corridor - its middle is an average of ' +
+            '0 feet from them (a corridor apart is 200 feet or more)'
+    ]);
+    assert.deepEqual(options.plan.options.map(({name}) => name), ['New Road']);
+    assert.ok('plan' in validatePlan(options.plan));
 });
 
 

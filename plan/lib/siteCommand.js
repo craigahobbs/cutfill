@@ -297,10 +297,14 @@ function keepSite(plan, site, layout) {
     const exclusions = exclusionFeatures(layout, site);
     const siteRoads = siteRoadFeatures(layout, site);
     const isMark = siteMarkFeatures(plan.site ?? {}, site);
-    const features = (plan.topography.features ?? []).filter((feature) => !isMark(feature));
-    const keptPlan = sitePlan(
-        plan, site, layout, {'topography': {...plan.topography, 'features': [...features, ...exclusions, ...siteRoads]}}
-    );
+
+    // The features are in a new site's order (createSite) - the USGS's, the site's marks, and the plan's own
+    const isOwn = (feature) => feature.type === 'rock' || feature.type === 'exclusion' || (feature.added ?? false);
+    const planFeatures = (plan.topography.features ?? []).filter((feature) => !isMark(feature));
+    const features = [
+        ...planFeatures.filter((feature) => !isOwn(feature)), ...exclusions, ...siteRoads, ...planFeatures.filter(isOwn)
+    ];
+    const keptPlan = sitePlan(plan, site, layout, {'topography': {...plan.topography, features}});
     return {'plan': keptPlan, 'lines': [
         'Site: the plan\'s site data is kept - its terrain, streams, roads, trails, and map (its grid is the site\'s - fetch ' +
             'them again with --fetch)',
