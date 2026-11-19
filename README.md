@@ -1,3 +1,5 @@
+![SageRoad icon](https://craigahobbs.github.io/sageroad/viewer/sageroad.svg)
+
 # SageRoad
 
 [![PyPI - Status](https://img.shields.io/pypi/status/sageroad)](https://pypi.org/project/sageroad/)
