@@ -87,7 +87,8 @@ Run `make` in `viewer/` or `plan/` for a subproject's own targets (e.g.
 - The application's front end (`app/src/cutfill/static/`) is generated (`make -C app static`) and committed, so the
   package builds from the repository without Node.js - commit it with the viewer and planning tool changes that
   regenerate it (`make commit` does), and don't edit it by hand. The front end loads nothing from the internet but
-  the USGS's services (an app test checks).
+  the USGS's services (an app test checks). The package's readme (its PyPI page) is the README, by a link
+  (`app/PYPI.md` - setuptools reads only the package directory's files), so the README's links are all absolute.
 - Road plan files and their work directories (`*.work/`, git-ignored) usually live outside the repo - they're user
   data, so don't add them to the repo or the web site.
 

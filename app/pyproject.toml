@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "cutfill"
 version = "0.1.0"
 description = "Cutfill engineers low-volume roads on USGS lidar terrain and views the resulting road plans"
-readme = "README.md"
+readme = "PYPI.md"
 license = "MIT"
 requires-python = ">=3.11"
 keywords = ["road", "grading", "lidar", "civil engineering"]
@@ -36,9 +36,9 @@ Homepage = "https://github.com/craigahobbs/cutfill"
 [project.scripts]
 cutfill = "cutfill.main:main"
 
-[tool.setuptools]
-package-dir = {"" = "src"}
-packages = ["cutfill"]
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["cutfill", "cutfill.*"]
 
 [tool.setuptools.package-data]
 cutfill = ["static/**/*"]

@@ -19,6 +19,8 @@ front end's statics (and chisel's API documentation, `/doc/`) - the front end do
 
 The front end is the package's `static` directory - `make static` copies the viewer's staged application there, with
 the planning tools' modules (`plan/lib/`). It's committed, so the package builds from the repository without Node.js.
+The package's readme (its PyPI page) is the project's README, by a link (`PYPI.md`) - setuptools reads only the
+package directory's files.
 The package is installed from [PyPI](https://pypi.org/project/cutfill/):
 
 ```sh
