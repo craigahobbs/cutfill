@@ -2,6 +2,7 @@
 
 ## 1.0.1 (2026-11-19)
 
+- [2b201f6](https://github.com/craigahobbs/sageroad/commit/2b201f6) - Enlarge the README's icon
 - [8c3289b](https://github.com/craigahobbs/sageroad/commit/8c3289b) - Set the version to 1.0.1
 - [4ae460a](https://github.com/craigahobbs/sageroad/commit/4ae460a) - Add the SageRoad icon
 - [e26a320](https://github.com/craigahobbs/sageroad/commit/e26a320) - Add a top-level make publish
