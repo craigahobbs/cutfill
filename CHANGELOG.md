@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.5 (2026-11-20)
+
+- [bd47a68](https://github.com/craigahobbs/sageroad/commit/bd47a68) - Follow a road's side slopes to the terrain
+
 ## 1.0.4 (2026-11-20)
 
 - [36ad454](https://github.com/craigahobbs/sageroad/commit/36ad454) - Show an optional choice's default in its choice of none
