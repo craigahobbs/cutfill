@@ -185,9 +185,12 @@ A run of the plan:
    weights of the penalty for ground steeper than the design grade, and it's the one with the lowest
    cost score (the other corridor's road is searched with one). A road's cut or fill is 60 feet (18
    meters) deep at most, at its center line (but for a bridge's span) - where the grade limits need
-   more, the road is searched again with stricter grades, and if it still does, it isn't a road. The
-   terrain's unmapped draws that a road crosses are added as streams, with culverts, and the roads
-   are engineered again. If the Existing Roads or New Road option runs to the site's edge, or
+   more, the road is searched again with stricter grades, and if it still does, it isn't a road. A
+   road that's over 20 feet (6 meters) deep is held off the ground by its grade limit - its line's
+   ground is steeper than its grade for too long (a canyon's floor, say) - so it's searched with the
+   stricter grades, too, and it's the road with the lowest cost score: a longer road around often
+   costs far less than a long, deep fill. The terrain's unmapped draws that a road crosses are added
+   as streams, with culverts, and the roads are engineered again. If the Existing Roads or New Road option runs to the site's edge, or
    there's no road within the grade limit, the site's margin is enlarged by half, and the plan is
    made again - at most twice. On ground too steep for a road at the maximum grade - a canyon's
    walls, say - a run ends with no road, and says where the road it found is too deep.
