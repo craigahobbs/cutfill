@@ -96,9 +96,10 @@ criteria, and marks), and what can be done with it:
   default). If the notes can't be read - Ollama isn't running, or it has no models - or won't be
   (no model is chosen), or the model doesn't read images (it can't find the notes' places on the
   map), it says so. The run's steps are shown as it goes, with its time, and its result and report when it's
-  done. **Stop** stops it, when its current step's work is done - and its work is thrown away. The
-  road options it engineers are the plan's, and so are the places it found for the notes (see
-  Planning a road, below). A plan that's run again keeps its site's data (its terrain,
+  done. The run is made in the background, so the page goes on while it runs. **Stop** stops it at
+  once - and its work is thrown away. The road options it engineers are the plan's, and so are the
+  places it found for the notes (see Planning a road, below). A plan that's run again keeps its
+  site's data (its terrain,
   streams, roads, and map), so the USGS isn't asked for it again - unless its points, units, margin,
   or spacing changed, or "Fetch the site's data from the USGS again" is checked. **Clear Road
   Options** clears them - the plan keeps its site's data.
