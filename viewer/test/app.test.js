@@ -287,7 +287,7 @@ test('the loaded plan', async (context) => {
     ]);
     assert.deepEqual([...element.querySelectorAll('li')].map((item) => item.innerHTML), ['Stay off the barn.', 'A &lt;gravel&gt; road.']);
     assert.deepEqual(loadedActions(browser), [
-        'View Plan (disabled)', 'Edit Plan', 'Edit Map (disabled)', 'Save', 'Save As…', 'Close', 'Run Plan', 'Ollama Models'
+        'View Plan (disabled)', 'Edit Plan', 'Edit Map (disabled)', 'Download', 'Close', 'Run Plan', 'Ollama Models'
     ]);
     const modelOptions = [...browser.document.getElementById('sageroad-run-model').options];
     assert.deepEqual(modelOptions.map(({value, textContent}) => [value, textContent]), [
@@ -324,7 +324,7 @@ test('running a plan', async (context) => {
     assert.equal(document.getElementById('sageroad-stop').disabled, false);
     assert.equal(select.disabled, true);
     assert.deepEqual(loadedActions(browser), [
-        'View Plan (disabled)', 'Edit Plan (disabled)', 'Edit Map (disabled)', 'Save (disabled)', 'Save As… (disabled)',
+        'View Plan (disabled)', 'Edit Plan (disabled)', 'Edit Map (disabled)', 'Download (disabled)',
         'Close (disabled)', 'Stop'
     ]);
     assert.deepEqual(['sageroad-open', 'sageroad-new'].map((id) => document.getElementById(id).disabled), [true, true]);
@@ -381,7 +381,7 @@ test('running a plan', async (context) => {
         element.querySelector('.sageroad-loaded-kind').innerHTML, '<code>hill.json</code> <span class="sageroad-unsaved">Not saved</span>'
     );
     assert.deepEqual(loadedActions(browser), [
-        'View Plan', 'Edit Plan', 'Edit Map (disabled)', 'Save', 'Save As…', 'Close', 'Run Plan', 'Clear Road Options', 'Ollama Models'
+        'View Plan', 'Edit Plan', 'Edit Map (disabled)', 'Download', 'Close', 'Run Plan', 'Clear Road Options', 'Ollama Models'
     ]);
 
     // The last model chosen is the model - and no model, once it's chosen
@@ -537,6 +537,7 @@ test('saving a plan', async (context) => {
     assert.equal(saveStatus(), 'Saved the plan, "saved.json".');
     assert.deepEqual(app.loaded, {'name': 'saved.json', 'file': 'saved.json', 'site': siteConfig, 'changed': false, 'saved': true});
     assert.equal(loadedElement(browser).querySelector('.sageroad-loaded-kind').innerHTML, '<code>saved.json</code>');
+    assert.deepEqual(loadedActions(browser).slice(3, 6), ['Save', 'Save As…', 'Close']);
     assert.ok(browser.indexedDB.records('files').some(({name}) => name === 'saved.json'));
 
     // Save it again - it's saved to its file, without the dialog
@@ -576,7 +577,7 @@ test('saving a plan without road options', async (context) => {
 
 
 test('saving a plan without a save dialog', async (context) => {
-    // The browser has no save dialog - the plan is downloaded, for save and save as
+    // The browser has no save dialog - the plan is downloaded ("Download" - there's no save as)
     const {browser, app} = await startRunApp(context, {'loaded': {...loadedConfig, 'name': null}});
     const {document} = browser;
     const clicks = [];
@@ -586,13 +587,15 @@ test('saving a plan without a save dialog', async (context) => {
         element.click = () => clicks.push([element.getAttribute('href'), element.download]);
         return element;
     });
-    for (const [ixSave, id] of ['sageroad-save', 'sageroad-save-as'].entries()) {
-        click(browser, id);
+    assert.deepEqual(loadedActions(browser).slice(3, 5), ['Download', 'Close']);
+    assert.equal(document.getElementById('sageroad-save-as'), null);
+    for (const ixSave of [0, 1]) {
+        click(browser, 'sageroad-save');
         await flushUntil(() => clicks.length === ixSave + 1 && document.getElementById('sageroad-save-status').textContent !== '');
     }
     assert.deepEqual(clicks, [['blob:http://localhost/1', 'Hill Road.json'], ['blob:http://localhost/2', 'Hill Road.json']]);
     assert.equal(JSON.parse(await browser.objectURLs[0].text()).title, 'Fixture Plan');
-    assert.equal(document.getElementById('sageroad-save-status').textContent, 'Saved the plan, "Hill Road.json".');
+    assert.equal(document.getElementById('sageroad-save-status').textContent, 'Downloaded the plan, "Hill Road.json".');
     assert.equal(app.loaded.saved, true);
     assert.deepEqual(browser.revokedURLs, []);
     browser.clock.runTimeout();
@@ -694,7 +697,7 @@ test('clearing a plan\'s road options, and closing it', async (context) => {
     assert.ok(loadedElement(browser).textContent.includes('The plan has no road options - run the plan to engineer them. Its ' +
         'site\'s data (its terrain, streams, roads, and map) is kept, so a run doesn\'t fetch it from the USGS again.'));
     assert.deepEqual(loadedActions(browser), [
-        'View Plan (disabled)', 'Edit Plan', 'Edit Map (disabled)', 'Save', 'Save As…', 'Close', 'Run Plan', 'Ollama Models'
+        'View Plan (disabled)', 'Edit Plan', 'Edit Map (disabled)', 'Download', 'Close', 'Run Plan', 'Ollama Models'
     ]);
     assert.equal(document.getElementById('sageroad-run-progress').hidden, true);
     const cleared = JSON.parse(await browser.indexedDB.records('files').find(({name}) => name === 'hill.json').blob.text());
@@ -820,7 +823,7 @@ test('a loaded plan without a plan config', async (context) => {
     await flushUntil(() => loadedElement(browser).querySelector('h2') !== null);
     assert.deepEqual(app.loaded, {'name': 'old.json', 'file': 'old.json', 'site': null, 'changed': false, 'saved': true});
     assert.equal(loadedElement(browser).querySelector('h2').textContent, 'Fixture Plan');
-    assert.deepEqual(loadedActions(browser), ['View Plan', 'Edit Plan (disabled)', 'Edit Map (disabled)', 'Save', 'Save As…', 'Close']);
+    assert.deepEqual(loadedActions(browser), ['View Plan', 'Edit Plan (disabled)', 'Edit Map (disabled)', 'Download', 'Close']);
     assert.ok(loadedElement(browser).textContent.includes('The plan has no config - it was made before plans kept theirs - ' +
         'so it can\'t be edited or run here.'));
     assert.equal(browser.document.getElementById('sageroad-run'), null);

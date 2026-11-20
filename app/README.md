@@ -61,8 +61,8 @@ once it's run), run it (its steps - the planning tools' `autoSteps` - and its ti
 report when it's done; it's stopped with an abort signal, when its current step's work is done, and its work is
 thrown away; the last model chosen is remembered; a plan's site's data is kept, unless the site changed or it's
 fetched again), clear its road options (its site's data is kept), save it (to its file, or another - the browser's
-save dialog, or a download), and close it (the user is asked first, if it has changes that aren't saved). A plan with
-road options is one file: it keeps its config and its map image (a data URL). The recent files are listed - a file is
+save dialog, or a download - "Download", in a browser without one), and close it (the user is asked first, if it has
+changes that aren't saved). A plan with road options is one file: it keeps its config and its map image (a data URL). The recent files are listed - a file is
 opened, or removed (but for the loaded plan's road options' file).
 
 The engineering isn't the back end's: a plan is run in the browser, by the planning tools' procedure (`autoPlan`,

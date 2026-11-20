@@ -19,6 +19,12 @@ export function titleFileName(title) {
 }
 
 
+// Whether the browser has a save dialog that writes to a file (the File System Access API's - Chromium's)
+function hasSaveDialog(window) {
+    return typeof window.showSaveFilePicker === 'function';
+}
+
+
 // The plan config's design criteria's and cost rates' text - each member's words, and its value
 function memberText(members) {
     return Object.entries(members).map(([name, value]) => `${memberWords(name)} ${value}`).join(', ');
@@ -137,7 +143,8 @@ export class HomePage {
             return;
         }
 
-        // The plan's title, its file, and its actions - its road options are viewed with "View Plan", in a new tab
+        // The plan's title, its file, and its actions - its road options are viewed with "View Plan", in a new tab, and
+        // a browser without a save dialog (Firefox and Safari) downloads the plan ("Download" - save and save as are the same)
         const button = (id, text, isDisabled = false) => (
             `<button type="button" id="${id}" class="sageroad-button"${isDisabled ? ' disabled' : ''}>${escapeHtml(text)}</button>`
         );
@@ -152,7 +159,8 @@ export class HomePage {
             '<p class="sageroad-actions">' +
                 `${viewHtml}${button('sageroad-edit', 'Edit Plan', site === null)}` +
                 `${button('sageroad-map', 'Edit Map', site === null || !('georeference' in (value ?? {})))}` +
-                `${button('sageroad-save', 'Save')}${button('sageroad-save-as', 'Save As…')}${button('sageroad-close', 'Close')}</p>`,
+                `${hasSaveDialog(app.window) ? `${button('sageroad-save', 'Save')}${button('sageroad-save-as', 'Save As…')}` :
+                    button('sageroad-save', 'Download')}${button('sageroad-close', 'Close')}</p>`,
             '<p id="sageroad-save-status"></p>'
         ];
         if (value === null) {
@@ -439,7 +447,7 @@ export class HomePage {
         let name = loaded.name ?? titleFileName(loaded.site.title);
         try {
             let handle = isSaveAs ? null : app.fileHandle;
-            if (handle === null && typeof window.showSaveFilePicker === 'function') {
+            if (handle === null && hasSaveDialog(window)) {
                 handle = await window.showSaveFilePicker({
                     'suggestedName': name, 'types': [{'description': 'SageRoad plan', 'accept': {'application/json': ['.json']}}]
                 });
@@ -474,7 +482,8 @@ export class HomePage {
         app.setLoaded({...loaded, name, file, 'saved': true});
         if (!this.closed) {
             await this.renderLoaded();
-            document.getElementById('sageroad-save-status').textContent = `Saved the plan, "${name}".`;
+            const verb = hasSaveDialog(window) ? 'Saved' : 'Downloaded';
+            document.getElementById('sageroad-save-status').textContent = `${verb} the plan, "${name}".`;
             await this.renderRecent();
         }
     }
