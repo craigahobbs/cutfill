@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.4 (2026-11-20)
+
+- [36ad454](https://github.com/craigahobbs/sageroad/commit/36ad454) - Show an optional choice's default in its choice of none
+
+- [7ed02e5](https://github.com/craigahobbs/sageroad/commit/7ed02e5) - Add the road's width and surface to the design criteria
+
 ## 1.0.3 (2026-11-20)
 
 - [7ebd3a6](https://github.com/craigahobbs/sageroad/commit/7ebd3a6) - Label the save button "Download" in browsers without a save dialog
