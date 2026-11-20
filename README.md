@@ -180,7 +180,8 @@ A run of the plan:
    slope, stream crossing, rock, and exclusion costs) - a road doesn't cross itself, run back along
    itself, or run in a stream's channel - its vertical profile is designed by dynamic
    programming (the least earthwork within the grade limits, flatter on switchbacks), and its
-   culverts, retaining walls, bridges, and turnouts are placed. Each road is searched with three
+   culverts, retaining walls (where a cut or fill slope doesn't meet the ground within the maximum
+   slope height), bridges, and turnouts are placed. Each road is searched with three
    weights of the penalty for ground steeper than the design grade, and it's the one with the lowest
    cost score (the other corridor's road is searched with one). A road's cut or fill is 60 feet (18
    meters) deep at most, at its center line (but for a bridge's span) - where the grade limits need
@@ -229,8 +230,9 @@ Engineering Best Management Practices Field Guide*, AASHTO low-volume road guida
 | Minimum radius | 50 ft / 15 m | 50 ft / 15 m | 50 ft / 15 m (70 ft for trucks with trailers) |
 
 The defaults are a 14 foot (4.3 meter) gravel road, a 12% maximum grade (designed 1% under it, and 8%
-on switchbacks), a 50 foot (15 meter) minimum radius, and a 20 foot (6 meter) maximum wall height. A
-dead-end road also needs a turnaround at its end - it isn't modeled.
+on switchbacks), a 50 foot (15 meter) minimum radius, a 20 foot (6 meter) maximum wall height, and a
+60 foot (18 meter) maximum cut or fill slope height. A dead-end road also needs a turnaround at its
+end - it isn't modeled.
 
 
 ## The viewer
@@ -255,7 +257,8 @@ and cost score, then shows:
   that shows all of its road (from straight above, if the terrain hides parts of it at every tilt).
 - **Cost** - the cost breakdown by item
 - **Design warnings** - grades over the maximum, curves under the minimum radius, slopes that don't
-  daylight (retaining walls needed), walls over the maximum height, unprotected stream crossings,
+  daylight - that don't meet the ground within the maximum slope height (retaining walls needed) -
+  walls over the maximum height, unprotected stream crossings,
   exclusion areas, and ends that miss the start/end points or don't tie in to the ground
 - **Structures** and the **source map** image
 
@@ -311,8 +314,9 @@ plan options, not as a bid estimate. SageRoad computes it from typical 2023-2025
 average bid prices and low-volume road references):
 
 - **Earthwork** by the average end area method. Cross sections every third of a grid cell model the
-  road template, cut slopes (1:1 soil, 0.5:1 rock), and fill slopes (1.5:1) against the ground's
-  cross slope. Rock excavation applies within rock outcrop areas.
+  road template, cut slopes (1:1 soil, 0.5:1 rock), and fill slopes (1.5:1) on the terrain - a
+  slope is followed out from the road's edge to where it meets the ground. Rock excavation applies
+  within rock outcrop areas.
 - **Mass balance** - shrinkage and swell, borrow (import), waste (export), and overhaul from the mass
   haul diagram beyond the free haul distance
 - **Clearing, surfacing, ditches and cross drains, erosion control**, by area or length
