@@ -48,14 +48,15 @@ const sectionCellLimit = 6000000;
 // elevations, and the ground's "sideSlope" (its rise per unit of offset to the left) at the stations - and the index
 // of the first existing road station that the grade limits can't reach ("unreachable" - the profile breaks grade
 // there), or null. A profile that the grade limits can't take to the end's ground ends at the nearest level they can,
-// and a profile that they can't keep within the design's maximum depth of the ground is "deep" (it isn't a road's).
+// and a profile that they can't keep within the design's maximum depth of the ground is "deep" (it isn't a road's) -
+// unless "isDeep" is false: there's then no profile (null), which is much less work to find than how deep it is.
 // "cellLimit" is the most station level cells whose cross sections the design keeps (it's faster, and the same).
-export function designProfile(topo, design, x, y, stations, existing = null, cellLimit = sectionCellLimit) {
+export function designProfile(topo, design, x, y, stations, existing = null, cellLimit = sectionCellLimit, isDeep = true) {
     // The profile is within the maximum cut and fill depth of the ground - its design's work is the stations times the
     // depth, not times the site's relief. Where the grade limits can't keep it there, it's designed with a deeper limit
     // - it's deep.
     let result = null;
-    for (const depthLimit of depthLimits) {
+    for (const depthLimit of (isDeep ? depthLimits : depthLimits.slice(0, 1))) {
         result = designProfileDepth(topo, design, x, y, stations, existing, depthLimit, cellLimit);
         if (result !== null) {
             result.deep = depthLimit !== depthLimits[0];

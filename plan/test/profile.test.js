@@ -110,7 +110,16 @@ test('designProfile, an existing road', () => {
         assert.deepEqual(plain(steepDesigned.profile.slice(10)), plain(steepDesigned.ground.slice(10)));
         assert.ok(Math.max(...grades(steepDesigned.profile.slice(0, 10), 5)) <= steep.design.grade + 1e-9);
         assert.ok(Math.abs(steepDesigned.ground[9] - steepDesigned.profile[9] - depth) < 0.001, `${rise}`);
+
+        // Unless a deep profile isn't designed - there's none
+        assert.equal(designProfile(steep.topo, steep.design, steep.x, steep.y, steep.stations, steep.existing, undefined, false), null);
     }
+
+    // A profile that's within the depth limit is the same, whether or not a deep profile is designed
+    const {topo, design, x, y, stations, existing} = profileFixture('profile-hill').alignment;
+    const shallow = designProfile(topo, design, x, y, stations, existing, undefined, false);
+    assert.equal(shallow.deep, false);
+    assert.deepEqual(shallow, designProfile(topo, design, x, y, stations, existing));
 });
 
 

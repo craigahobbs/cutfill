@@ -37,7 +37,8 @@ export const roadSurfaces = ['native', 'gravel', 'asphalt', 'concrete'];
 
 
 // The route search's soft grade bands and grade margins - if the profile can't reach the end elevation within the grade
-// limits, the route is searched again with stricter grade penalties
+// limits, the route is searched again with stricter grade penalties. And if the grade limit holds a search's road off
+// the ground (its cut or fill is over the design's search depth), the stricter searches' roads are the route's, too.
 const routeSearches = [[0.03, 0], [0.01, 0.005], [0, 0.015], [0, 0.03]];
 
 
@@ -305,7 +306,8 @@ const topoLattices = new WeakMap();
 
 // Engineer an option of a plan - its alignment, profile, and structures - "commandArgs" is the road's arguments
 // (roadArguments). The route is searched with each grade penalty weight (or the argument's), and the option is the best
-// of their roads (bestRoad). The option is added to the plan's options, or it replaces the option of its name. Returns
+// of their roads (bestRoad) - with the stricter searches' roads of a road that its grade limit holds off the ground
+// (routeAlignment). The option is added to the plan's options, or it replaces the option of its name. Returns
 // the report's "lines" and the "error" - null, or why there's no option (the plan is as it was - "isGrade" is true if
 // there's no road within the grade limit) - and if there's an option, whether it's at the site's edge ("atEdge" - the
 // site may be too small for it), whether it passes by a via point or turns back at one ("turnsBack"), and the via points
@@ -356,11 +358,15 @@ export function engineerOption(plan, topo, commandArgs) {
         }
         if (error !== null) {
             failed ??= {lines, error, isGrade};
-        } else {
+            continue;
+        }
+
+        // The search's road - and the stricter searches' roads, if the grade limit holds it off the ground
+        for (const road of [designed, ...designed.others]) {
             // Structures (the existing roads within the road's length, measured along the option's alignment points as
             // the viewer does - an existing road to the road's end is to its last station, so nothing is placed between
             // them)
-            const {x, y, stations, profile, sideSlope} = designed;
+            const {x, y, stations, profile, sideSlope} = road;
             const pointsX = Array.from(x, (value) => pyRound(value, 2));
             const pointsY = Array.from(y, (value) => pyRound(value, 2));
             let length = 0;
@@ -368,7 +374,7 @@ export function engineerOption(plan, topo, commandArgs) {
                 length += Math.sqrt((pointsX[ix + 1] - pointsX[ix]) ** 2 + (pointsY[ix + 1] - pointsY[ix]) ** 2);
             }
             const alignmentLength = Math.floor(length * 10) / 10;
-            const existingRoads = designed.existingRoads.filter(([start]) => start < alignmentLength);
+            const existingRoads = road.existingRoads.filter(([start]) => start < alignmentLength);
             const structures = designStructures(topo, design, x, y, stations, profile, sideSlope, existingRoads, alignmentLength);
 
             // The road's option, and its cost score
@@ -383,7 +389,10 @@ export function engineerOption(plan, topo, commandArgs) {
             };
             options[ixOption] = option;
             const {score, warnings} = analyzeOption(plan, ixOption, topo);
-            designedRoads.push({option, designed, existingRoads, lines, score, 'warnings': warnings.length});
+            designedRoads.push({
+                option, 'designed': road, existingRoads, 'lines': road === designed ? lines : [...lines, road.line], score,
+                'warnings': warnings.length
+            });
         }
     }
 
@@ -444,6 +453,13 @@ export function bestRoad(roads) {
 // no route. A road that overlaps itself isn't designed - it has no profile, and its "overlap" is the station where it
 // first overlaps itself (it's null for a road). "pathDesigns" are the designs of the paths that were searched before
 // (a map) - the searches with other grade penalty weights often find the same path, and a path's design is the same.
+//
+// A road that the grade limit holds off the ground - its cut or fill is over the design's search depth, at its center
+// line - is deep because its line's ground is steeper than its grade for too long (a canyon's floor, or a hill straight
+// up): the search's penalty for steep ground is light, since a little earthwork absorbs a little of it. The stricter
+// searches' roads go around - they're longer, with less earthwork - so they're the route's roads, too (the road's
+// "others" - each as the road is, with the "line" that reports why it was searched), and the road that costs the least
+// is the route's (engineerOption). On ground a road follows, a stricter search's road only costs more - it isn't searched.
 function routeAlignment(plan, topo, design, roads, routeNodes, commandArgs, lines, pathDesigns) {
     // The existing roads are the argument's ranges, or the plan's existing roads that the route follows
     const followsRoads = !commandArgs.allNew && commandArgs.existingRoads === null;
@@ -468,15 +484,18 @@ function routeAlignment(plan, topo, design, roads, routeNodes, commandArgs, line
     // Search for the horizontal alignment through the via points. The legs, and the searches with stricter grades,
     // search one lattice.
     const waypoints = [[plan.start.x, plan.start.y], ...commandArgs.via, [plan.end.x, plan.end.y]];
+    const searchPath = ([softBand, gradeMargin]) => routePath(
+        (start, end, heading, endHeading) => routeSearch(
+            routeNodes, design, start, end, commandArgs.gradeWeight, heading, softBand, gradeMargin, endHeading
+        ),
+        waypoints, design, pathDesign
+    );
     let routed;
     let failure = null;
-    for (const [ixSearch, [softBand, gradeMargin]] of routeSearches.entries()) {
-        routed = routePath(
-            (start, end, heading, endHeading) => routeSearch(
-                routeNodes, design, start, end, commandArgs.gradeWeight, heading, softBand, gradeMargin, endHeading
-            ),
-            waypoints, design, pathDesign
-        );
+    let ixRoad = 0;
+    for (const [ixSearch, search] of routeSearches.entries()) {
+        ixRoad = ixSearch;
+        routed = searchPath(search);
         if (routed === null) {
             return null;
         } else if (routed.overlap !== null) {
@@ -496,6 +515,39 @@ function routeAlignment(plan, topo, design, roads, routeNodes, commandArgs, line
             lines.push(`The profile ${failure} - searching with stricter grades`);
         }
     }
+    const road = routedRoad(plan, design, commandArgs, routed, failure);
+
+    // The grade limit holds the road off the ground? The stricter searches' roads are the route's, too - those that are
+    // roads, within the grade limits (a profile that isn't within the maximum depth isn't designed).
+    road.others = [];
+    if (failure === null && routed.overlap === null) {
+        const {depth, station} = deepestStation(topo, design, road, road, road.existingRoads);
+        if (Math.abs(depth) > design.searchDepth) {
+            const line = `The profile is ${pyFixed(Math.abs(depth), 1)} ${plan.units} ${depth > 0 ? 'above' : 'below'} the ground at ` +
+                `station ${pyFixed(station, 0)} - a search with stricter grades has the road`;
+            for (const search of routeSearches.slice(ixRoad + 1)) {
+                const other = searchPath(search);
+                if (other.overlap === null) {
+                    const {alignment, existingRoads} = other.design;
+                    other.design.designed ??= designProfile(
+                        topo, design, alignment.x, alignment.y, alignment.stations, existingMask(alignment.stations, existingRoads),
+                        undefined, false
+                    );
+                    if (other.design.designed !== null &&
+                        gradeFailure(topo, design, alignment, other.design.designed, existingRoads, plan.units) === null) {
+                        road.others.push({...routedRoad(plan, design, commandArgs, other, null), line});
+                    }
+                }
+            }
+        }
+    }
+    return road;
+}
+
+
+// Get a route's road of its searched path (routePath's - its alignment's profile is designed, unless it overlaps
+// itself) - see routeAlignment. "failure" is the profile's failure to meet the grade limits (gradeFailure).
+function routedRoad(plan, design, commandArgs, routed, failure) {
     const {alignment, existingRoads, designed} = routed.design;
     const {x, y, stations} = alignment;
 
@@ -630,25 +682,33 @@ function gradeFailure(topo, design, {x, y, stations}, {profile, ground, sideSlop
         return `ends ${pyFixed(Math.abs(endDepth), 1)} ${units} ${endDepth > 0 ? 'below' : 'above'} the end point`;
     }
     if (deep) {
-        // The deepest station that isn't on a bridge - a fill is above the ground, and a cut below it
-        const bridges = designStructures(topo, design, x, y, stations, profile, sideSlope, existingRoads).filter(
-            ({type}) => type === 'bridge'
-        );
-        let depth = 0;
-        let station = 0;
-        for (let ix = 0; ix < profile.length; ix++) {
-            const isBridge = bridges.some((bridge) => stations[ix] >= bridge.station - 0.1 && stations[ix] <= bridge.endStation + 0.1);
-            if (!isBridge && Math.abs(profile[ix] - ground[ix]) > Math.abs(depth)) {
-                depth = profile[ix] - ground[ix];
-                station = stations[ix];
-            }
-        }
+        const {depth, station} = deepestStation(topo, design, {x, y, stations}, {profile, ground, sideSlope}, existingRoads);
         if (Math.abs(depth) > design.maxDepth) {
             return `is ${pyFixed(Math.abs(depth), 1)} ${units} ${depth > 0 ? 'above' : 'below'} the ground at station ` +
                 `${pyFixed(station, 0)} (a road's cut or fill is ${design.maxDepth} ${units} deep, at most)`;
         }
     }
     return null;
+}
+
+
+// Get a profile's deepest station that isn't on a bridge - its "depth" (a fill is above the ground - it's positive -
+// and a cut is below it) and its "station". "alignment" is the profile's alignment, and "existingRoads" its existing
+// roads' ranges.
+function deepestStation(topo, design, {x, y, stations}, {profile, ground, sideSlope}, existingRoads) {
+    const bridges = designStructures(topo, design, x, y, stations, profile, sideSlope, existingRoads).filter(
+        ({type}) => type === 'bridge'
+    );
+    let depth = 0;
+    let station = 0;
+    for (let ix = 0; ix < profile.length; ix++) {
+        const isBridge = bridges.some((bridge) => stations[ix] >= bridge.station - 0.1 && stations[ix] <= bridge.endStation + 0.1);
+        if (!isBridge && Math.abs(profile[ix] - ground[ix]) > Math.abs(depth)) {
+            depth = profile[ix] - ground[ix];
+            station = stations[ix];
+        }
+    }
+    return {depth, station};
 }
 
 

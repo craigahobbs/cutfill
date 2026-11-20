@@ -54,6 +54,10 @@ export function createDesign(plan, args) {
         // of the ground isn't a road's
         'maxDepth': feet ? 60 : 18,
 
+        // The depth of a road's cut or fill, at its center line, that says its grade limit holds it off the ground - a
+        // road that's deeper is searched again with stricter grades, for a road that costs less
+        'searchDepth': feet ? 20 : 6,
+
         // Turnouts - a single-lane road has them
         'turnoutSpacing': args.turnouts ?? (width < (feet ? 16 : 4.9) ? (feet ? 400 : 120) : 0),
         'bridgeFill': args.bridgeFill,

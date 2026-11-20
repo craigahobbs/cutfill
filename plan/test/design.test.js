@@ -43,6 +43,9 @@ function pythonDesign(design) {
 
         // The most a road's cut or fill is deep - the Python tools' profile design's depth limit
         'maxDepth': design.feet ? 60 : 18,
+
+        // The depth that a road is searched again with stricter grades - the Python tools' roads weren't
+        'searchDepth': design.feet ? 20 : 6,
         'turnoutSpacing': design.turnout_spacing,
         'bridgeFill': design.bridge_fill,
         'tieTolerance': design.tie_tolerance

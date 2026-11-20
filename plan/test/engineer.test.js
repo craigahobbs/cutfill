@@ -1,5 +1,5 @@
 import {bestRoad, corridorReason} from '../lib/engineer.js';
-import {blockedPlan, designArgs, expected, hillPlan, planePlan, roadPlan, valleyPlan} from './roadFixtures.js';
+import {blockedPlan, designArgs, elevationGrid, expected, hillPlan, planePlan, roadPlan, valleyPlan} from './roadFixtures.js';
 import {optionsCommand, optionsUsage, routeCommand, routeUsage} from '../lib/cli.js';
 import {planText, validatePlan} from '../../viewer/lib/model.js';
 import {polylineStations, roadOverlaps} from '../lib/route.js';
@@ -314,6 +314,37 @@ test('route, the grade penalty weights', () => {
     assert.deepEqual(routed(['-g', '6.5']).plan, routed(['-g', '6.5', '--grade-weight', '1']).plan);
     assert.equal(routed(['-g', '6.5', '--grade-weight', '0.5']).result.lines[2], 'Cost score: 97.5, design warnings: 0');
     assert.equal(routed(['-g', '6.5', '--grade-weight', '0.25']).result.lines[2], 'Cost score: 102.7, design warnings: 0');
+});
+
+
+test('route, a road that its grade limit holds off the ground', () => {
+    // Level ground, and then a 14% ramp up to the end point - steeper than the 11% design grade for 280 meters. The
+    // search's penalty for ground that's a little too steep is light (a little earthwork absorbs a little of it), so its
+    // road is straight up the ramp, and its profile is nearly 10 meters off the ground - the grade limit holds it off.
+    // A road that's over 6 meters off the ground is searched with the stricter grades, too: their road crosses the ramp
+    // at an angle - it's 105 meters longer, within a meter of the ground, and it costs the least, so it's the road.
+    const rampPlan = () => {
+        const plan = planePlan({'units': 'meters', 'size': 61});
+        plan.topography.elevations = elevationGrid(61, 10, (x) => 100 + 0.14 * Math.max(0, x - 300)).slice(0, 41);
+        plan.start = {'x': 20, 'y': 200};
+        plan.end = {'x': 580, 'y': 200};
+        return plan;
+    };
+    const {result, plan} = run(rampPlan(), ['route', 'plan.json', '-n', 'Ramp']);
+    assert.deepEqual(result, {'code': 0, 'lines': [
+        'The profile is 9.9 meters below the ground at station 101 - a search with stricter grades has the road',
+        'Option "Ramp": 665 meters long, 179 alignment points, max grade 11.0%, max cut 0.9, max fill 0.4',
+        'Structures: 1 culvert, 5 turnouts',
+        'Cost score: 128.0, design warnings: 0',
+        'Wrote plan.json'
+    ]});
+    const [{alignment}] = plan.options;
+    assert.ok(Math.max(...alignment.map(({y}) => Math.abs(y - 200))) > 100);
+
+    // The search with each grade penalty weight has the same road
+    for (const weight of ['1', '0.25']) {
+        assert.deepEqual(run(rampPlan(), ['route', 'plan.json', '-n', 'Ramp', '--grade-weight', weight]).plan, plan);
+    }
 });
 
 
@@ -849,7 +880,9 @@ test('route, a road that\'s deeper than the maximum depth', () => {
     ]});
     assert.equal(written, null);
 
-    // A bridge over the valley's stream spans its deep fill - the road's fill isn't deeper than the maximum depth
+    // A bridge over the valley's stream spans its deep fill - the road's fill isn't deeper than the maximum depth. Its
+    // fill is 44 feet deep at the bridge's ends, so its route is searched with the stricter grades, too - there's no way
+    // around the valley, and their roads cost more, so the road is the first search's (the report's first line is its).
     const bridged = run(valley(), ['route', 'plan.json', '-n', 'Test', '--bridge-fill', '20']);
     assert.deepEqual([bridged.result.code, bridged.result.lines[0]], [
         0, 'Option "Test": 406 feet long, 83 alignment points, max grade 11.0%, max cut 0.0, max fill 82.1'

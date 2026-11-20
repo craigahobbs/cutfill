@@ -160,6 +160,21 @@ and if there's still no road, it's an error and no option is written. The profil
 limits so that it can say how deep the road would be - a deep profile isn't a road's (a fill 147 meters deep was
 a canyon site's only option, before it was a failure).
 
+A road that's within its grade limit may be held off the ground by it. The search's penalty for ground that's a little
+steeper than the design grade is light - a little earthwork absorbs a little of it - but ground that's steeper than
+the grade for a long way isn't absorbed: the profile falls behind the ground, and the road is on a fill (or in a cut)
+for as long as it takes to catch up. A canyon site's road followed the canyon's floor, which climbs at 12-13% where the
+design grade is 11%, to an end point up a 21% knoll - on a fill up to 55 feet deep for 3,700 feet, which was over half
+of its cost score, and under the maximum depth. So a road whose cut or fill is deeper than the search depth
+(`design.js`'s `searchDepth` - 20 feet, or 6 meters, at the center line, but for a bridge's span) is searched with
+the stricter grades, too (`routeAlignment`), and the route's road is the one with the lowest cost score of them all -
+that site's is 1,650 feet longer, its deepest fill is 15 feet, and its cost score is 56% lower. On ground a road
+follows, a stricter search's road is mostly just longer (from 1% less to 59% more, on three other sites), so a road that isn't
+deep isn't searched again - its run takes no longer - and a deep road's stricter searches' roads that cost more
+aren't the road (a fill across a valley there's no way around). A stricter search's profile that isn't within the
+maximum depth isn't a road, and isn't designed deeper (`designProfile`'s `isDeep`) - finding how deep it would be is
+most of a deep profile's work.
+
 A road's start and end points are apart - points that are one point of the route search's lattice have no road
 between them (it's an error). A point beside an exclusion area isn't within it: its lattice node is the nearest of
 its cell's nodes that isn't within an area (`routeNode`).
