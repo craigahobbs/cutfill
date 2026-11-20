@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.7 (2026-11-20)
+
+- [d7b4101](https://github.com/craigahobbs/sageroad/commit/d7b4101) - Make a plan in a worker, so the page stays responsive
+
 ## 1.0.6 (2026-11-20)
 
 - [7eb2965](https://github.com/craigahobbs/sageroad/commit/7eb2965) - Search a deep road's route with stricter grades, too
