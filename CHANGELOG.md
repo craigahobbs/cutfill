@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.6 (2026-11-20)
+
+- [7eb2965](https://github.com/craigahobbs/sageroad/commit/7eb2965) - Search a deep road's route with stricter grades, too
+
 ## 1.0.5 (2026-11-20)
 
 - [bd47a68](https://github.com/craigahobbs/sageroad/commit/bd47a68) - Follow a road's side slopes to the terrain
