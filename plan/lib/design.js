@@ -6,13 +6,15 @@ import {elevation, linearAreas, planCriteria, planRates, unitScale} from '../../
 
 // Create the road design parameters and unit costs (per plan unit) of a plan and the route and profile commands'
 // arguments: "grade" and "switchbackGrade" (percent), "width", "surface", "cutSlope", "fillSlope", "turnouts", and
-// "bridgeFill". The grade, width, turnouts, and bridge fill arguments may be null.
+// "bridgeFill". The grade, width, surface, turnouts, and bridge fill arguments may be null - a null width or surface is
+// the plan's design criteria's.
 export function createDesign(plan, args) {
     const feet = plan.units === 'feet';
     const criteria = planCriteria(plan);
     const maxGrade = criteria.maxGrade / 100;
     const grade = args.grade ? args.grade / 100 : Math.max(maxGrade - 0.01, maxGrade * 0.9);
-    const width = args.width ? args.width : (feet ? 14 : 4.3);
+    const width = args.width || criteria.width;
+    const surface = args.surface ?? criteria.surface;
     const rates = planRates(plan);
     const scale = unitScale(plan);
     const scale2 = scale * scale;
@@ -27,7 +29,7 @@ export function createDesign(plan, args) {
         'rockCutSlope': criteria.rockCutSlope,
         width,
         'halfWidth': width * 0.5,
-        'surface': args.surface,
+        surface,
         'cutSlope': args.cutSlope,
         'fillSlope': args.fillSlope,
 
@@ -42,7 +44,7 @@ export function createDesign(plan, args) {
         'costWaste': rates.waste * scale3,
         'costArea': clearing * scale2,
         'costWall': rates.retainingWall * scale2,
-        'costLength': width * (rates[args.surface] + rates.clearing + rates.erosionControl) * scale2 + rates.drainage * scale,
+        'costLength': width * (rates[surface] + rates.clearing + rates.erosionControl) * scale2 + rates.drainage * scale,
         'costCulvert': rates.culvertEnds + rates.culvert * (feet ? 1.5 * scale : 0.45) * scale * width * 3,
         'costExisting': width * rates.existingRoad * scale2,
         'shrink': rates.shrink,

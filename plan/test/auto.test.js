@@ -212,7 +212,7 @@ ${wroteLine}`);
 
     // The plan - its criteria, its features, and its options
     assert.ok('plan' in validatePlan(io.plan));
-    assert.deepEqual(io.plan.criteria, {'maxGrade': 10, 'minRadius': 20});
+    assert.deepEqual(io.plan.criteria, {'width': 5, 'surface': 'asphalt', 'maxGrade': 10, 'minRadius': 20});
     assert.deepEqual(io.plan.topography.features.map(({type, name, points}) => [type, name, points.length]), [
         ['road', 'Mill Rd', 2], ['exclusion', 'Barn', 4], ['exclusion', 'Well', 4], ['exclusion', 'Yard', 4], ['stream', 'Draw 1', 2]
     ]);
@@ -267,6 +267,36 @@ ${wroteLine}`);
     assert.deepEqual(again.plan.criteria, first.plan.criteria);
     const featureNames = ({topography}) => topography.features.map(({type, name}) => `${type} ${name}`).sort();
     assert.deepEqual(featureNames(again.plan), featureNames(first.plan));
+});
+
+
+test('auto, the plan config\'s road', async () => {
+    // Without a model, the plan config's width and surface are the options' road
+    const site = autoSite({'criteria': {'width': 6, 'surface': 'concrete'}});
+    const io = await runAuto(site);
+    assert.equal(io.code, 0);
+    assert.deepEqual(io.plan.criteria, {'width': 6, 'surface': 'concrete'});
+    assert.deepEqual(io.plan.options.map(({name, section}) => [name, section.width, section.surface]), [
+        ['New Road', 6, 'concrete'], ['South Corridor', 6, 'concrete']
+    ]);
+
+    // The plan config's width and surface win over the notes' - the notes' maximum grade is the plan's still
+    const notedSite = autoSite({'notes': ['A 5 meter asphalt road, at most 10%.'], 'criteria': {'width': 6, 'surface': 'concrete'}});
+    const noted = await runAuto(notedSite, {
+        'args': ['--model', 'test-model'], 'answers': {'notes': notesAnswer({'width': 5, 'surface': 'asphalt', 'maxGrade': 10})}
+    });
+    assert.equal(noted.code, 0);
+    assert.deepEqual(noted.output.join('').split('\n').filter((line) => line.startsWith('Notes: ')), ['Notes: maximum grade 10']);
+    assert.deepEqual(noted.plan.criteria, {'width': 6, 'surface': 'concrete', 'maxGrade': 10});
+    assert.ok(noted.plan.options.every(({section}) => section.width === 6 && section.surface === 'concrete'));
+
+    // The plan config's width with the notes' surface
+    const mixed = await runAuto(autoSite({'notes': ['A 5 meter asphalt road.'], 'criteria': {'width': 6}}), {
+        'args': ['--model', 'test-model'], 'answers': {'notes': notesAnswer({'width': 5, 'surface': 'asphalt'})}
+    });
+    assert.deepEqual(mixed.output.join('').split('\n').filter((line) => line.startsWith('Notes: ')), ['Notes: the road is asphalt']);
+    assert.deepEqual(mixed.plan.criteria, {'width': 6, 'surface': 'asphalt'});
+    assert.ok(mixed.plan.options.every(({section}) => section.width === 6 && section.surface === 'asphalt'));
 });
 
 

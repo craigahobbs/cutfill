@@ -161,12 +161,27 @@ test('validatePlan, structure endStation', () => {
 
 
 test('planCriteria', () => {
-    assert.deepEqual(planCriteria(planSimple()), {'maxGrade': 12, 'minRadius': 15, 'rockCutSlope': 0.5, 'maxWallHeight': 6});
-    assert.deepEqual(planCriteria(planComplex()), {'maxGrade': 10, 'minRadius': 50, 'rockCutSlope': 0.5, 'maxWallHeight': 3});
+    assert.deepEqual(planCriteria(planSimple()), {
+        'width': 4.3, 'surface': 'gravel', 'maxGrade': 12, 'minRadius': 15, 'rockCutSlope': 0.5, 'maxWallHeight': 6
+    });
+    assert.deepEqual(planCriteria(planComplex()), {
+        'width': 14, 'surface': 'gravel', 'maxGrade': 10, 'minRadius': 50, 'rockCutSlope': 0.5, 'maxWallHeight': 3
+    });
 
     const plan = planComplex();
     plan.criteria = {'minRadius': 30, 'rockCutSlope': 0.25};
-    assert.deepEqual(planCriteria(plan), {'maxGrade': 12, 'minRadius': 30, 'rockCutSlope': 0.25, 'maxWallHeight': 20});
+    assert.deepEqual(planCriteria(plan), {
+        'width': 14, 'surface': 'gravel', 'maxGrade': 12, 'minRadius': 30, 'rockCutSlope': 0.25, 'maxWallHeight': 20
+    });
+
+    // The road's width and surface
+    plan.criteria = {'width': 30, 'surface': 'asphalt'};
+    assert.deepEqual(planCriteria(plan), {
+        'width': 30, 'surface': 'asphalt', 'maxGrade': 12, 'minRadius': 50, 'rockCutSlope': 0.5, 'maxWallHeight': 20
+    });
+    assert.ok('plan' in validatePlan(plan));
+    plan.criteria = {'surface': 'mud'};
+    assert.ok('error' in validatePlan(plan));
 });
 
 

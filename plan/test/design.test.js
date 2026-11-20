@@ -83,6 +83,17 @@ test('createDesign', () => {
     assert.equal(createDesign(planePlan(), designArgs({'width': 16})).turnoutSpacing, 0);
     assert.equal(createDesign(planePlan({'units': 'meters'}), designArgs({'width': 5})).turnoutSpacing, 0);
     assert.equal(createDesign(planePlan(), designArgs({'turnouts': 250})).turnoutSpacing, 250);
+
+    // A null width or surface is the plan's design criteria's - a wide road's, without turnouts - and the arguments'
+    // win over them
+    const criteriaPlan = {...planePlan(), 'criteria': {'width': 30, 'surface': 'asphalt'}};
+    const criteria = createDesign(criteriaPlan, designArgs({'surface': null}));
+    assert.deepEqual([criteria.width, criteria.halfWidth, criteria.surface, criteria.turnoutSpacing], [30, 15, 'asphalt', 0]);
+    assert.equal(criteria.costLength, createDesign(planePlan(), designArgs({'width': 30, 'surface': 'asphalt'})).costLength);
+    const argued = createDesign(criteriaPlan, designArgs({'width': 12, 'surface': 'native'}));
+    assert.deepEqual([argued.width, argued.surface, argued.turnoutSpacing], [12, 'native', 400]);
+    const plain = createDesign(planePlan(), designArgs({'surface': null}));
+    assert.deepEqual([plain.width, plain.surface], [14, 'gravel']);
 });
 
 

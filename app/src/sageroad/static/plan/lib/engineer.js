@@ -17,15 +17,15 @@ import {designProfile} from './profile.js';
 
 
 // Create a road's engineering arguments - the defaults, with other arguments: its option's "name" and "description"
-// (lines, or null to keep the option's), the road's "width" and "surface", its "cutSlope" and "fillSlope" ratios, its
-// design "grade" and "switchbackGrade" (in percent), its "turnouts" spacing, the fill depth of a stream crossing that a
-// bridge replaces ("bridgeFill"), its "existingRoads" ([station, end station] ranges - null to find them), its "via"
-// points ([x, y] arrays), whether it's all new ("allNew" - it doesn't follow the plan's existing roads), the names of
-// the existing roads it doesn't follow ("ruleOut"), and its route search's "gradeWeight" (null for the best of several)
-// and "slopeWeight". A null argument is its default.
+// (lines, or null to keep the option's), the road's "width" and "surface" (null for the plan's design criteria's), its
+// "cutSlope" and "fillSlope" ratios, its design "grade" and "switchbackGrade" (in percent), its "turnouts" spacing, the
+// fill depth of a stream crossing that a bridge replaces ("bridgeFill"), its "existingRoads" ([station, end station]
+// ranges - null to find them), its "via" points ([x, y] arrays), whether it's all new ("allNew" - it doesn't follow the
+// plan's existing roads), the names of the existing roads it doesn't follow ("ruleOut"), and its route search's
+// "gradeWeight" (null for the best of several) and "slopeWeight". A null argument is its default.
 export function roadArguments(args = {}) {
     return {
-        'description': null, 'width': null, 'surface': 'gravel', 'cutSlope': 1, 'fillSlope': 1.5, 'grade': null, 'switchbackGrade': 8,
+        'description': null, 'width': null, 'surface': null, 'cutSlope': 1, 'fillSlope': 1.5, 'grade': null, 'switchbackGrade': 8,
         'turnouts': null, 'bridgeFill': null, 'existingRoads': null, 'via': [], 'allNew': false, 'ruleOut': [], 'gradeWeight': null,
         'slopeWeight': 1, ...args
     };

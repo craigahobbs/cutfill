@@ -96,7 +96,7 @@ test('routeUsage', () => {
     assert.ok(routeUsage.every((line) => line.length <= 120));
     assert.equal(optionsUsage[0], 'usage: plan options <plan.json> [options]');
     assert.ok(optionsUsage.every((line) => line.length <= 120));
-    assert.deepEqual(optionsUsage.slice(-12, -2), routeUsage.slice(13, 23));
+    assert.deepEqual(optionsUsage.slice(-13, -2), routeUsage.slice(13, 24));
     assert.ok(optionsUsage.at(-2).startsWith('  --rule-out NAME '));
     assert.ok(routeUsage.some((line) => line.startsWith('  --rule-out NAME ')));
 });
@@ -541,6 +541,10 @@ test('options', () => {
     ]);
     assert.deepEqual(again.plan.options.map(({section}) => section.width), [14, 20, 20]);
     assert.deepEqual(again.plan.options[1].section, {'width': 20, 'cutSlope': 1, 'fillSlope': 1.5, 'surface': 'asphalt'});
+
+    // Without the design options, the road is the plan's design criteria's - the design options' road
+    const criteria = run({...roadPlan(), 'criteria': {'width': 20, 'surface': 'asphalt'}}, ['options', 'plan.json']);
+    assert.deepEqual(criteria.plan.options, again.plan.options.slice(1));
 });
 
 

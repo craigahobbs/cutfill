@@ -29,15 +29,17 @@ export const autoUsage = [
     '                         application\'s (the command line doesn\'t ask a model)',
     '  --fresh                ask the model again - don\'t use its saved answer, and look for the notes\' places again',
     '  --fetch                fetch the site\'s data from the USGS again - an existing plan\'s, if it\'s the site\'s, is kept',
-    '  -w, --width WIDTH      the road width (default is the notes\', or 14 feet / 4.3 meters)',
-    '  -s, --surface SURFACE  the road surface - native, gravel, asphalt, or concrete (default is the notes\', or gravel)'
+    '  -w, --width WIDTH      the road width (default is the site\'s criteria\', the notes\', or 14 feet / 4.3 meters)',
+    '  -s, --surface SURFACE  the road surface - native, gravel, asphalt, or concrete (default is the site\'s criteria\',',
+    '                         the notes\', or gravel)'
 ];
 
 
 // The design options' usage text lines - the route and options commands'
 const designUsage = [
-    '  -w, --width WIDTH              the road width (default is 14 feet / 4.3 meters)',
-    '  -s, --surface SURFACE          the road surface - native, gravel, asphalt, or concrete (default is gravel)',
+    '  -w, --width WIDTH              the road width (default is the plan\'s criteria\', or 14 feet / 4.3 meters)',
+    '  -s, --surface SURFACE          the road surface - native, gravel, asphalt, or concrete (default is the plan\'s',
+    '                                 criteria\', or gravel)',
     '  --cut-slope SLOPE              the cut slope ratio H:V (default is 1)',
     '  --fill-slope SLOPE             the fill slope ratio H:V (default is 1.5)',
     '  -g, --grade GRADE              the design grade, in percent (default is 1 less than the maximum grade)',
@@ -152,7 +154,7 @@ export async function autoCommand(args, io) {
 // The commands' design options and road rule options, and the route command's option options and route options
 const designOptions = {
     'width': {'type': 'string', 'short': 'w'},
-    'surface': {'type': 'string', 'short': 's', 'default': 'gravel'},
+    'surface': {'type': 'string', 'short': 's'},
     'cut-slope': {'type': 'string', 'default': '1'},
     'fill-slope': {'type': 'string', 'default': '1.5'},
     'grade': {'type': 'string', 'short': 'g'},
@@ -194,7 +196,7 @@ function parseCommandArgs(command, args) {
         'name': values.name,
         'description': values.description ?? null,
         'width': number('width'),
-        'surface': values.surface,
+        'surface': values.surface ?? null,
         'cutSlope': number('cut-slope'),
         'fillSlope': number('fill-slope'),
         'grade': number('grade'),
@@ -211,7 +213,7 @@ function parseCommandArgs(command, args) {
 
     // The plan, the option name (but for the options command), and valid numbers are required
     if (positionals.length !== 1 || (command !== 'options' && commandArgs.name === undefined) ||
-        !roadSurfaces.includes(commandArgs.surface) ||
+        (commandArgs.surface !== null && !roadSurfaces.includes(commandArgs.surface)) ||
         Object.values(commandArgs).some(Number.isNaN) ||
         [...commandArgs.existingRoads ?? [], ...commandArgs.via].some((pair) => pair.length !== 2 || pair.some(Number.isNaN))) {
         return null;

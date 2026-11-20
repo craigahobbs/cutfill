@@ -113,9 +113,9 @@ const pointSchema = {
 // the model's saved answers, and the plots the model was asked of), and its map image is its file's. The options are
 // the "model" to ask (null for none - the notes aren't read), whether to ask it again ("isFresh" - its saved answers
 // aren't used, and the notes' places are found again), whether to fetch the site's data again ("isFetch"), and the
-// road's "width" and "surface" (null for the notes', or the defaults). Returns the exit "code", the report's "lines",
-// the "plan" (null if its site wasn't created - if the plan failed, it's the plan as it was last whole), and the plan
-// config ("site" - the run's, if its marks or its margin changed).
+// road's "width" and "surface" (null for the plan config's design criteria's, the notes', or the defaults). Returns the
+// exit "code", the report's "lines", the "plan" (null if its site wasn't created - if the plan failed, it's the plan as
+// it was last whole), and the plan config ("site" - the run's, if its marks or its margin changed).
 export async function autoPlan(io, planPath, site, planValue, options = {}) {
     const {model = null, isFresh = false, isFetch = false, width = null, surface = null} = options;
     const work = `${planPath.replace(/\.json$/i, '')}.work`;
@@ -220,20 +220,24 @@ export async function autoPlan(io, planPath, site, planValue, options = {}) {
             const answer = await ask('notes', notesSchema, () => ({question}));
             directives = notesDirectives(answer, units, notes);
 
-            // The design criteria - the plan config's own are the plan's
-            for (const member of ['maxGrade', 'minRadius']) {
-                if (directives[member] !== null && !(member in (config.criteria ?? {}))) {
+            // The design criteria - the plan config's own are the plan's, and the run's road is its options'
+            const runCriteria = {width, surface};
+            for (const member of ['width', 'surface', 'maxGrade', 'minRadius']) {
+                if (directives[member] !== null && !(member in (config.criteria ?? {})) && (runCriteria[member] ?? null) === null) {
                     notesCriteria[member] = directives[member];
                 }
             }
             if (Object.keys(notesCriteria).length > 0) {
                 plan.criteria = {...plan.criteria, ...notesCriteria};
-                report(`Notes: ${Object.entries(notesCriteria).map(([member, value]) => `${criteriaNames[member]} ${value}`).join(', ')}`);
             }
-            if (directives.width !== null || directives.surface !== null) {
+            const limitCriteria = Object.entries(notesCriteria).filter(([member]) => member in criteriaNames);
+            if (limitCriteria.length > 0) {
+                report(`Notes: ${limitCriteria.map(([member, value]) => `${criteriaNames[member]} ${value}`).join(', ')}`);
+            }
+            if ('width' in notesCriteria || 'surface' in notesCriteria) {
                 report(`Notes: the road is ${[
-                    ...(directives.width !== null ? [`${directives.width} ${units} wide`] : []),
-                    ...(directives.surface !== null ? [directives.surface] : [])
+                    ...('width' in notesCriteria ? [`${notesCriteria.width} ${units} wide`] : []),
+                    ...('surface' in notesCriteria ? [notesCriteria.surface] : [])
                 ].join(', ')}`);
             }
             if (directives.bridgeFill !== null) {
@@ -269,8 +273,8 @@ export async function autoPlan(io, planPath, site, planValue, options = {}) {
     // options cross no unmapped draws (it's a choice against the standard options as they'll be, and it's often not an
     // option) - if it's an option that crosses unmapped draws, they're added, and the options are engineered again.
     const roadArgs = roadArguments({
-        'width': width ?? directives.width,
-        'surface': surface ?? directives.surface ?? roadArguments().surface,
+        width,
+        surface,
         'bridgeFill': directives.bridgeFill,
         'ruleOut': ruledOut
     });
