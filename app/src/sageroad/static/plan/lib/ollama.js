@@ -2,7 +2,7 @@
 
 
 // The default Ollama host - this computer's
-export {ollamaHost as ollamaHostDefault} from '../../viewer/lib/models.js';
+export {ollamaHost as ollamaHostDefault} from '../../lib/models.js';
 
 
 // The most tokens of a question's answer. A question's answer is a small JSON object, so a model that runs on is

@@ -7,10 +7,10 @@ import {exclusionFeatures, lineFeatures, siteRoadFeatures, snapDistance, snapStr
 import {
     isLayoutGrid, isLayoutPlan, layoutBox, layoutGeoreference, layoutLatLong, layoutSize, readTile, siteLayout, siteTerrain
 } from './terrain.js';
-import {elevation as planElevation, planTopo, siteMarkFeatures, validateSite} from '../../viewer/lib/model.js';
-import {latLongText} from '../../viewer/lib/geo.js';
+import {elevation as planElevation, planTopo, siteMarkFeatures, validateSite} from '../../lib/model.js';
+import {latLongText} from '../../lib/geo.js';
 import {nearestText} from './roads.js';
-import {round} from '../../viewer/lib/format.js';
+import {round} from '../../lib/format.js';
 import {writePlan} from './planFile.js';
 
 

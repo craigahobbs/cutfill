@@ -24,10 +24,12 @@ The project is three subprojects, and the top-level makefile delegates to them:
   which a browser can't know), for now. The front end does the work in the browser: its home page opens a plan (file dialog) or
   makes a new one (a config form made from the model's types - `viewer/lib/form.js`), shows the loaded plan - its
   config, and its road options - runs it with `plan/lib/browser/io.js` (`planRoad` - the run's procedure, `autoPlan`,
-  with a browser's input and output functions), and saves it to a file. A plan is its config (a road site model) and, once
+  with a browser's input and output functions, in a worker - `plan/lib/browser/worker.js` - so the page stays responsive),
+  and saves it to a file. A plan is its config (a road site model) and, once
   it's run, its road options (a road plan model with the config as its `site` member) - a plan without road options
   is its config's file. The tools' modules stay importable in a browser: a Node module they import needs a stand-in in
-  `plan/lib/browser/` and the page's import map (`viewer/index.html`). The page asks Ollama (on this computer) itself -
+  `plan/lib/browser/` and the page's import map (`viewer/index.html`) - and, since a worker has no import map, a rewrite
+  of the staged modules' imports (`app/Makefile`'s `static`, checked by an app test). The page asks Ollama (on this computer) itself -
   its model pages (`viewer/lib/modelsPage.js`, `#var.vModels=true`) list, download, and delete its models
   (`viewer/lib/models.js`), and a run asks a model its questions. See [app/README.md](app/README.md).
 

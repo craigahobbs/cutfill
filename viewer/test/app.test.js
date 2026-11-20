@@ -445,9 +445,7 @@ test('stopping a plan\'s run', async (context) => {
     click(browser, 'sageroad-stop');
     assert.equal(calls[0].signal.aborted, true);
     assert.equal(document.getElementById('sageroad-stop').disabled, true);
-    assert.equal(
-        document.getElementById('sageroad-run-status').textContent, 'Stopping - the run stops when its current step\'s work is done…'
-    );
+    assert.equal(document.getElementById('sageroad-run-status').textContent, 'Stopping the run…');
     finish.resolve({'code': 1, 'lines': ['The plan was stopped'], 'plan': null, 'stopped': true});
     await runDone(browser);
     assert.equal(

@@ -8,10 +8,10 @@ import {
 } from './route.js';
 import {designStructures, existingMask} from './structures.js';
 import {drawAreaText, drawCrossings} from './draws.js';
-import {fixedTrim, number as formatNumber} from '../../viewer/lib/format.js';
+import {fixedTrim, number as formatNumber} from '../../lib/format.js';
 import {lineIndex, nearestLine} from './roads.js';
 import {pyFixed, pyRound} from './numeric.js';
-import {analyzeOption} from '../../viewer/lib/model.js';
+import {analyzeOption} from '../../lib/model.js';
 import {createDesign} from './design.js';
 import {designProfile} from './profile.js';
 

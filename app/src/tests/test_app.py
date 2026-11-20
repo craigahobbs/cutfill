@@ -73,40 +73,45 @@ class TestApp(unittest.TestCase):
 
     def test_statics_modules(self):
         # Every module the front end imports is the package's, and every module of the package is imported - from the
-        # page's module, by its import map (the planning tools' Node modules, and their imports of the viewer's)
+        # page's module, or from the plan's worker's module. A worker has no import map, so the staged modules import
+        # the planning tools' Node modules, the viewer's modules, and the schema-markdown package by their paths.
         app = SageRoad()
         urls = {url for request in app.requests.values() if request.doc_group == 'Statics' for _, url in request.urls}
         page = app.request('GET', '/')[2].decode('utf-8')
-        import_map = json.loads(re.search(r'<script type="importmap">(.*?)</script>', page, re.DOTALL).group(1))['imports']
-        url_map = {posixpath.normpath(posixpath.join('/', key)) + ('/' if key.endswith('/') else ''): value
-                   for key, value in import_map.items() if key.startswith('.')}
 
         def resolve(base, specifier):
-            for prefix, target in import_map.items():
-                if not prefix.startswith('.') and (specifier == prefix or (prefix.endswith('/') and specifier.startswith(prefix))):
-                    return posixpath.normpath(posixpath.join('/', target + specifier[len(prefix):]))
-            url = posixpath.normpath(posixpath.join(posixpath.dirname(base), specifier))
-            for prefix, target in url_map.items():
-                if url.startswith(prefix):
-                    return posixpath.normpath(posixpath.join('/', target + url[len(prefix):]))
-            return url
+            return posixpath.normpath(posixpath.join(posixpath.dirname(base), specifier))
 
-        modules = set()
-        missing = set()
+        def imported(pending):
+            modules = set()
+            missing = set()
+            workers = set()
+            while pending:
+                url = pending.pop()
+                if url in urls and url not in modules:
+                    modules.add(url)
+                    text = app.request('GET', url)[2].decode('utf-8')
+                    pending.extend(resolve(url, specifier) for specifier in re.findall(r"(?:from |import\()'([^']+)'", text))
+                    workers.update(resolve(url, specifier)
+                                   for specifier in re.findall(r"new URL\('([^']+)', import\.meta\.url\)", text))
+                missing.update({url} - urls)
+            self.assertSetEqual(missing, set())
+            return modules, workers
+
+        # The page's modules
         pending = [resolve('/index.html', specifier) for specifier in re.findall(r"from '([^']+)'", page)]
         self.assertListEqual(pending, ['/lib/app.js'])
-        while pending:
-            url = pending.pop()
-            if url in urls and url not in modules:
-                modules.add(url)
-                text = app.request('GET', url)[2].decode('utf-8')
-                pending.extend(resolve(url, specifier) for specifier in re.findall(r"(?:from |import\()'([^']+)'", text))
-            missing.update({url} - urls)
-        self.assertSetEqual(missing, set())
-        self.assertIn('/plan/lib/browser/zlib.js', modules)
+        modules, workers = imported(pending)
+        self.assertTrue({'/plan/lib/browser/io.js', '/plan/lib/browser/zlib.js', '/schema-markdown/lib/schema.js'} <= modules)
+
+        # The plan's worker's modules - the planning tools' and the viewer's
+        self.assertSetEqual(workers, {'/plan/lib/browser/worker.js'})
+        worker_modules, _ = imported(list(workers))
+        self.assertTrue({'/plan/lib/auto.js', '/plan/lib/browser/zlib.js', '/lib/model.js', '/schema-markdown/lib/schema.js'} <=
+                        worker_modules)
 
         # The package has no other scripts
-        self.assertSetEqual({url for url in urls if url.endswith('.js')} - modules, set())
+        self.assertSetEqual({url for url in urls if url.endswith('.js')} - modules - worker_modules, set())
 
 
     def test_statics_offline(self):

@@ -363,7 +363,7 @@ export class HomePage {
         stopButton.addEventListener('click', () => {
             controller.abort();
             stopButton.disabled = true;
-            statusElement.textContent = 'Stopping - the run stops when its current step\'s work is done…';
+            statusElement.textContent = 'Stopping the run…';
         });
 
         // The run's time, every second

@@ -1,7 +1,7 @@
 // schemaDoc.js - Schema Markdown type model documentation, as Markdown text - structs, enums, and typedefs (a port of the
 // BareScript library's "schemaDocMarkdown" function)
 
-import {getEnumValues, getReferencedTypes, getStructMembers} from 'schema-markdown/lib/schema.js';
+import {getEnumValues, getReferencedTypes, getStructMembers} from '../schema-markdown/lib/schema.js';
 import {markdownEscape, markdownTable} from './markdown.js';
 import {headerId} from './format.js';
 

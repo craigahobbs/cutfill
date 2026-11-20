@@ -2,8 +2,8 @@
 // areas, in the plan's coordinates
 
 import {layoutPoint, layoutSize} from './terrain.js';
-import {round} from '../../viewer/lib/format.js';
-import {siteMarkNames} from '../../viewer/lib/model.js';
+import {round} from '../../lib/format.js';
+import {siteMarkNames} from '../../lib/model.js';
 
 
 // The distance, in meters, that a line's points are simplified within, and that lines' ends are joined within

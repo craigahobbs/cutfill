@@ -1,8 +1,8 @@
 // model.js - the road grading plan model: schema, validation, earthwork, and cost analysis
 
 import {fixed, fixedTrim, station as formatStation, unitLabel} from './format.js';
-import {parseSchemaMarkdown} from 'schema-markdown/lib/parser.js';
-import {validateType} from 'schema-markdown/lib/schema.js';
+import {parseSchemaMarkdown} from '../schema-markdown/lib/parser.js';
+import {validateType} from '../schema-markdown/lib/schema.js';
 
 
 // The road grading plan model's type model - the model is defined with Schema Markdown

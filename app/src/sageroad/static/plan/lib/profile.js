@@ -2,7 +2,7 @@
 
 import {arange, hypot, movingAverage, pairwiseSum, pyRound} from './numeric.js';
 import {crossSection, groundElevation, groundGradient, sectionCut, sectionFill, sectionSlopeWidth, sectionWall} from './design.js';
-import {featureIndexes, pointInPolygons} from '../../viewer/lib/model.js';
+import {featureIndexes, pointInPolygons} from '../../lib/model.js';
 import {turnRadius} from './route.js';
 
 

@@ -9,15 +9,15 @@ import {addDraws, drawCrossings} from './draws.js';
 import {
     corridorNames, corridorOption, engineerOption, keepOptions, roadArguments, roadSurfaces, standardOptions
 } from './engineer.js';
-import {number as formatNumber, round} from '../../viewer/lib/format.js';
+import {number as formatNumber, round} from '../../lib/format.js';
 import {layoutPoint, siteLayout} from './terrain.js';
-import {orderPlan, planCriteria, planTopo, siteMarkNames, validateSitePlan} from '../../viewer/lib/model.js';
+import {orderPlan, planCriteria, planTopo, siteMarkNames, validateSitePlan} from '../../lib/model.js';
 import {planMapBase64, planPlot} from './plot.js';
-import {Buffer} from 'node:buffer';
+import {Buffer} from './browser/buffer.js';
 import {createSite} from './siteCommand.js';
 import {describePlan} from './draft.js';
 import {existingMask} from './structures.js';
-import {planLatLong} from '../../viewer/lib/geo.js';
+import {planLatLong} from '../../lib/geo.js';
 import {polylineStations} from './route.js';
 
 

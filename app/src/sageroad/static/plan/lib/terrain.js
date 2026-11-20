@@ -1,8 +1,8 @@
 // terrain.js - a road site's topography grid, from the USGS 3D Elevation Program's 1 meter elevation models
 
-import {project, transverseMercator, unproject, utmFalseEasting, utmZone} from '../../viewer/lib/geo.js';
-import {round} from '../../viewer/lib/format.js';
-import {unitScale} from '../../viewer/lib/model.js';
+import {project, transverseMercator, unproject, utmFalseEasting, utmZone} from '../../lib/geo.js';
+import {round} from '../../lib/format.js';
+import {unitScale} from '../../lib/model.js';
 
 
 // The topography grid's size limit, in grid points - the default grid spacing is the finest that's within it

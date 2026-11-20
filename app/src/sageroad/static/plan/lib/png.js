@@ -1,6 +1,6 @@
 // png.js - a PNG image file of gray pixels
 
-import {crc32, deflateSync} from 'node:zlib';
+import {crc32, deflateSync} from './browser/zlib.js';
 
 
 // The PNG file signature

@@ -44,6 +44,10 @@ clean:
 # application's page maps their imports - but for the command line's, which a browser doesn't load). The staged front
 # end is committed - the package builds from the repository without Node.js - so it's staged before the
 # package's environment's commands (its tests, say): the pre-commit gate keeps it the sources'.
+#
+# A plan is made in a worker (plan/lib/browser/worker.js), and a worker has no import map - so the staged modules import
+# the planning tools' Node modules, the viewer's modules, and the schema-markdown package by their staged paths (the
+# paths the page's import map resolves them to).
 .PHONY: static
 $(DEFAULT_VENV_BUILD): | static
 static:
@@ -53,6 +57,17 @@ static:
 	cp -R $(VIEWER)/build/app/. $(STATIC)/
 	cp -R $(PLAN)/lib $(STATIC)/plan/
 	rm $(STATIC)/plan/lib/cli.js
+	$(call STATIC_IMPORTS, $(STATIC)/lib/*.js, -e "s|from 'schema-markdown/|from '../schema-markdown/|")
+	$(call STATIC_IMPORTS, $(STATIC)/plan/lib/*.js, -e "s|from 'node:buffer'|from './browser/buffer.js'|" \
+		-e "s|from 'node:zlib'|from './browser/zlib.js'|" -e "s|from '../../viewer/lib/|from '../../lib/|")
+	$(call STATIC_IMPORTS, $(STATIC)/plan/lib/browser/*.js, -e "s|from 'node:buffer'|from './buffer.js'|" \
+		-e "s|from '../../../viewer/lib/|from '../../../lib/|")
+
+
+# Rewrite the imports of staged modules - the modules' files, and the sed expressions
+define STATIC_IMPORTS
+	for FILE in $(1); do sed $(2) "$$FILE" > "$$FILE.tmp" && mv "$$FILE.tmp" "$$FILE"; done
+endef
 
 
 # The changelog covers the repository, so it's the top level's (../CHANGELOG.md) - python-build's changelog command

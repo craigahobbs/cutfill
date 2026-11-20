@@ -4,9 +4,9 @@
 import {
     cellContours, contourInterval, contourLevel, niceStep, planMarkers, roadColor, roadFeatureColor, streamColor, svgPoints, svgPolyline,
     svgText, terrainShade
-} from '../../viewer/lib/draw.js';
-import {escapeHtml, px} from '../../viewer/lib/format.js';
-import {Buffer} from 'node:buffer';
+} from '../../lib/draw.js';
+import {escapeHtml, px} from '../../lib/format.js';
+import {Buffer} from './browser/buffer.js';
 import {grayPng} from './png.js';
 import {rangeContourInterval} from './siteCommand.js';
 

@@ -1,8 +1,8 @@
 // draft.js - a draft of a road plan model's descriptions: the facts of the plan and of each option that the tools know,
 // and what a plan's run adds to them
 
-import {analyzeOption, culvertDiameter, planCriteria, siteMarkNames} from '../../viewer/lib/model.js';
-import {displayQuantity, fixedTrim, station as formatStation, number, unitLabel} from '../../viewer/lib/format.js';
+import {analyzeOption, culvertDiameter, planCriteria, siteMarkNames} from '../../lib/model.js';
+import {displayQuantity, fixedTrim, station as formatStation, number, unitLabel} from '../../lib/format.js';
 import {existingRoadGrades} from './engineer.js';
 import {groundElevation} from './design.js';
 import {lineIndex} from './roads.js';

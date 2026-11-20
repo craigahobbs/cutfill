@@ -1,4 +1,4 @@
-import {autoSteps, browserIo, ollamaHostDefault, planRoad, siteDefaults} from '../lib/browser/io.js';
+import {autoSteps, browserIo, ollamaHostDefault, planRoad, siteDefaults, workerMessage} from '../lib/browser/io.js';
 import {crc32, deflateSync} from '../lib/browser/zlib.js';
 import {inflateSync, crc32 as nodeCrc32} from 'node:zlib';
 import {siteEast, siteNorth, testItem, testPages, testSite} from './terrainHelpers.js';
@@ -384,5 +384,157 @@ test('planRoad, stopped', async () => {
 
         // The plan's work is thrown away - the files are the files that were kept before it
         assert.deepEqual([...files], [['plan.work/terrain/tile.json', '{}'], ['plan.work/decisions.json', '{"answers": {}}']]);
+    }
+});
+
+
+// Create a fake browser window with a fake worker - its worker's scope is a fake window, too, and its messages are
+// copies, delivered later, as a worker's are. The window records its workers ("workers" - each one's URL, options, and
+// whether it was terminated). A terminated worker's messages aren't delivered, unless "isDelivered" is true (a
+// message the worker posted before it was terminated may be delivered).
+function workerWindow({isDelivered = false, workerError = null, ...windowArgs} = {}) {
+    const window = fakeWindow(windowArgs);
+    window.workers = [];
+    window.Worker = class {
+        constructor(url, options) {
+            this.record = {'url': url.href, options, 'terminated': false};
+            window.workers.push(this.record);
+            this.scope = fakeWindow();
+            this.scope.postMessage = (data) => {
+                const copy = structuredClone(data);
+                setTimeout(() => {
+                    if (isDelivered || !this.record.terminated) {
+                        this.onmessage({'data': copy});
+                    }
+                });
+            };
+            if (workerError !== null) {
+                setTimeout(() => this.onerror(workerError));
+            }
+        }
+
+        postMessage(data) {
+            const copy = structuredClone(data);
+            setTimeout(() => {
+                if (workerError === null) {
+                    workerMessage(this.scope, copy);
+                }
+            });
+        }
+
+        terminate() {
+            this.record.terminated = true;
+        }
+    };
+    return window;
+}
+
+
+test('planRoad, in a worker', async () => {
+    // The plan is made in a worker - it's the plan the page would make. Its plots are drawn by the page (a worker can't
+    // draw an SVG image), and its statuses are the page's.
+    const site = testSite({'margin': 150, 'spacing': 10, 'notes': ['Stay off the barn.']});
+    const window = workerWindow();
+    const files = new Map([['other.json', '{}'], ['plan.work/decisions.json', '{"answers": {}}']]);
+    const statuses = [];
+    const result = await planRoad(window, {site}, {'model': 'test-model', 'status': (text, step) => statuses.push(step), files});
+    const pageFiles = new Map([['plan.work/decisions.json', '{"answers": {}}']]);
+    const pageStatuses = [];
+    const pageResult = await planRoad(fakeWindow(), {site}, {
+        'model': 'test-model', 'status': (text, step) => pageStatuses.push(step), 'files': pageFiles
+    });
+    assert.equal(result.code, 0);
+    assert.deepEqual(result, pageResult);
+    assert.deepEqual(statuses, pageStatuses);
+    assert.deepEqual(files, pageFiles);
+
+    // The worker is the module's, and it's ended when the plan is made - the page drew the model's plots
+    const workerUrl = new URL('../lib/browser/worker.js', import.meta.url).href;
+    assert.deepEqual(window.workers, [{'url': workerUrl, 'options': {'type': 'module'}, 'terminated': true}]);
+    assert.equal(window.canvases.length, 2);
+    assert.deepEqual(window.fetches, []);
+
+    // A plan without a status function, a signal, or files
+    const again = await planRoad(workerWindow(), {site});
+    assert.deepEqual([again.code, again.plan.options.length], [0, 2]);
+});
+
+
+test('planRoad, in a worker, failures', async () => {
+    // A plot that the page can't draw - the plan fails
+    const site = testSite({'margin': 150, 'spacing': 10, 'notes': ['Stay off the barn.']});
+    const failed = await planRoad(workerWindow({'imageLoads': false}), {site}, {'model': 'test-model'});
+    assert.deepEqual([failed.code, failed.lines.at(-1), failed.plan], [1, 'error: Could not draw a plot', null]);
+
+    // The worker fails - its module can't be loaded, say (an error may have no message)
+    const workerFailed = 'error: The plan\'s worker failed';
+    for (const [message, line] of [['Not found', `${workerFailed} - Not found`], ['', workerFailed]]) {
+        const window = workerWindow({'workerError': {message}});
+        const files = new Map([['plan.work/decisions.json', '{}']]);
+        assert.deepEqual(await planRoad(window, {site}, {files}), {'code': 1, 'lines': [line], 'plan': null});
+        assert.deepEqual([window.workers[0].terminated, [...files.keys()]], [true, ['plan.work/decisions.json']]);
+    }
+
+    // A plan that throws is the worker's error result
+    const posted = [];
+    await workerMessage({'postMessage': (data) => posted.push(data)}, {'type': 'run', 'road': null, 'files': new Map()});
+    assert.deepEqual(posted.map(({type, result}) => [type, result.code, result.lines[0].slice(0, 7), result.plan]), [
+        ['done', 1, 'error: ', null]
+    ]);
+});
+
+
+test('planRoad, in a worker, stopped', async () => {
+    // The plan is stopped while it engineers its options - it stops at once, its worker is ended, and its work is thrown
+    // away: the files are the files that were kept before it
+    const site = testSite({'margin': 150, 'spacing': 10});
+    for (const isDelivered of [false, true]) {
+        const window = workerWindow({isDelivered});
+        const files = new Map([['plan.work/decisions.json', '{"answers": {}}'], ['old.json', '{}']]);
+        const controller = new AbortController();
+        const statuses = [];
+        const result = await planRoad(window, {site}, {
+            'signal': controller.signal,
+            files,
+            'status': (text, step) => {
+                statuses.push(step);
+                if (step === 'options') {
+                    controller.abort();
+                }
+            }
+        });
+        assert.deepEqual(result, {'code': 1, 'lines': ['The plan was stopped'], 'plan': null, 'stopped': true});
+        assert.deepEqual([statuses, window.workers.map(({terminated}) => terminated)], [['site', 'options'], [true]]);
+        assert.deepEqual([...files], [['plan.work/decisions.json', '{"answers": {}}']]);
+
+        // The worker's messages after it's stopped (a browser may deliver those it posted before) are ignored
+        await new Promise((resolve) => {
+            setTimeout(resolve, 100);
+        });
+        assert.deepEqual([...files], [['plan.work/decisions.json', '{"answers": {}}']]);
+    }
+
+    // A plan that's stopped before it starts has no worker
+    const window = workerWindow();
+    const controller = new AbortController();
+    controller.abort();
+    assert.deepEqual(await planRoad(window, {site}, {'signal': controller.signal}), {
+        'code': 1, 'lines': ['The plan was stopped'], 'plan': null, 'stopped': true
+    });
+    assert.deepEqual(window.workers, []);
+});
+
+
+test('worker.js', async () => {
+    // The worker's messages are workerMessage's - its scope is the global scope
+    const posted = [];
+    globalThis.postMessage = (data) => posted.push(data);
+    try {
+        await import('../lib/browser/worker.js');
+        await globalThis.onmessage({'data': {'type': 'run', 'road': {'site': {}}, 'files': new Map()}});
+        assert.deepEqual(posted.map(({type, result}) => [type, result.lines[0]]), [['done', 'error: The plan config is invalid:']]);
+    } finally {
+        delete globalThis.postMessage;
+        delete globalThis.onmessage;
     }
 });

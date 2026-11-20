@@ -1,7 +1,7 @@
 // structures.js - the road's structures: culverts, bridges, retaining walls, and turnouts (a port of the Python planning
 // tools')
 
-import {crossSection, featureIndexes, pointInPolygons, segmentIntersect} from '../../viewer/lib/model.js';
+import {crossSection, featureIndexes, pointInPolygons, segmentIntersect} from '../../lib/model.js';
 import {featureStreams, groundElevation} from './design.js';
 import {npRound, pyRound} from './numeric.js';
 

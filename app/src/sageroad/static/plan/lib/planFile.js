@@ -1,6 +1,6 @@
 // planFile.js - the road plan model file - reading it, and writing it
 
-import {orderPlan, planText, validateSitePlan} from '../../viewer/lib/model.js';
+import {orderPlan, planText, validateSitePlan} from '../../lib/model.js';
 
 
 // Read and validate a road plan model file - "io" is the tools' input and output functions. Returns an object with the

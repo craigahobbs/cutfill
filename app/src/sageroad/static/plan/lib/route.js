@@ -5,7 +5,7 @@
 import {
     crossSection, featureStreams, groundElevation, groundGradient, sectionCut, sectionFill, sectionSlopeWidth, sectionWall
 } from './design.js';
-import {featureIndexes, pointInPolygons, segmentIntersect} from '../../viewer/lib/model.js';
+import {featureIndexes, pointInPolygons, segmentIntersect} from '../../lib/model.js';
 import {hypot, interp, linspace, pyRound} from './numeric.js';
 import {nearestLine, segmentNearest} from './roads.js';
 

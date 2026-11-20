@@ -1,7 +1,7 @@
 // design.js - the road engineering's design parameters and unit costs, ground model, and cross sections (a port of the
 // Python planning tools')
 
-import {elevation, linearAreas, planCriteria, planRates, unitScale} from '../../viewer/lib/model.js';
+import {elevation, linearAreas, planCriteria, planRates, unitScale} from '../../lib/model.js';
 
 
 // Create the road design parameters and unit costs (per plan unit) of a plan and the route and profile commands'
