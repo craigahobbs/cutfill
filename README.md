@@ -104,8 +104,9 @@ criteria, and marks), and what can be done with it:
   Options** clears them - the plan keeps its site's data.
 - **Save** the plan to its file - the file it was opened from, or saved to - or **Save As** another,
   to duplicate it (and run it with another config, say). In a browser that can't write to a file
-  (Firefox and Safari), a save downloads the plan's file. A plan with road options keeps its config
-  and its map image, so it's one file - and a plan without road options is its config's file.
+  (Firefox and Safari), it's **Download** - the plan's file is downloaded. A plan with road options
+  keeps its config and its map image, so it's one file - and a plan without road options is its
+  config's file.
 - **Close** it - if it has changes that aren't saved, you're asked first.
 - **Ollama Models** - Ollama's models on this computer: whether each reads images, its parameters,
   size, and modified date. **Delete** a model, or **Update** it (download it again), and see a
