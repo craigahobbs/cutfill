@@ -1032,6 +1032,10 @@ test('the plan config editor', async (context) => {
         'Default: 12', 'Default: 50', 'Default: 19', '', '', ''
     ]);
 
+    const surface = document.querySelector('[data-member="criteria.surface"]');
+    assert.deepEqual([surface.value, surface.options[0].textContent], ['', 'Default: gravel']);
+    assert.deepEqual(placeholders('criteria.width'), ['Default: 14']);
+
     // The defaults follow the plan config - its units, and its points
     const form = document.getElementById('sageroad-site');
     document.querySelector('[data-member="units"]').value = 'meters';

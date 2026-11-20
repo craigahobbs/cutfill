@@ -1,4 +1,4 @@
-import {formHtml, formPastePoint, formValue} from '../lib/form.js';
+import {formHtml, formPastePoint, formPlaceholders, formValue} from '../lib/form.js';
 import {JSDOM} from 'jsdom';
 import assert from 'node:assert/strict';
 import {parseSchemaMarkdown} from 'schema-markdown/lib/parser.js';
@@ -119,6 +119,31 @@ test('formHtml', () => {
     assert.deepEqual(texts(formElement(null)), ['car']);
     const invalid = formElement({'tripName': 5, 'mode': 'bus', 'start': 'Pasco', 'notes': 'Pack light.', 'cost': null});
     assert.deepEqual(texts(invalid), ['5', 'car']);
+});
+
+
+test('formPlaceholders', () => {
+    const {document} = new JSDOM('<form></form>').window;
+    const form = document.querySelector('form');
+    form.innerHTML = formHtml(types, 'Trip', {'tripName': 'North', 'mode': 'car'});
+    const control = (member) => form.querySelector(`[data-member="${member}"]`);
+    const choices = (member) => [...control(member).options].map((option) => [option.value, option.textContent]);
+
+    // A control's placeholder is its default - an optional enumeration's is its choice of none's text, and a required
+    // enumeration has no choice of none. A member that isn't the form's is ignored.
+    formPlaceholders(form, {'days': '3', 'returnMode': 'train', 'mode': 'car', 'start.city': '', 'nope': '1'});
+    assert.deepEqual([control('days').placeholder, control('start.city').placeholder], ['Default: 3', '']);
+    assert.deepEqual(choices('returnMode'), [['', 'Default: train'], ['car', 'car'], ['train', 'train']]);
+    assert.deepEqual(choices('mode'), [['car', 'car'], ['train', 'train']]);
+
+    // The choice of none has no value - the member is omitted
+    assert.equal(control('returnMode').value, '');
+    assert.ok(!('returnMode' in formValue(types, 'Trip', form)));
+
+    // The placeholders are set again - there are none
+    formPlaceholders(form, {'days': '', 'returnMode': ''});
+    assert.equal(control('days').placeholder, '');
+    assert.deepEqual(choices('returnMode')[0], ['', '']);
 });
 
 
