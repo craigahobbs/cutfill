@@ -133,7 +133,7 @@ test('planView, features, structures, and the other options', () => {
 
     // The features - streams (one unnamed, one from beyond the topography), a rock outcrop, and an exclusion area - then
     // the other option's dashed centerline, and the features' names over them. The road and its slopes are over the
-    // middles of the streams, so they're named farther along (seven tenths of the way), and the road is over the rock
+    // middles of the streams, so they're named farther along (six tenths of the way), and the road is over the rock
     // outcrop and the exclusion area, which aren't named
     const nameAttr = `font-size="11" ${textAttr}`;
     assert.deepEqual(planElements.slice(2, 10), [
@@ -143,8 +143,8 @@ test('planView, features, structures, and the other options', () => {
         '<polygon points="85,360 135,360 135,260 85,260" fill="rgba(110,110,110,0.35)" stroke="#555555" stroke-width="1"/>',
         '<polygon points="320,360 350,360 350,260 320,260" fill="rgba(208,49,45,0.12)" stroke="#d0312d" stroke-width="1.5"/>',
         `<polyline points="10,210 210,210 460,210" fill="none" stroke="#777777" stroke-width="1.5" ${lineAttr} stroke-dasharray="6 4"/>`,
-        `<text x="70" y="102.5" ${nameAttr} fill="#1d4f9e" ${textStroke}>Creek A</text>`,
-        `<text x="250" y="130" ${nameAttr} fill="#1d4f9e" ${textStroke}>Creek C</text>`
+        `<text x="70" y="150" ${nameAttr} fill="#1d4f9e" ${textStroke}>Creek A</text>`,
+        `<text x="250" y="170" ${nameAttr} fill="#1d4f9e" ${textStroke}>Creek C</text>`
     ]);
     assert.deepEqual(texts(planElements, 'font-size', '11'), ['Creek A', 'Creek C', 'N']);
     assert.equal(withAttr(planElements, 'stroke-dasharray', '6 4').length, 1);
@@ -169,12 +169,12 @@ test('planView, features, structures, and the other options', () => {
     assert.equal(withAttr(planElements, 'fill', 'rgb(196,120,64)').length, 18 + 1);
     assert.equal(withAttr(planElements, 'fill', 'rgb(218,184,96)').length, 19 + 3);
     assert.ok(planElements.includes(
-        '<polygon points="225.6,285 225.6,164 242.2,285 242.2,285" fill="rgb(196,120,64)" stroke="rgb(196,120,64)" stroke-width="0.5"/>'
+        '<polygon points="225.6,285 225.6,195 242.2,285 242.2,285" fill="rgb(196,120,64)" stroke="rgb(196,120,64)" stroke-width="0.5"/>'
     ));
 
     // The culverts cross the road and its slopes - the culvert beyond the end of the road is at its end
     assert.deepEqual(withAttr(planElements, 'stroke-width', '3').filter((element) => element.includes('stroke="#2a6fdb"')), [
-        `<polyline points="76.3,150 76.3,380" fill="none" stroke="#2a6fdb" stroke-width="3" ${lineAttr}/>`,
+        `<polyline points="76.3,195 76.3,380" fill="none" stroke="#2a6fdb" stroke-width="3" ${lineAttr}/>`,
         `<polyline points="435,275 435,325" fill="none" stroke="#2a6fdb" stroke-width="3" ${lineAttr}/>`
     ]);
 

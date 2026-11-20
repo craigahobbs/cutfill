@@ -42,7 +42,7 @@ export function planePlan({units = 'feet', rise = 0.1, size = 11, spacing = 10} 
 
 
 // Create a plan's elevation grid from a function of x and y - the elevations are rounded to hundredths
-function elevationGrid(size, spacing, elevationFn) {
+export function elevationGrid(size, spacing, elevationFn) {
     const elevations = [];
     for (let row = 0; row < size; row++) {
         const rowElevations = [];

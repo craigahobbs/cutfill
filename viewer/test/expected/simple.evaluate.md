@@ -4,7 +4,7 @@ Topography: 5 x 5 grid, 10 m spacing, 40 x 40 m, elevations 100.0 to 104.0 m
 
 - start (0.0, 20.0): ground elevation 102.0
 - end (40.0, 20.0): ground elevation 102.0
-- Design criteria: maximum grade 12%, minimum radius 15 m, maximum wall height 6 m
+- Design criteria: maximum grade 12%, minimum radius 15 m, maximum wall height 6 m, maximum slope height 18 m
 
 ## Options (lengths in m, volumes in m³)
 

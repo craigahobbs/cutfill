@@ -46,7 +46,7 @@ test('PlanData analysis', () => {
     // Every option's analysis
     const analyses = data.analyses();
     assert.deepEqual(analyses.map((analysis) => analysis.name), ['Main', 'Alt']);
-    assert.deepEqual(analyses.map((analysis) => analysis.warnings.length), [18, 8]);
+    assert.deepEqual(analyses.map((analysis) => analysis.warnings.length), [18, 9]);
     assert.equal(analyses[1], alt);
     assert.equal(data.analysis(0), analyses[0]);
     assert.deepEqual(analyses[0], analyzeOption(plan, 0, data.topo));

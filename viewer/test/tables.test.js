@@ -18,19 +18,19 @@ test('costTable', () => {
     assert.deepEqual(costTable(units, analysis), {
         'fields': [['Item', 'left'], ['Quantity', 'right'], ['Cost Score', 'right'], ['Share', 'right']],
         'rows': [
-            ['Clearing and grubbing', '3,351 sf', '0.6', '1.3%'],
-            ['Common excavation', '339 cy', '5.2', '10.9%'],
-            ['Rock excavation', '14 cy', '1.1', '2.2%'],
-            ['Embankment', '299 cy', '1.5', '3.1%'],
-            ['Waste (export)', '11 cy', '0.1', '0.2%'],
-            ['Surfacing (asphalt)', '1,049 sf', '3.9', '8.2%'],
-            ['Ditches and cross drains', '83 ft', '1.1', '2.4%'],
-            ['Culverts (2)', '29 ft', '16.3', '34.3%'],
-            ['Retaining walls', '53 sf', '3.2', '6.7%'],
-            ['Bridges', '40 sf', '10.0', '21.1%'],
-            ['Erosion control', '3,351 sf', '0.2', '0.5%'],
-            ['Mobilization', '', '4.3', '9.1%'],
-            [{'strong': 'Total'}, '', {'strong': '47.6'}, '']
+            ['Clearing and grubbing', '2,892 sf', '0.5', '1.2%'],
+            ['Common excavation', '253 cy', '3.9', '8.5%'],
+            ['Rock excavation', '14 cy', '1.1', '2.3%'],
+            ['Embankment', '190 cy', '0.9', '2.1%'],
+            ['Waste (export)', '45 cy', '0.3', '0.8%'],
+            ['Surfacing (asphalt)', '1,049 sf', '3.9', '8.5%'],
+            ['Ditches and cross drains', '83 ft', '1.1', '2.5%'],
+            ['Culverts (2)', '29 ft', '16.3', '35.7%'],
+            ['Retaining walls', '53 sf', '3.2', '7.0%'],
+            ['Bridges', '40 sf', '10.0', '22.0%'],
+            ['Erosion control', '2,892 sf', '0.2', '0.4%'],
+            ['Mobilization', '', '4.2', '9.1%'],
+            [{'strong': 'Total'}, '', {'strong': '45.7'}, '']
         ]
     });
 });

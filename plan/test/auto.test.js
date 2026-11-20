@@ -16,7 +16,7 @@ test('auto', async () => {
     assert.equal(io.output.join(''), `\
 ${siteLines}Notes: not read - there's no model (--model)
 Draws: added the unmapped draws the options crossed, as streams - Draw 1
-${optionsLines}Option 0: "New Road" - cost score 72.5, design warnings: 0
+${optionsLines}Option 0: "New Road" - cost score 72.4, design warnings: 0
 Option 1: "North Corridor" - cost score 85.1, design warnings: 0
 ${wroteLine}`);
     assert.deepEqual(io.asks, []);
@@ -157,17 +157,17 @@ Notes: pass through "Stall" - at x 340, y 90
 Draws: added the unmapped draws the options crossed, as streams - Draw 1
 Option "New Road": 383 meters long, 83 alignment points, max grade 3.6%, max cut 0.1, max fill 0.1
 Structures: 1 culvert
-Cost score: 122.3, design warnings: 1
+Cost score: 122.2, design warnings: 1
 Option "North Corridor": 485 meters long, 105 alignment points, max grade 2.1%, max cut 0.1, max fill 0.1
 Structures: 1 culvert
 Cost score: 150.4, design warnings: 0
 Other corridor: "North Corridor" (through 226,367) - its middle is an average of 97 meters from the standard options
 Option "Via Ford": 384 meters long, 83 alignment points, max grade 3.6%, max cut 0.1, max fill 0.1
 Structures: 1 culvert
-Cost score: 122.8, design warnings: 1
+Cost score: 122.7, design warnings: 1
 Notes: "Via Ford" passes through "Ford"
-Option 0: "New Road" - cost score 122.3, design warnings: 1
-Option 1: "Via Ford" - cost score 122.8, design warnings: 1
+Option 0: "New Road" - cost score 122.2, design warnings: 1
+Option 1: "Via Ford" - cost score 122.7, design warnings: 1
 Option 2: "North Corridor" - cost score 150.4, design warnings: 0
 Notes: NOT acted on - Paint it blue.
 Notes: NOT acted on - rule out the road "Nope Rd" (the site has no road of that name)

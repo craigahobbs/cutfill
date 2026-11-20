@@ -21,12 +21,14 @@ export function simplePlan() {
 }
 
 
-// The simple plan with tall ridges on both sides of its road (which hide the road from low viewpoints)
-export function ridgesPlan() {
+// The simple plan with tall ridges on both sides of its road (which hide the road from low viewpoints) - the road has
+// walls, so it has no cut slopes up the ridges
+export function ridgesPlan(elevation = 150) {
     const plan = simplePlan();
     for (const row of [1, 3]) {
-        plan.topography.elevations[row].fill(150);
+        plan.topography.elevations[row].fill(elevation);
     }
+    plan.options[0].structures = [{'type': 'retainingWall', 'station': 0, 'endStation': 40}];
     return plan;
 }
 
@@ -61,7 +63,7 @@ export function complexPlan() {
         },
         'start': {'x': -15, 'y': 20, 'label': 'Road'},
         'end': {'x': 75, 'y': 60},
-        'criteria': {'maxGrade': 10, 'maxWallHeight': 3},
+        'criteria': {'maxGrade': 10, 'maxWallHeight': 3, 'maxSlopeHeight': 12},
         'options': [
             {
                 'name': 'Main',

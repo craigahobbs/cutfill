@@ -1,9 +1,9 @@
 // structures.js - the road's structures: culverts, bridges, retaining walls, and turnouts (a port of the Python planning
 // tools')
 
-import {crossSection, featureStreams, groundElevation, sectionWallLeft, sectionWallRight} from './design.js';
+import {crossSection, featureIndexes, pointInPolygons, segmentIntersect} from '../../viewer/lib/model.js';
+import {featureStreams, groundElevation} from './design.js';
 import {npRound, pyRound} from './numeric.js';
-import {segmentIntersect} from '../../viewer/lib/model.js';
 
 
 // Get the station mask of the existing roads ([station, end station] ranges), with a tolerance for the stations' rounding
@@ -20,8 +20,9 @@ export function existingMask(stations, existingRoads) {
 }
 
 
-// Place an alignment's structures - retaining walls (where a slope doesn't daylight), culverts (at stream crossings and
-// profile sags), bridges (over deep stream crossing fills), and turnouts. None are within the existing roads ([station,
+// Place an alignment's structures - retaining walls (where a slope doesn't daylight - the viewer's cross sections, on
+// the terrain, so the road's walls are where its analysis needs them), culverts (at stream crossings and profile
+// sags), bridges (over deep stream crossing fills), and turnouts. None are within the existing roads ([station,
 // end station] ranges), which are added as existing road structures. The alignment is its "x" and "y" coordinate arrays,
 // their evenly-spaced "stations", its "profile" (the grade elevations), and the ground's "sideSlope" at the stations.
 // "roadLength" is the road's length, measured along the alignment's points as the viewer does - it's a little less
@@ -35,16 +36,26 @@ export function designStructures(topo, design, x, y, stations, profile, sideSlop
     const inExisting = (stationValue) => existingRoads.some(([start, end]) => start - 1e-6 <= stationValue && stationValue <= end + 1e-6);
     const structures = [];
 
-    // The cut (or fill) depth at each station, and the heights of the walls where its slopes don't daylight
+    // The cut (or fill) depth at each station, and whether each side's slope doesn't daylight - it needs a wall. The
+    // road's direction at a station is the alignment's - central differences, one-sided at the ends.
     const depth = new Float64Array(count);
-    const wallLeft = new Float64Array(count);
-    const wallRight = new Float64Array(count);
-    const section = new Float64Array(6);
+    const wallLeft = new Uint8Array(count);
+    const wallRight = new Uint8Array(count);
+    const rocks = featureIndexes(topo, 'rock');
     for (let ix = 0; ix < count; ix++) {
         depth[ix] = groundElevation(topo, x[ix], y[ix]) - profile[ix];
-        crossSection(depth[ix], sideSlope[ix], design.halfWidth, design.cutSlope, design.fillSlope, section);
-        wallLeft[ix] = section[sectionWallLeft];
-        wallRight[ix] = section[sectionWallRight];
+        const ixPrev = Math.max(0, ix - 1);
+        const ixNext = Math.min(count - 1, ix + 1);
+        const headingX = x[ixNext] - x[ixPrev];
+        const headingY = y[ixNext] - y[ixPrev];
+        const headingLength = Math.max(Math.hypot(headingX, headingY), 1e-9);
+        const cutSlope = pointInPolygons(x[ix], y[ix], rocks) ? design.rockCutSlope : design.cutSlope;
+        const {left, right} = crossSection(
+            topo, x[ix], y[ix], profile[ix], headingX / headingLength, headingY / headingLength, design.halfWidth, cutSlope,
+            design.fillSlope, design.maxSlopeHeight, false, false
+        );
+        wallLeft[ix] = left.daylight ? 0 : 1;
+        wallRight[ix] = right.daylight ? 0 : 1;
     }
 
     // Stream crossings

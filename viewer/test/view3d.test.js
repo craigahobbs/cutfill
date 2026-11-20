@@ -487,7 +487,7 @@ test('view3DParts, features and structures', () => {
     assert.deepEqual(elementCounts(elements.slice(0, -7)), {
         'cells': 64,
         'minor': 63,
-        'index': 36,
+        'index': 32,
         'quads': 76,
         'titles': 26,
         'lines': {'#2a6fdb 2.5': 48, '#555555 1': 12, 'rgba(208,49,45,0.55) 1': 12, '#2a6fdb 4': 2},
@@ -526,7 +526,7 @@ test('view3DParts, features and structures', () => {
     assert.equal(other.label, '3D view of the Alt road plan option');
     const otherCounts = elementCounts(other.elements.slice(0, -7));
     assert.deepEqual(otherCounts.lines, {'#2a6fdb 2.5': 48, '#555555 1': 12, 'rgba(208,49,45,0.55) 1': 12});
-    assert.deepEqual([otherCounts.quads, otherCounts.titles], [71, 21]);
+    assert.deepEqual([otherCounts.quads, otherCounts.titles], [65, 21]);
     assert.ok(!other.elements.some((element) => element.includes('fill="rgb(128,128,126)"')));
 });
 
@@ -732,10 +732,7 @@ test('reportViews, the viewpoints', () => {
 
     // Ridges on both sides hide the road at a low tilt - the lowest tilt that shows all of the road wins. Ridges that
     // hide the road at every tilt are viewed from straight above.
-    const lowRidges = simplePlan();
-    lowRidges.topography.elevations[1].fill(115);
-    lowRidges.topography.elevations[3].fill(115);
-    assert.deepEqual(viewpoints(planReportViews(lowRidges)), [[0, 70, 0, 40, true]]);
+    assert.deepEqual(viewpoints(planReportViews(ridgesPlan(115))), [[0, 70, 0, 40, true]]);
     assert.deepEqual(viewpoints(planReportViews(ridgesPlan())), [[0, 90, 0, 40, true]]);
 
     // A narrow road's segment views are from straight above, too, in the overview's orientation

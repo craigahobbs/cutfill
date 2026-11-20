@@ -24,16 +24,33 @@ function crossingWarnings(analysis) {
 
 
 // Get the middle cross section sample of a road running east across a plane - "slope" is the plane's rise to the north
-// (the road's left) and "depth" is the ground elevation minus the grade elevation at the centerline
-function planeSample({slope = 0, depth = 0, width = 10, section = {}, structures = []}) {
+// (the road's left) and "depth" is the ground elevation minus the grade elevation at the centerline. The ground may be
+// a function of the distance north, instead ("groundFn" - the centerline is 20 north, and the plane's elevation there
+// is 100 plus 20 times its slope).
+function planeSample(planeArgs) {
+    return planeAnalysis(planeArgs).samples[6];
+}
+
+
+// Get the plane road's design warnings, but for its grade's at its ends
+function analyzeWarnings(planeArgs) {
+    return planeAnalysis(planeArgs).warnings.filter((warning) => !warning.startsWith('The road grade at the '));
+}
+
+
+// Analyze the plane road (planeSample)
+function planeAnalysis({slope = 0, depth = 0, width = 10, section = {}, structures = [], criteria = {}, groundFn = null}) {
     const plan = planSimple();
-    plan.topography.elevations = plan.topography.elevations.map((row, ixRow) => row.map(() => 100 + slope * 10 * (4 - ixRow)));
+    plan.criteria = criteria;
+    plan.topography.elevations = plan.topography.elevations.map((row, ixRow) => row.map(() => (
+        groundFn !== null ? groundFn(10 * (4 - ixRow)) : 100 + slope * 10 * (4 - ixRow)
+    )));
     const z = 100 + slope * 20 - depth;
     const [option] = plan.options;
     option.section = {width, ...section};
     option.alignment = [{'x': 0, 'y': 20, z}, {'x': 40, 'y': 20, z}];
     option.structures = structures;
-    return analyze(plan).samples[6];
+    return analyze(plan);
 }
 
 
@@ -162,22 +179,22 @@ test('validatePlan, structure endStation', () => {
 
 test('planCriteria', () => {
     assert.deepEqual(planCriteria(planSimple()), {
-        'width': 4.3, 'surface': 'gravel', 'maxGrade': 12, 'minRadius': 15, 'rockCutSlope': 0.5, 'maxWallHeight': 6
+        'width': 4.3, 'surface': 'gravel', 'maxGrade': 12, 'minRadius': 15, 'rockCutSlope': 0.5, 'maxWallHeight': 6, 'maxSlopeHeight': 18
     });
     assert.deepEqual(planCriteria(planComplex()), {
-        'width': 14, 'surface': 'gravel', 'maxGrade': 10, 'minRadius': 50, 'rockCutSlope': 0.5, 'maxWallHeight': 3
+        'width': 14, 'surface': 'gravel', 'maxGrade': 10, 'minRadius': 50, 'rockCutSlope': 0.5, 'maxWallHeight': 3, 'maxSlopeHeight': 12
     });
 
     const plan = planComplex();
     plan.criteria = {'minRadius': 30, 'rockCutSlope': 0.25};
     assert.deepEqual(planCriteria(plan), {
-        'width': 14, 'surface': 'gravel', 'maxGrade': 12, 'minRadius': 30, 'rockCutSlope': 0.25, 'maxWallHeight': 20
+        'width': 14, 'surface': 'gravel', 'maxGrade': 12, 'minRadius': 30, 'rockCutSlope': 0.25, 'maxWallHeight': 20, 'maxSlopeHeight': 60
     });
 
     // The road's width and surface
     plan.criteria = {'width': 30, 'surface': 'asphalt'};
     assert.deepEqual(planCriteria(plan), {
-        'width': 30, 'surface': 'asphalt', 'maxGrade': 12, 'minRadius': 50, 'rockCutSlope': 0.5, 'maxWallHeight': 20
+        'width': 30, 'surface': 'asphalt', 'maxGrade': 12, 'minRadius': 50, 'rockCutSlope': 0.5, 'maxWallHeight': 20, 'maxSlopeHeight': 60
     });
     assert.ok('plan' in validatePlan(plan));
     plan.criteria = {'surface': 'mud'};
@@ -436,8 +453,9 @@ test('analyzeOption, side sections', () => {
     assert.deepEqual(planeSample({'depth': 2}).left,
         {'kind': 'cut', 'offset': 2, 'drop': 2, 'wall': 0, 'cut': 2, 'fill': 0, 'daylight': true});
 
-    // Cut on ground steeper than the cut slope
-    assert.deepEqual(planeSample({'slope': 2, 'depth': 2 - 2 * 5}).left,
+    // Cut on ground steeper than the cut slope - it doesn't daylight, and it's its part within the maximum slope height
+    const steep = {'maxSlopeHeight': 6};
+    assert.deepEqual(planeSample({'slope': 2, 'depth': 2 - 2 * 5, 'criteria': steep}).left,
         {'kind': 'cut', 'offset': 6, 'drop': 6, 'wall': 0, 'cut': 30, 'fill': 0, 'daylight': false});
 
     // Fill on flat ground
@@ -445,12 +463,45 @@ test('analyzeOption, side sections', () => {
         {'kind': 'fill', 'offset': 4, 'drop': -2, 'wall': 0, 'cut': 0, 'fill': 4, 'daylight': true});
 
     // Fill on ground steeper than the fill slope
-    assert.deepEqual(planeSample({'slope': -1, 'depth': -2 + 1 * 5, 'section': {'fillSlope': 2}}).left,
+    assert.deepEqual(planeSample({'slope': -1, 'depth': -2 + 1 * 5, 'section': {'fillSlope': 2}, 'criteria': steep}).left,
         {'kind': 'fill', 'offset': 12, 'drop': -6, 'wall': 0, 'cut': 0, 'fill': 60, 'daylight': false});
 
     // At grade
     assert.deepEqual(planeSample({'slope': 0.5, 'depth': -0.5 * 5}).left,
         {'kind': 'none', 'offset': 0, 'drop': 0, 'wall': 0, 'cut': 0, 'fill': 0, 'daylight': true});
+});
+
+
+// A side's slope meets the ground where the terrain is - the ground isn't a plane of its slope at the centerline
+test('analyzeOption, side sections on the terrain', () => {
+    // A cut into a bank below a bench - the ground rises 10 in the 10 north of the centerline, and it's level beyond. The
+    // left edge is 5 deep, and its slope meets the bench 10 from the edge (a plane of the centerline's slope, 0.5, would
+    // be met 5 from the edge, 2.5 deep).
+    const bench = planeSample({'groundFn': (north) => (north > 20 ? 110 : 100)});
+    assert.deepEqual([bench.ground, bench.z, bench.slope], [100, 100, 0.5]);
+    assert.deepEqual(bench.left, {'kind': 'cut', 'offset': 10, 'drop': 10, 'wall': 0, 'cut': 37.5, 'fill': 0, 'daylight': true});
+    assert.deepEqual(bench.right, {'kind': 'none', 'offset': 0, 'drop': 0, 'wall': 0, 'cut': 0, 'fill': 0, 'daylight': true});
+    assert.deepEqual([bench.cut, bench.fill], [12.5 + 37.5, 0]);
+
+    // A fill above a draw - the ground falls 10 in the 10 south of the centerline, and rises again. The right edge is 5
+    // deep, and its slope meets the draw's far side 9 from the edge.
+    const draw = planeSample({'groundFn': (north) => (north === 10 ? 90 : 100)});
+    assert.deepEqual([draw.right.kind, draw.right.daylight], ['fill', true]);
+    assert.deepEqual([draw.right.offset, draw.right.drop, draw.right.fill].map((value) => round(value, 9)), [9, -6, 42.5]);
+    assert.deepEqual([draw.cut, round(draw.fill, 9)], [0, 12.5 + 42.5]);
+
+    // The ground beyond the topography is its nearest point's - a cut 10.5 deep at the left edge, into a plane that
+    // rises at 0.5, meets the ground 18 from the edge (3 beyond the topography), not 21
+    const beyond = planeSample({'slope': 0.5, 'depth': 8});
+    assert.deepEqual(beyond.left, {'kind': 'cut', 'offset': 18, 'drop': 18, 'wall': 0, 'cut': 105.75, 'fill': 0, 'daylight': true});
+
+    // A slope that doesn't meet the ground within the maximum slope height doesn't daylight - it's that high
+    const high = planeSample({'slope': 0.5, 'depth': 8, 'criteria': {'maxSlopeHeight': 10}});
+    assert.deepEqual(high.left, {'kind': 'cut', 'offset': 10, 'drop': 10, 'wall': 0, 'cut': 80, 'fill': 0, 'daylight': false});
+    assert.deepEqual(analyzeWarnings({'slope': 0.5, 'depth': 8, 'criteria': {'maxSlopeHeight': 10}}), [
+        'The cut slope does not daylight (retaining wall needed) from 0+000 to 0+040'
+    ]);
+    assert.deepEqual(analyzeWarnings({'slope': 0.5, 'depth': 8}), []);
 });
 
 
@@ -589,7 +640,7 @@ test('analyzeOption, the simple plan', () => {
             'daylight': true
         },
         'right': {
-            'kind': 'fill', 'offset': 0.8823529411764706, 'drop': -0.5882352941176471, 'wall': 0, 'cut': 0, 'fill': 0.22058823529411767,
+            'kind': 'fill', 'offset': 0.8823529411764706, 'drop': -0.5882352941176471, 'wall': 0, 'cut': 0, 'fill': 0.22058823529411764,
             'daylight': true
         }
     });
@@ -654,9 +705,9 @@ test('analyzeOption, the complex plan', () => {
     assert.equal(analysis.bridgeLength, 4);
     assert.equal(analysis.culvertCount, 2);
     assert.equal(analysis.borrow, 0);
-    assert.equal(round(analysis.waste, 2), 305.59);
+    assert.equal(round(analysis.waste, 2), 1227.52);
     assert.equal(round(analysis.wallArea, 2), 53.07);
-    assert.equal(round(analysis.score, 2), 47.58);
+    assert.equal(round(analysis.score, 2), 45.7);
     assert.deepEqual(analysis.warnings, [
         'Grade 20.0% exceeds the maximum grade (10%) from 0+40 to 0+50',
         'Grade 100.0% exceeds the maximum grade (10%) from 0+70 to 0+86',
@@ -733,6 +784,7 @@ test('analyzeOption, ground alignment', () => {
         'The alignment end is 25 ft from the plan end point',
         'The road is outside the topography from 0+83 to 0+90',
         'The fill slope does not daylight (retaining wall needed) from 0+00 to 0+40',
+        'The cut slope does not daylight (retaining wall needed) from 0+00 to 0+80',
         'The Creek A crossing at 0+12 has no culvert or bridge',
         'The stream crossing at 0+45 has no culvert or bridge',
         'The Creek C crossing at 0+48 has no culvert or bridge'
@@ -933,12 +985,14 @@ test('analyzeOption warnings', () => {
     plan.options[0].alignment = [{'x': 20, 'y': 30}, {'x': 60, 'y': 260}, {'x': 200, 'y': 200, 'z': 400}, {'x': 600, 'y': 250}];
     const validated = validatePlan(plan).plan;
     const {warnings} = analyzeOption(validated, 0, planTopo(validated));
-    // The crossing is at an alignment point, so both of its segments cross the stream (as in the MarkdownUp viewer)
+    // The crossing is at an alignment point, so both of its segments cross the stream (as in the MarkdownUp viewer). The
+    // road's cut is 100 feet deep - its slopes are over the maximum slope height.
     assert.deepEqual(warnings, [
         'Grade 99.2% exceeds the maximum grade (12%) from 2+33 to 7+89',
         'The alignment end is 220 ft from the plan end point',
         'The road is outside the topography from 5+89 to 7+89',
         'The road crosses an exclusion area from 2+16 to 2+53',
+        'The cut slope does not daylight (retaining wall needed) from 3+00 to 5+86',
         'The Test Creek crossing at 3+86 has no culvert or bridge',
         'The Test Creek crossing at 3+86 has no culvert or bridge'
     ]);

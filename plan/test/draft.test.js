@@ -47,31 +47,32 @@ test('draft', () => {
 **The site.** From "Road" (elevation 504 feet) to the end point (elevation 533 feet). The straight line between them climbs 30 \
 feet in 422 feet (7.1%).
 
-**Design criteria.** Maximum grade 12%, minimum curve radius 50 feet, maximum retaining wall height 20 feet.
+**Design criteria.** Maximum grade 12%, minimum curve radius 50 feet, maximum retaining wall height 20 feet, maximum cut or fill \
+slope height 60 feet.
 
 ${limitations}
 
 # Option: Direct
 
-The least-cost option - its cost score is 48.6. It's 440 feet long and 12 feet wide, gravel, and its maximum grade is 20.9%.
+The least-cost option - its cost score is 48.0. It's 440 feet long and 12 feet wide, gravel, and its maximum grade is 20.9%.
 
 - **Line.** From the start, it runs northeast for about 200 feet, east for about 110 feet, and northeast for about 130 feet to the end.
 - **Structures.** 1 culvert (Creek culvert, station 2+11, 1.5 ft), 1 retaining wall (stations 2+60 to 3+00), 1 turnout.
-- **Earthwork.** 108 cy of cut and 338 cy of fill, with 237 cy of borrow (import). Its deepest cut is 2.0 feet (station 3+43). \
+- **Earthwork.** 107 cy of cut and 332 cy of fill, with 233 cy of borrow (import). Its deepest cut is 2.0 feet (station 3+43). \
 Its deepest fill is 7.0 feet (station 2+13).
-- **Cost.** Its largest items: surfacing (gravel) 10.2, culverts (1) 10.1, retaining walls 6.1.
+- **Cost.** Its largest items: surfacing (gravel) 10.2, culverts (1) 9.7, retaining walls 6.1.
 - **Design warnings.** Grade 20.9% exceeds the maximum grade (12%) from 2+11 to 3+11.
 
 # Option: Bridge - East
 
-It costs 703% more than the least-cost option, "Direct" - its cost score is 390.2. Its largest cost difference: bridges 316.1 \
+It costs 713% more than the least-cost option, "Direct" - its cost score is 390.0. Its largest cost difference: bridges 316.1 \
 more. It's 464 feet long and 14 feet wide, asphalt, and its new road's maximum grade is 9.9%.
 
 - **Line.** From the start, it runs east for about 230 feet and northeast for about 230 feet to the end.
 - **Existing road.** It follows an existing road for 100 feet (stations 3+00 to 4+00).
 ${upgrade}
 - **Structures.** 1 bridge (stations 1+60 to 2+50).
-- **Earthwork.** 448 cy of cut and 67 cy of fill, with 350 cy of waste (export). Its deepest cut is 10.9 feet (station 2+98). \
+- **Earthwork.** 444 cy of cut and 67 cy of fill, with 346 cy of waste (export). Its deepest cut is 10.9 feet (station 2+98). \
 Its deepest fill is 5.3 feet (station 1+59).
 - **Cost.** Its largest items: bridges 316.1, mobilization 35.5, surfacing (asphalt) 14.6.
 - **Design warnings.** The bridge deck is below the ground from 2+35 to 2+48.
@@ -107,7 +108,7 @@ test('describePlan', () => {
     assert.deepEqual([named.description[0], named.description[6], named.description.at(-1).slice(-20)], [
         'A road of \\~400 feet.', '**Options.** About \\~5% more.', 'he gate is \\~here\\~.'
     ]);
-    assert.ok(named.options[1].description[0].startsWith('It costs 703% more than the least-cost option, "Direct \\~1" - '));
+    assert.ok(named.options[1].description[0].startsWith('It costs 713% more than the least-cost option, "Direct \\~1" - '));
 });
 
 
@@ -127,10 +128,10 @@ test('draft, options that aren\'t in cost order', () => {
     same.options[1].structures = [1, 2, 3, 4, 5, 6, 7].map((number) => ({'type': 'culvert', 'station': number * 10}));
     same.options[0].structures = same.options[1].structures.slice(0, 6);
     assert.deepEqual(draftLines(same).filter((line) => line.startsWith('- **Structures.**') || / - its cost score is /.test(line)), [
-        'The least-cost option - its cost score is 80.0. It\'s 440 feet long and 12 feet wide, gravel, and its maximum grade is 20.9%.',
+        'The least-cost option - its cost score is 79.8. It\'s 440 feet long and 12 feet wide, gravel, and its maximum grade is 20.9%.',
         '- **Structures.** 6 culverts (station 0+10, 1.5 ft; station 0+20, 1.5 ft; station 0+30, 1.5 ft; station 0+40, 1.5 ft; station ' +
             '0+50, 1.5 ft; station 0+60, 1.5 ft).',
-        'It costs 10% more than the least-cost option, "Direct" - its cost score is 88.4. Its largest cost difference: culverts 7.6 ' +
+        'It costs 10% more than the least-cost option, "Direct" - its cost score is 88.2. Its largest cost difference: culverts 7.6 ' +
             'more. It\'s 440 feet long and 12 feet wide, ' +
             'gravel, and its maximum grade is 20.9%.',
         '- **Structures.** 7 culverts (station 0+10, 1.5 ft; station 0+20, 1.5 ft; station 0+30, 1.5 ft; station 0+40, 1.5 ft; station ' +
@@ -139,20 +140,20 @@ test('draft, options that aren\'t in cost order', () => {
     const equal = fixturePlan();
     equal.options = [equal.options[0], {...equal.options[0], 'name': 'Equal'}];
     assert.ok(draftLines(equal).includes(
-        'It costs the same as the least-cost option, "Direct" - its cost score is 48.6. It\'s 440 feet long and 12 feet wide, gravel, ' +
+        'It costs the same as the least-cost option, "Direct" - its cost score is 48.0. It\'s 440 feet long and 12 feet wide, gravel, ' +
             'and its maximum grade is 20.9%.'
     ));
     assert.deepEqual(lines.filter((line) => line.startsWith('- **Structures.**') || / - its cost score is /.test(line)), [
-        'It costs 1,011% more than the least-cost option, "Plain" - its cost score is 390.2. Its largest cost difference: bridges ' +
+        'It costs 1,013% more than the least-cost option, "Plain" - its cost score is 390.0. Its largest cost difference: bridges ' +
             '316.1 more. It\'s 464 feet long and 14 feet wide, ' +
             'asphalt, and its new road\'s maximum grade is 9.9%.',
         '- **Structures.** 1 bridge (stations 1+60 to 2+50).',
-        'It costs 69% more than the least-cost option, "Plain" - its cost score is 59.3. Its largest cost differences: culverts 18.7 ' +
+        'It costs 67% more than the least-cost option, "Plain" - its cost score is 58.6. Its largest cost differences: culverts 18.4 ' +
             'more, retaining walls 6.1 more. It\'s 440 feet long and 12 feet wide, ' +
             'gravel, and its maximum grade is 20.9%.',
         '- **Structures.** 2 culverts (Creek culvert, station 2+11, 1.5 ft; station 0+50, 2.5 ft), 1 retaining wall (stations 2+60 ' +
             'to 3+00), 2 turnouts.',
-        'The least-cost option - its cost score is 35.1. It\'s 440 feet long and 12 feet wide, gravel, and its maximum grade is 27.9%.',
+        'The least-cost option - its cost score is 35.0. It\'s 440 feet long and 12 feet wide, gravel, and its maximum grade is 27.9%.',
         '- **Structures.** None.'
     ]);
 });
@@ -176,7 +177,8 @@ test('draft, existing roads and added features', async () => {
         '**The site.** From "Gate" (elevation 102 feet) to "House" (elevation 118 feet). The straight line between them climbs 15 ' +
             'feet in 416 feet (3.7%).',
         '',
-        '**Design criteria.** Maximum grade 12%, minimum curve radius 50 feet, maximum retaining wall height 20 feet.',
+        '**Design criteria.** Maximum grade 12%, minimum curve radius 50 feet, maximum retaining wall height 20 feet, maximum cut or ' +
+            'fill slope height 60 feet.',
         '',
         '**Features added to the site.** They aren\'t the USGS\'s - verify them in the field:',
         '',
@@ -226,7 +228,8 @@ test('draft, a meters plan down a steep plane', () => {
             'between them descends 30 meters in 100 meters (30%) - steeper than the maximum grade, so a road is longer than the ' +
             'straight line.',
         '',
-        '**Design criteria.** Maximum grade 12%, minimum curve radius 15 meters, maximum retaining wall height 6 meters.',
+        '**Design criteria.** Maximum grade 12%, minimum curve radius 15 meters, maximum retaining wall height 6 meters, maximum cut ' +
+            'or fill slope height 18 meters.',
         '',
         limitations,
         '',

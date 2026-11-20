@@ -65,14 +65,15 @@ Cost rate overrides, in nominal US dollars per metric unit
 
 The road design criteria
 
-| Name          | Type                     | Attributes            | Description                                                                         |
-|---------------|--------------------------|-----------------------|-------------------------------------------------------------------------------------|
-| width         | float                    | optional<br>value > 0 | The road width, including shoulders (default is 14 feet / 4.3 meters)               |
-| surface       | [Surface](#enum-surface) | optional              | The road surface (default is "gravel")                                              |
-| maxGrade      | float                    | optional<br>value > 0 | The maximum road grade, in percent (default is 12)                                  |
-| minRadius     | float                    | optional<br>value > 0 | The minimum centerline curve radius (default is 50 feet / 15 meters)                |
-| rockCutSlope  | float                    | optional<br>value > 0 | The rock cut slope ratio, horizontal run per unit of vertical rise (default is 0.5) |
-| maxWallHeight | float                    | optional<br>value > 0 | The maximum retaining wall height (default is 20 feet / 6 meters)                   |
+| Name           | Type                     | Attributes            | Description                                                                                                                                              |
+|----------------|--------------------------|-----------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------|
+| width          | float                    | optional<br>value > 0 | The road width, including shoulders (default is 14 feet / 4.3 meters)                                                                                    |
+| surface        | [Surface](#enum-surface) | optional              | The road surface (default is "gravel")                                                                                                                   |
+| maxGrade       | float                    | optional<br>value > 0 | The maximum road grade, in percent (default is 12)                                                                                                       |
+| minRadius      | float                    | optional<br>value > 0 | The minimum centerline curve radius (default is 50 feet / 15 meters)                                                                                     |
+| rockCutSlope   | float                    | optional<br>value > 0 | The rock cut slope ratio, horizontal run per unit of vertical rise (default is 0.5)                                                                      |
+| maxWallHeight  | float                    | optional<br>value > 0 | The maximum retaining wall height (default is 20 feet / 6 meters)                                                                                        |
+| maxSlopeHeight | float                    | optional<br>value > 0 | The maximum cut or fill slope height (default is 60 feet / 18 meters) - a slope that doesn't meet the ground (daylight) within it needs a retaining wall |
 
 ### typedef ElevationRow
 

@@ -83,8 +83,8 @@ test('auto, the plan config\'s marks', async () => {
         'Existing road: stations 0.0 to 415.1 (Farm track) - its grade averages 0.4%, 3.3% over its steepest 15 meters',
         'Notes: "Via Oak" passes through "Oak"',
         'Option 0: "Existing Roads" - cost score 25.8, design warnings: 0',
-        'Option 1: "New Road" - cost score 72.5, design warnings: 0',
-        'Option 2: "Via Oak" - cost score 89.2, design warnings: 0',
+        'Option 1: "New Road" - cost score 72.4, design warnings: 0',
+        'Option 2: "Via Oak" - cost score 89.3, design warnings: 0',
         'Notes: NOT acted on - pass through "Place 2" - it isn\'t within the site'
     ]);
     assert.deepEqual(io.plan.topography.features.map(({type, name, added}) => [type, name, added]), [
@@ -134,7 +134,7 @@ test('auto, a place to pass through that\'s a dead end', async () => {
         'NOTE: the via point 420,100 is a dead end off the road\'s way - the road would go out to it and return, so it passes it ' +
             'by, 138 meters from it (station 220)',
         'Notes: "Via Mine" passes 138 meters from "Mine" - it\'s a dead end off the road\'s way',
-        'Option 0: "New Road" - cost score 72.5, design warnings: 0',
+        'Option 0: "New Road" - cost score 72.4, design warnings: 0',
         'Option 1: "Via Mine" - cost score 76.9, design warnings: 0',
         'Option 2: "North Corridor" - cost score 85.1, design warnings: 0'
     ]);
@@ -199,7 +199,7 @@ test('auto, the options\' limit', async () => {
     assert.ok(corridorLines.includes('Cost score: 85.1, design warnings: 0'));
     assert.deepEqual(corridorLines.filter((line) => /^Option \d|^Other/.test(line)), [
         'Other corridor: "North Corridor" (through 262,352) - its middle is an average of 105 meters from the standard options',
-        'Option 0: "New Road" - cost score 72.5, design warnings: 0',
+        'Option 0: "New Road" - cost score 72.4, design warnings: 0',
         'Option 1: "Via Elm" - cost score 79.2, design warnings: 0',
         'Option 2: "Via Oak" - cost score 86.8, design warnings: 0',
         'Option 3: "Via Fir" - cost score 111.7, design warnings: 0'

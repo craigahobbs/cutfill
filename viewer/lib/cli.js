@@ -82,7 +82,8 @@ function evaluate(file, detail, readFile) {
     }
     lines.push(
         `- Design criteria: maximum grade ${fixedTrim(criteria.maxGrade, 1)}%, minimum radius ` +
-            `${fixedTrim(criteria.minRadius, 1)} ${lengthUnit}, maximum wall height ${fixedTrim(criteria.maxWallHeight, 1)} ${lengthUnit}`,
+            `${fixedTrim(criteria.minRadius, 1)} ${lengthUnit}, maximum wall height ${fixedTrim(criteria.maxWallHeight, 1)} ` +
+            `${lengthUnit}, maximum slope height ${fixedTrim(criteria.maxSlopeHeight, 1)} ${lengthUnit}`,
         ''
     );
 

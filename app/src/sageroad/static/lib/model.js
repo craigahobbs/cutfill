@@ -183,6 +183,10 @@ export const sageRoadTypes = parseSchemaMarkdown([
     '    # The maximum retaining wall height (default is 20 feet / 6 meters)',
     '    optional float(> 0) maxWallHeight',
     '',
+    '    # The maximum cut or fill slope height (default is 60 feet / 18 meters) - a slope that doesn\'t meet the ground',
+    '    # (daylight) within it needs a retaining wall',
+    '    optional float(> 0) maxSlopeHeight',
+    '',
     '',
     '# Cost rate overrides, in nominal US dollars per metric unit',
     'struct CostRates',
@@ -673,7 +677,8 @@ export function planCriteria(plan) {
         'maxGrade': criteria.maxGrade ?? 12,
         'minRadius': criteria.minRadius ?? unitLength(plan, 15, 50),
         'rockCutSlope': criteria.rockCutSlope ?? 0.5,
-        'maxWallHeight': criteria.maxWallHeight ?? unitLength(plan, 6, 20)
+        'maxWallHeight': criteria.maxWallHeight ?? unitLength(plan, 6, 20),
+        'maxSlopeHeight': criteria.maxSlopeHeight ?? unitLength(plan, 18, 60)
     };
 }
 
@@ -915,54 +920,104 @@ export function linearAreas(v1, v2, length) {
 }
 
 
-// Compute one side of a road cross section beyond the road edge.
-//
-// depth - the ground elevation minus the grade elevation at the road edge (positive is cut)
-// rise - the ground's rise per unit of outward offset
-//
-// Returns the side object: "kind" is 'cut', 'fill', 'wall', or 'none'; "offset" is the slope's
-// horizontal width beyond the road edge; "drop" is the slope's elevation change from the road edge to
-// the daylight point; "wall" is the retaining wall height; "cut" and "fill" are the side's areas; and
-// "daylight" is false if the slope does not meet the ground.
-function sideSection(depth, rise, cutSlope, fillSlope, isWall) {
-    if (isWall) {
-        return {'kind': 'wall', 'offset': 0, 'drop': depth, 'wall': Math.abs(depth), 'cut': 0, 'fill': 0, 'daylight': true};
-    } else if (depth > 0) {
-        const approach = 1 / cutSlope - rise;
-        const daylight = approach > 1e-6;
-        const offset = daylight ? depth / approach : 3 * depth * cutSlope;
-        const area = depth * offset - approach * offset * offset * 0.5;
-        return {'kind': 'cut', offset, 'drop': offset / cutSlope, 'wall': 0, 'cut': area, 'fill': 0, daylight};
-    } else if (depth < 0) {
-        const approach = rise + 1 / fillSlope;
-        const daylight = approach > 1e-6;
-        const offset = daylight ? -depth / approach : -3 * depth * fillSlope;
-        const area = -depth * offset - approach * offset * offset * 0.5;
-        return {'kind': 'fill', offset, 'drop': -offset / fillSlope, 'wall': 0, 'cut': 0, 'fill': area, daylight};
+// Follow a side's slope out from the road edge, on the terrain, until it meets the ground (daylights) or it's "limit"
+// wide. "groundFn" is a function of the outward offset from the road edge - the ground elevation there, minus the grade
+// elevation - "sign" is 1 for a cut slope and -1 for a fill slope, "slope" is its ratio, and "step" is the distance
+// between the ground's points along it. Returns the slope's width ("offset"), the "area" between it and the ground, and
+// whether it meets the ground ("daylight").
+function followSlope(groundFn, sign, slope, limit, step) {
+    let offset = 0;
+    let gap = sign * groundFn(0);
+    let area = 0;
+    for (let ixStep = 1; offset < limit; ixStep++) {
+        const offsetNext = Math.min(limit, ixStep * step);
+        const gapNext = sign * groundFn(offsetNext) - offsetNext / slope;
+        if (gapNext <= 0) {
+            const width = (offsetNext - offset) * gap / (gap - gapNext);
+            return {'offset': offset + width, 'area': area + 0.5 * gap * width, 'daylight': true};
+        }
+        area += 0.5 * (gap + gapNext) * (offsetNext - offset);
+        offset = offsetNext;
+        gap = gapNext;
     }
-    return {'kind': 'none', 'offset': 0, 'drop': 0, 'wall': 0, 'cut': 0, 'fill': 0, 'daylight': true};
+    return {offset, area, 'daylight': false};
 }
 
 
-// Compute a road cross section.
+// Compute one side of a road cross section beyond the road edge, on the terrain. The side's slope is followed out
+// from the road edge until it meets the ground (daylights) - the ground is the terrain's, not a plane's, so the slope
+// meets the ground where the ground is. A slope that doesn't meet the ground within the maximum slope height doesn't
+// daylight - it's three times as high as it's deep at the road edge (at most the maximum slope height).
 //
-// depth - the ground elevation minus the grade elevation at the centerline (positive is cut)
-// slope - the ground's rise per unit of offset to the left
+// groundFn - a function of the outward offset from the road edge: the ground elevation there, minus the grade elevation
+//     (at the road edge, it's the edge's depth - positive is cut)
+// maxSlopeHeight - the maximum slope height
+// step - the distance between the ground's points along the slope
+//
+// Returns the side object: "kind" is 'cut', 'fill', 'wall', or 'none'; "offset" is the slope's horizontal width beyond
+// the road edge; "drop" is the slope's elevation change from the road edge to the daylight point; "wall" is the
+// retaining wall height; "cut" and "fill" are the side's areas; and "daylight" is false if the slope doesn't meet the
+// ground.
+function sideSection(groundFn, cutSlope, fillSlope, maxSlopeHeight, step, isWall) {
+    const depth = groundFn(0);
+    if (isWall) {
+        return {'kind': 'wall', 'offset': 0, 'drop': depth, 'wall': Math.abs(depth), 'cut': 0, 'fill': 0, 'daylight': true};
+    } else if (depth === 0) {
+        return {'kind': 'none', 'offset': 0, 'drop': 0, 'wall': 0, 'cut': 0, 'fill': 0, 'daylight': true};
+    }
+    const isCut = depth > 0;
+    const sign = isCut ? 1 : -1;
+    const slope = isCut ? cutSlope : fillSlope;
+    const limit = maxSlopeHeight * slope;
+    let found = followSlope(groundFn, sign, slope, limit, step);
+    const {daylight} = found;
+    if (!daylight) {
+        found = followSlope(groundFn, sign, slope, Math.min(limit, 3 * Math.abs(depth) * slope), step);
+    }
+    const {offset, area} = found;
+    return {
+        'kind': isCut ? 'cut' : 'fill', offset, 'drop': sign * offset / slope, 'wall': 0, 'cut': isCut ? area : 0, 'fill': isCut ? 0 : area,
+        daylight
+    };
+}
+
+
+// Compute a road cross section on the terrain - the road is at "x" and "y", at the grade elevation "z", and its
+// direction is the unit vector "dx" and "dy". The ground of a point outside the topography grid is the grid's nearest
+// point's.
+//
 // halfWidth - half of the road width
+// maxSlopeHeight - the maximum slope height (see sideSection)
 //
 // Returns the cross section object with total "cut" and "fill" areas and the "left" and "right" sides.
-function crossSection(depth, slope, halfWidth, cutSlope, fillSlope, wallLeft, wallRight) {
-    const depthLeft = depth + slope * halfWidth;
-    const depthRight = depth - slope * halfWidth;
-    const roadAreas = linearAreas(depthRight, depthLeft, 2 * halfWidth);
-    const left = sideSection(depthLeft, slope, cutSlope, fillSlope, wallLeft);
-    const right = sideSection(depthRight, -slope, cutSlope, fillSlope, wallRight);
+export function crossSection(topo, x, y, z, dx, dy, halfWidth, cutSlope, fillSlope, maxSlopeHeight, wallLeft, wallRight) {
+    const {width, height} = topo;
+    const step = topo.spacing * 0.5;
+
+    // The ground along the cross section, at an offset to the left of the centerline - its elevation minus the grade's
+    const groundFn = (offset) => (
+        elevation(topo, Math.max(0, Math.min(width, x - dy * offset)), Math.max(0, Math.min(height, y + dx * offset))) - z
+    );
+    const left = sideSection((offset) => groundFn(halfWidth + offset), cutSlope, fillSlope, maxSlopeHeight, step, wallLeft);
+    const right = sideSection((offset) => groundFn(-halfWidth - offset), cutSlope, fillSlope, maxSlopeHeight, step, wallRight);
+
+    // The road's areas - from its edges' depths to its centerline's
+    const depth = groundFn(0);
+    const areasLeft = linearAreas(depth, groundFn(halfWidth), halfWidth);
+    const areasRight = linearAreas(groundFn(-halfWidth), depth, halfWidth);
     return {
-        'cut': roadAreas[0] + left.cut + right.cut,
-        'fill': roadAreas[1] + left.fill + right.fill,
+        'cut': areasLeft[0] + areasRight[0] + left.cut + right.cut,
+        'fill': areasLeft[1] + areasRight[1] + left.fill + right.fill,
         left,
         right
     };
+}
+
+
+// A road cross section without earthwork - a bridge's, an existing road's, and a road's outside the topography
+function noSection() {
+    const side = () => ({'kind': 'none', 'offset': 0, 'drop': 0, 'wall': 0, 'cut': 0, 'fill': 0, 'daylight': true});
+    return {'cut': 0, 'fill': 0, 'left': side(), 'right': side()};
 }
 
 
@@ -1030,7 +1085,7 @@ const maxSamples = 2000;
 
 
 // Compute an option's cross section samples
-function optionSamples(topo, option, alignment, rockCutSlope, bridges, existingRoads) {
+function optionSamples(topo, option, alignment, {rockCutSlope, maxSlopeHeight}, bridges, existingRoads) {
     const {section} = option;
     const halfWidth = section.width * 0.5;
     const cutSlope = section.cutSlope ?? 1;
@@ -1076,19 +1131,24 @@ function optionSamples(topo, option, alignment, rockCutSlope, bridges, existingR
             z = existing ? ground : z;
         }
 
-        // Compute the cross section - a bridge or an existing road has no earthwork
+        // Compute the cross section, on the terrain - a bridge or an existing road has no earthwork
         const rock = pointInPolygons(x, y, rockFeatures);
         const bridge = structureAt(bridges, stationValue);
         let section2;
-        if (bridge || existing) {
-            section2 = crossSection(0, 0, halfWidth, cutSlope, fillSlope, false, false);
+        if (bridge || existing || outside) {
+            section2 = noSection();
         } else {
             section2 = crossSection(
-                ground - z,
-                slope,
+                topo,
+                x,
+                y,
+                z,
+                dx,
+                dy,
                 halfWidth,
                 rock ? rockCutSlope : cutSlope,
                 fillSlope,
+                maxSlopeHeight,
                 structureAt(walls, stationValue, 'left'),
                 structureAt(walls, stationValue, 'right')
             );
@@ -1281,7 +1341,7 @@ export function analyzeOption(plan, ixOption, topo) {
     const bridges = structuresOfType(option, 'bridge');
     const existingRoads = structuresOfType(option, 'existingRoad');
     const alignment = optionAlignment(topo, option, existingRoads);
-    const samples = optionSamples(topo, option, alignment, criteria.rockCutSlope, bridges, existingRoads);
+    const samples = optionSamples(topo, option, alignment, criteria, bridges, existingRoads);
     const length = alignment[alignment.length - 1].station;
     const warnings = [];
     const lengthUnit = unitLabel(units, 'length');

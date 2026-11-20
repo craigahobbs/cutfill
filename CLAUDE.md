@@ -59,8 +59,11 @@ Run `make` in `viewer/` or `plan/` for a subproject's own targets (e.g.
 - The road plan model stays defined, validated, and documented with Schema Markdown (see viewer/CLAUDE.md), and the
   viewer validates every plan it loads.
 - The planning tools use the viewer's model (`plan/lib/` imports `viewer/lib/` - its schema, cost rates, topography,
-  and drawing code). Their route search and profile design have their own cross sections (`plan/lib/design.js`, a
-  retaining wall where a slope doesn't daylight) - keep them consistent with `viewer/lib/model.js`'s.
+  and drawing code). A plan's cross sections are the viewer's, on the terrain (`viewer/lib/model.js`'s `crossSection` - a
+  slope is followed out to where it meets the ground, within the maximum slope height), and a road's walls are where
+  they don't daylight (`plan/lib/structures.js`). The route search and profile design have their own cross sections
+  (`plan/lib/design.js` - the ground is a plane, its side slope at the centerline, which is what they can afford) - keep
+  their rules the viewer's: a slope that doesn't daylight within the maximum slope height is a retaining wall.
 - The planning tools' tests never use the network - the USGS services and elevation models are faked
   (`plan/test/terrainHelpers.js`). To check the tools against the real services, plan a site in the scratchpad
   (`node plan/bin/plan.js auto <site.json> <plan.json>`, or `site`, then `options` and `route`).

@@ -61,14 +61,14 @@ test('cliMain evaluate, warnings, walls, and a bridge', () => {
         '',
         '- start (20.0, 30.0): ground elevation 503.6',
         '- end (380.0, 250.0): ground elevation 533.4',
-        '- Design criteria: maximum grade 12%, minimum radius 50 ft, maximum wall height 20 ft',
+        '- Design criteria: maximum grade 12%, minimum radius 50 ft, maximum wall height 20 ft, maximum slope height 60 ft',
         '',
         '## Options (lengths in ft, volumes in cy)',
         '',
         '| Option        | Length | Max Grade | Cut | Fill | Borrow | Waste | Warnings | Cost Score |',
         '|---------------|--------|-----------|-----|------|--------|-------|----------|------------|',
-        '| Direct        | 440    | 20.9%     | 108 | 338  | 237    | 0     | 1        | 48.6       |',
-        '| Bridge - East | 464    | 9.9%      | 448 | 67   | 0      | 350   | 1        | 390.2      |'
+        '| Direct        | 440    | 20.9%     | 107 | 332  | 233    | 0     | 1        | 48.0       |',
+        '| Bridge - East | 464    | 9.9%      | 444 | 67   | 0      | 346   | 1        | 390.0      |'
     ]);
 
     // The cost table - right-aligned quantities, scores, and shares, and a bold total
@@ -76,9 +76,9 @@ test('cliMain evaluate, warnings, walls, and a bridge', () => {
     assert.deepEqual(lines.slice(ixCost + 2, ixCost + 5), [
         '| Item                     | Quantity | Cost Score | Share |',
         '|--------------------------|---------:|-----------:|------:|',
-        '| Clearing and grubbing    | 7,995 sf |        1.5 |  3.1% |'
+        '| Clearing and grubbing    | 7,928 sf |        1.5 |  3.1% |'
     ]);
-    assert.equal(lines[ixCost + 15], '| **Total**                |          |   **48.6** |       |');
+    assert.equal(lines[ixCost + 15], '| **Total**                |          |   **48.0** |       |');
 
     // The design warnings are a list
     const ixWarnings = lines.indexOf('### Design Warnings');
@@ -107,9 +107,9 @@ test('cliMain evaluate, warnings, walls, and a bridge', () => {
         '| 0+00    | 20.0  | 30.0  | 503.6  | 503.6 | C 0.0    | 10%        | cut 0.7  | fill 1.1  |       |'
     ]);
     for (const line of [
-        '| 2+00    | 190.5 | 134.2 | 510.0  | 516.3 | F 6.3    | 17%        | fill 6.3 | fill 15.0 |       |',
-        '| 2+80    | 268.4 | 146.8 | 532.8  | 531.4 | C 1.4    | 9%         | wall 2.0 | wall 0.8  | rock  |',
-        '| 4+40    | 380.0 | 250.0 | 533.4  | 533.4 | C 0.0    | 19%        | cut 1.4  | fill 2.4  |       |',
+        '| 2+00    | 190.5 | 134.2 | 510.0  | 516.3 | F 6.3    | 17%        | fill 5.8 | fill 13.1 |       |',
+        '| 2+80    | 268.4 | 146.8 | 532.8  | 531.4 | C 1.4    | 9%         | wall 2.0 | wall 0.9  | rock  |',
+        '| 4+40    | 380.0 | 250.0 | 533.4  | 533.4 | C 0.0    | 19%        | cut 1.6  | fill 2.2  |       |',
         '| 1+79    | 195.4 | 60.0  | 500.7  | 511.6 | F 10.9   | 12%        |          |           | bridge              |',
         '| 3+01    | 288.4 | 116.1 | 533.2  | 533.2 | C 0.0    | 3%         |          |           | existing road, rock |'
     ]) {
@@ -129,7 +129,7 @@ test('cliMain evaluate, a georeferenced plan', () => {
         '- start (20.0, 30.0): ground elevation 503.6 - latitude and longitude 43.99967, -115.00068',
         '- end (380.0, 250.0): ground elevation 533.4 - latitude and longitude 44.00027, -114.99932',
         '- Topography sources: USGS 1 Meter A (2022-02-10), Survey',
-        '- Design criteria: maximum grade 12%, minimum radius 50 ft, maximum wall height 20 ft'
+        '- Design criteria: maximum grade 12%, minimum radius 50 ft, maximum wall height 20 ft, maximum slope height 60 ft'
     ]);
 });
 

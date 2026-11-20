@@ -145,7 +145,8 @@ export function draftDescriptions(plan, topo, {purpose = null, featureNotes = []
             `${straightGrade > criteria.maxGrade ? ' - steeper than the maximum grade, so a road is longer than the straight line' : ''}.`,
         '',
         `**Design criteria.** Maximum grade ${gradeText(criteria.maxGrade)}, minimum curve radius ${lengthText(criteria.minRadius)}, ` +
-            `maximum retaining wall height ${lengthText(criteria.maxWallHeight)}.`
+            `maximum retaining wall height ${lengthText(criteria.maxWallHeight)}, maximum cut or fill slope height ` +
+            `${lengthText(criteria.maxSlopeHeight)}.`
     ];
 
     // The features that were added to the site, and its places to pass through

@@ -101,7 +101,7 @@ end: "End" (448.87, 372.07) at 40.00200, -105.27650, ground 1705.6
 export const optionsLines = `\
 Option "New Road": 377 meters long, 102 alignment points, max grade 3.6%, max cut 0.0, max fill 0.1
 Structures: 1 culvert, 3 turnouts
-Cost score: 72.5, design warnings: 0
+Cost score: 72.4, design warnings: 0
 Option "North Corridor": 464 meters long, 125 alignment points, max grade 2.0%, max cut 0.1, max fill 0.1
 Structures: 1 culvert, 3 turnouts
 Cost score: 85.1, design warnings: 0

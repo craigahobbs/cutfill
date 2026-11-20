@@ -1,4 +1,4 @@
-import {alignmentFixture, alignments, designArgs, expected, plain, planePlan} from './roadFixtures.js';
+import {alignmentFixture, alignments, designArgs, elevationGrid, expected, plain, planePlan} from './roadFixtures.js';
 import {designStructures, existingMask} from '../lib/structures.js';
 import assert from 'node:assert/strict';
 import {createDesign} from '../lib/design.js';
@@ -17,9 +17,14 @@ function structuresFixture(name) {
 }
 
 
-// A level plan with two streams across it, and a road north across them - its topography, design, and alignment
-function levelFixture(args = designArgs()) {
+// A level plan with two streams across it, and a road north across them - its topography, design, and alignment. With
+// a row slope function (of the distance north), the ground of a grid row rises to the west - the road's left - at its
+// slope, from the road's ground.
+function levelFixture(args = designArgs(), rowSlopeFn = null) {
     const plan = planePlan({'rise': 0, 'size': 41});
+    if (rowSlopeFn !== null) {
+        plan.topography.elevations = elevationGrid(41, 10, (x, y) => 100 + rowSlopeFn(y) * (200 - x));
+    }
     plan.topography.features = [
         {'type': 'stream', 'points': [{'x': 0, 'y': 102}, {'x': 400, 'y': 102}]},
         {'type': 'stream', 'points': [{'x': 0, 'y': 302}, {'x': 400, 'y': 302}]}
@@ -28,10 +33,11 @@ function levelFixture(args = designArgs()) {
 }
 
 
-// Design the level plan's structures for a profile of depths below the ground (by station index) and a side slope
-// function - "name" is the name of the Python planning tools' result for them, which the structures match
-function levelStructures(name, {depths = {}, sideSlopeFn = () => 0, existingRoads = [], args = designArgs()} = {}) {
-    const {topo, design, x, y, stations} = levelFixture(args);
+// Design the level plan's structures for a profile of depths below the ground (by station index), a side slope
+// function, and the ground's row slope function (levelFixture) - "name" is the name of the Python planning tools'
+// result for them, which the structures match
+function levelStructures(name, {depths = {}, sideSlopeFn = () => 0, rowSlopeFn = null, existingRoads = [], args = designArgs()} = {}) {
+    const {topo, design, x, y, stations} = levelFixture(args, rowSlopeFn);
     const profile = stations.map((stationValue, ix) => 100 - (depths[ix] ?? 0));
     const structures = designStructures(topo, design, x, y, stations, profile, stations.map(sideSlopeFn), existingRoads);
     assert.deepEqual(plain(structures), expected['structures-cases'][name], name);
@@ -51,10 +57,32 @@ test('existingMask', () => {
 });
 
 
+// The alignments' walls that aren't the Python planning tools' - [station, end station, side] arrays
+const terrainWalls = {
+    'profile-valley': [[0, 98.8, 'right'], [266.6, 345.6, 'left']],
+    'profile-valley-culvert': [[39.5, 148.1, 'right'], [197.5, 306.1, 'left']]
+};
+
+
 test('designStructures, the Python planning tools\' structures', () => {
+    // The structures but the walls are the Python tools'
+    const isWall = (structure) => structure.type === 'retainingWall';
+    const walls = {};
     for (const name of Object.keys(alignments)) {
-        assert.deepEqual(plain(structuresFixture(name)), expected[name].structures, name);
+        const structures = plain(structuresFixture(name));
+        const others = (list) => list.filter((structure) => !isWall(structure));
+        assert.deepEqual(others(structures), others(expected[name].structures), name);
+        walls[name] = structures.filter(isWall).map(({station, endStation, side}) => [station, endStation, side]);
+        if (!(name in terrainWalls)) {
+            assert.deepEqual(structures, expected[name].structures, name);
+        }
     }
+
+    // The walls are where a slope doesn't daylight on the terrain, within the maximum slope height - the Python tools'
+    // ground was a plane (its side slope at the centerline), and its slopes had no maximum height. Past the valley's
+    // bridge, a fill slope meets the far side of the valley, so its wall starts two stations on - and without the
+    // bridge, the valley's fill is too deep for its slopes.
+    assert.deepEqual(Object.fromEntries(Object.keys(terrainWalls).map((name) => [name, walls[name]])), terrainWalls);
 });
 
 
@@ -180,10 +208,11 @@ test('designStructures, bridges', () => {
 
 
 test('designStructures, retaining walls', () => {
-    // A slope that doesn't daylight is a wall - from the station before it to the station after, on its side. A side
-    // slope of 0.8 is steeper than the fill slope, so its downhill side is a wall.
+    // A slope that doesn't daylight on the terrain is a wall - from the station before it to the station after, on its
+    // side. Ground that rises to the left at 0.8 is steeper than the fill slope, so the right side - the downhill side -
+    // is a wall (stations 50 to 60). The ground that falls to the left is that steep from station 395 (it's 0.7 there).
     const walls = levelStructures('walls', {
-        'sideSlopeFn': (stationValue) => (stationValue >= 50 && stationValue <= 60 ? 0.8 : (stationValue >= 395 ? -0.8 : 0))
+        'rowSlopeFn': (north) => ({'50': 0.8, '60': 0.8, '390': -0.6, '400': -0.8}[north] ?? 0)
     });
     assert.deepEqual(walls.filter((structure) => structure.type === 'retainingWall'), [
         {'type': 'retainingWall', 'station': 45, 'endStation': 65, 'side': 'right'},
@@ -192,7 +221,7 @@ test('designStructures, retaining walls', () => {
 
     // A wall from the road's start, and none within an existing road
     const start = levelStructures('walls-start', {
-        'sideSlopeFn': (stationValue) => (stationValue <= 10 || stationValue === 100 ? 0.8 : 0),
+        'rowSlopeFn': (north) => (north <= 10 || north === 100 ? 0.8 : 0),
         'existingRoads': [[90, 110]]
     });
     assert.deepEqual(start.filter((structure) => structure.type === 'retainingWall'), [

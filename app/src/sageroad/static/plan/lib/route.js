@@ -134,7 +134,7 @@ export function routeLattice(topo, design, slopeWeight, roads = null) {
                 const midY = (y1 + y2) * 0.5;
                 const [gradientX, gradientY] = groundGradient(topo, midX, midY);
                 const sideSlope = -uy * gradientX + ux * gradientY;
-                crossSection(0, sideSlope, design.halfWidth, design.cutSlope, design.fillSlope, section);
+                crossSection(0, sideSlope, design.halfWidth, design.cutSlope, design.fillSlope, design.maxSlopeHeight, section);
                 const cutCost = pointInPolygons(midX, midY, rocks) ? design.costRock : design.costCut;
                 costs[node] = length * (design.costLength + slopeWeight * (
                     section[sectionCut] * cutCost + section[sectionFill] * design.costFill +

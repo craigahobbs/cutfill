@@ -137,7 +137,9 @@ function designProfileDepth(topo, design, x, y, stations, existing, depthLimit, 
     // A station's cross section at a level - the cut and fill areas, and the slope width and wall height
     const section = new Float64Array(6);
     const stationSection = (ix, level) => {
-        crossSection(ground[ix] - levels[level], sideSlope[ix], design.halfWidth, cutSlope[ix], design.fillSlope, section);
+        crossSection(
+            ground[ix] - levels[level], sideSlope[ix], design.halfWidth, cutSlope[ix], design.fillSlope, design.maxSlopeHeight, section
+        );
     };
 
     // The stations' cross sections at their levels are the same for every balance price, so they're computed once and

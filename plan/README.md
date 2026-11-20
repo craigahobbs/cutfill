@@ -137,6 +137,16 @@ its profile's elevations (searched again, and kept only if its cost score was lo
 which were Python (they digitized a topographic map image) - their results are the engineering tests' expectations
 (`test/expected/pythonTools.json`).
 
+The search's and the profile design's cross sections are on a plane - the ground's side slope at the centerline
+(`lib/design.js`'s `crossSection`), which is what a search of millions of moves and a profile of thousands of levels can
+afford. A plan's cross sections are the viewer's, on the terrain: each side's slope is followed out from the road's
+edge to where it meets the ground (`viewer/lib/model.js`'s `crossSection`), since a hillside isn't a plane - a 1:1 cut
+into a canyon wall that's 98% at the centerline meets a plane of it 1,200 feet up, and the terrain 80 feet up. So
+the road's cost score is the terrain's, and its retaining walls are where the terrain's cross sections need them - where
+a slope doesn't meet the ground (daylight) within the maximum slope height (a design criterion - 60 feet, or 18 meters).
+The plane's cross sections have the same rule, so a slope that's too high is a wall's cost in the search and the
+profile's design, too.
+
 The route search follows the plan's existing roads (its `road` features, `lib/roads.js`) where that costs less than
 a new road: a move along an existing road costs its length's upgrade, with no earthwork, grade limit, or culvert,
 and it turns as the road does. The route's runs along existing roads are the roads' lines and the option's

@@ -132,8 +132,8 @@ test('buildReport, a feet plan with descriptions, warnings, structures, and a ma
 
     // The page's headings and paragraphs
     const fileArg = 'var.vFile=&#039;plans%2Fcomplex%20%281%29.json&#039;';
-    const exploreURL = `#var.vAzimuth=358.7&amp;var.vExplore=true&amp;${fileArg}&amp;var.vTilt=55&amp;var.vX=40&amp;var.vY=40.8&amp;` +
-        'var.vZ=131.6&amp;var.vZoom=1.093';
+    const exploreURL = `#var.vAzimuth=358.7&amp;var.vExplore=true&amp;${fileArg}&amp;var.vTilt=55&amp;var.vX=40&amp;var.vY=40.4&amp;` +
+        'var.vZ=131.9&amp;var.vZoom=1.093';
     assert.deepEqual(outline(html).filter((line) => !line.startsWith('<ul>')), [
         '<h1 id="complex-plan">Complex Plan</h1>',
         '<p>A complex plan.</p>',
@@ -142,7 +142,7 @@ test('buildReport, a feet plan with descriptions, warnings, structures, and a ma
         '<h2 id="main">Main</h2>',
         `<p><a href="${exploreURL}">Explore the plan in 3D</a> (full window, with mouse controls)</p>`,
         '<p>The main option.</p>',
-        '<p><strong>Cost score: 48</strong> - 86 ft, 100.0% maximum grade, 18 design warnings</p>',
+        '<p><strong>Cost score: 46</strong> - 86 ft, 100.0% maximum grade, 18 design warnings</p>',
         '<h3 id="plan-view">Plan View</h3>',
         '<svg: Plan view of the Main road plan option>',
         '<h3 id="profile">Profile</h3>',
@@ -168,27 +168,27 @@ test('buildReport, a feet plan with descriptions, warnings, structures, and a ma
     const [optionsTable, costTable, structuresTable] = tables(html);
     assert.deepEqual(optionsTable, [
         ['Option', 'Length (ft)', 'Max Grade', 'Cut (cy)', 'Fill (cy)', 'Net (cy)', 'Walls (sf)', 'Warnings', 'Cost Score', 'Relative'],
-        ['<strong>Main</strong>', '86', '100.0%', '353', '299', '11 export', '53', '18', '<strong>48</strong>', '+0%'],
+        ['<strong>Main</strong>', '86', '100.0%', '267', '190', '45 export', '53', '18', '<strong>46</strong>', '+0%'],
         [
-            `<a href="#${fileArg}&amp;var.vOption=1">Alt</a>`, '90', '264.0%', '19,237', '102', '16,634 export', '0', '8',
-            '<strong>471</strong>', '+890%'
+            `<a href="#${fileArg}&amp;var.vOption=1">Alt</a>`, '90', '264.0%', '2,552', '102', '2,118 export', '0', '9',
+            '<strong>65</strong>', '+42%'
         ]
     ]);
     assert.deepEqual(costTable, [
         ['Item', 'Quantity', 'Cost Score', 'Share'],
-        ['Clearing and grubbing', '3,351 sf', '0.6', '1.3%'],
-        ['Common excavation', '339 cy', '5.2', '10.9%'],
-        ['Rock excavation', '14 cy', '1.1', '2.2%'],
-        ['Embankment', '299 cy', '1.5', '3.1%'],
-        ['Waste (export)', '11 cy', '0.1', '0.2%'],
-        ['Surfacing (asphalt)', '1,049 sf', '3.9', '8.2%'],
-        ['Ditches and cross drains', '83 ft', '1.1', '2.4%'],
-        ['Culverts (2)', '29 ft', '16.3', '34.3%'],
-        ['Retaining walls', '53 sf', '3.2', '6.7%'],
-        ['Bridges', '40 sf', '10.0', '21.1%'],
-        ['Erosion control', '3,351 sf', '0.2', '0.5%'],
-        ['Mobilization', '', '4.3', '9.1%'],
-        ['<strong>Total</strong>', '', '<strong>47.6</strong>', '']
+        ['Clearing and grubbing', '2,892 sf', '0.5', '1.2%'],
+        ['Common excavation', '253 cy', '3.9', '8.5%'],
+        ['Rock excavation', '14 cy', '1.1', '2.3%'],
+        ['Embankment', '190 cy', '0.9', '2.1%'],
+        ['Waste (export)', '45 cy', '0.3', '0.8%'],
+        ['Surfacing (asphalt)', '1,049 sf', '3.9', '8.5%'],
+        ['Ditches and cross drains', '83 ft', '1.1', '2.5%'],
+        ['Culverts (2)', '29 ft', '16.3', '35.7%'],
+        ['Retaining walls', '53 sf', '3.2', '7.0%'],
+        ['Bridges', '40 sf', '10.0', '22.0%'],
+        ['Erosion control', '2,892 sf', '0.2', '0.4%'],
+        ['Mobilization', '', '4.2', '9.1%'],
+        ['<strong>Total</strong>', '', '<strong>45.7</strong>', '']
     ]);
     assert.deepEqual(structuresTable, [
         ['Type', 'Name', 'Station', 'Side', 'Detail'],
@@ -223,9 +223,10 @@ test('buildReport, the selected option', () => {
     const lines = outline(html);
     assert.deepEqual(lines.slice(4, 8), [
         '<h2 id="alt">Alt</h2>',
-        '<p><a href="#var.vAzimuth=0&amp;var.vExplore=true&amp;var.vFile=&#039;complex.json&#039;&amp;var.vOption=1&amp;var.vTilt=55&amp;' +
-            'var.vX=40&amp;var.vY=42.6&amp;var.vZ=110">Explore the plan in 3D</a> (full window, with mouse controls)</p>',
-        '<p><strong>Cost score: 471</strong> - 90 ft, 264.0% maximum grade, 8 design warnings</p>',
+        '<p><a href="#var.vAzimuth=0&amp;var.vExplore=true&amp;var.vFile=&#039;complex.json&#039;&amp;var.vOption=1&amp;var.vTilt=90&amp;' +
+            'var.vX=40&amp;var.vY=40&amp;var.vZ=122.9&amp;var.vZoom=1.143">Explore the plan in 3D</a> (full window, with mouse ' +
+            'controls)</p>',
+        '<p><strong>Cost score: 65</strong> - 90 ft, 264.0% maximum grade, 9 design warnings</p>',
         '<h3 id="plan-view">Plan View</h3>'
     ]);
     assert.deepEqual(lines.filter((line) => line.startsWith('<svg: ')), [
@@ -275,9 +276,9 @@ test('buildReport, a narrow road has road segment views', () => {
             'Explore the plan in 3D</a>',
         `<a href="#var.vAzimuth=328.6&amp;${exploreArgs}&amp;var.vTilt=55&amp;var.vX=202&amp;var.vY=146.7&amp;var.vZ=522.2">` +
             'Explore this view</a>',
-        `<a href="#var.vAzimuth=329.6&amp;${exploreArgs}&amp;var.vTilt=40&amp;var.vX=115.5&amp;var.vY=87.5&amp;var.vZ=509.9&amp;` +
+        `<a href="#var.vAzimuth=329.6&amp;${exploreArgs}&amp;var.vTilt=40&amp;var.vX=114.9&amp;var.vY=88.4&amp;var.vZ=510&amp;` +
             'var.vZoom=2.18">Explore this view</a>',
-        `<a href="#var.vAzimuth=327.5&amp;${exploreArgs}&amp;var.vTilt=40&amp;var.vX=305&amp;var.vY=173.8&amp;var.vZ=532.6&amp;` +
+        `<a href="#var.vAzimuth=327.5&amp;${exploreArgs}&amp;var.vTilt=40&amp;var.vX=305&amp;var.vY=173.7&amp;var.vZ=532.6&amp;` +
             'var.vZoom=2.325">Explore this view</a>'
     ]);
 
@@ -459,10 +460,10 @@ test('buildReport, the options table', () => {
     const planValue = fixturePlan();
     const [optionsTable] = tables(report(planValue).html);
     assert.deepEqual(optionsTable.slice(1), [
-        ['<strong>Direct</strong>', '440', '20.9%', '108', '338', '237 import', '101', '1', '<strong>49</strong>', '+0%'],
+        ['<strong>Direct</strong>', '440', '20.9%', '107', '332', '233 import', '101', '1', '<strong>48</strong>', '+0%'],
         [
-            '<a href="#var.vFile=&#039;plans%2Ffixture.json&#039;&amp;var.vOption=1">Bridge - East</a>', '464', '9.9%', '448', '67',
-            '350 export', '0', '1', '<strong>390</strong>', '+703%'
+            '<a href="#var.vFile=&#039;plans%2Ffixture.json&#039;&amp;var.vOption=1">Bridge - East</a>', '464', '9.9%', '444', '67',
+            '346 export', '0', '1', '<strong>390</strong>', '+713%'
         ]
     ]);
 

@@ -153,7 +153,7 @@ test('route, via points, streams, rock, and an exclusion area', () => {
     assert.deepEqual(result, {'code': 0, 'lines': [
         'Option "Hill Road": 290 meters long, 79 alignment points, max grade 9.0%, max cut 1.7, max fill 1.8',
         'Structures: 1 bridge, 1 culvert, 2 turnouts',
-        'Cost score: 269.1, design warnings: 0',
+        'Cost score: 269.2, design warnings: 0',
         'NOTE: the via point 110,90 is a dead end off the road\'s way - the road would go out to it and return, so it passes it ' +
             'by, 49 meters from it (station 167)',
         'Wrote plan.json - run "plan evaluate plan.json" for the full analysis and cost'
@@ -299,20 +299,21 @@ test('route, the grade penalty weights', () => {
     assert.deepEqual(road.result.lines.slice(0, 3), [
         'Option "Hill": 267 meters long, 73 alignment points, max grade 9.0%, max cut 1.8, max fill 2.5',
         'Structures: 2 culverts, 2 turnouts',
-        'Cost score: 94.7, design warnings: 0'
+        'Cost score: 92.5, design warnings: 0'
     ]);
     assert.deepEqual(routed(['--grade-weight', '1']).result.lines.slice(0, 3), [
         'Option "Hill": 298 meters long, 81 alignment points, max grade 8.4%, max cut 1.7, max fill 1.8',
         'Structures: 2 culverts, 2 turnouts',
-        'Cost score: 98.0, design warnings: 0'
+        'Cost score: 96.1, design warnings: 0'
     ]);
     assert.deepEqual(routed(['--grade-weight', '0.5']).plan, road.plan);
 
-    // With a design grade of 6.5%, the weight of 1's road costs the least
-    assert.equal(routed(['-g', '6.5']).result.lines[2], 'Cost score: 99.4, design warnings: 0');
+    // With a design grade of 6.5%, the weight of 1's road costs the least, as it's reported - the weight of 0.5's road's
+    // cost score is the same, to a tenth, and the first of the roads with the lowest score is the road
+    assert.equal(routed(['-g', '6.5']).result.lines[2], 'Cost score: 97.5, design warnings: 0');
     assert.deepEqual(routed(['-g', '6.5']).plan, routed(['-g', '6.5', '--grade-weight', '1']).plan);
-    assert.equal(routed(['-g', '6.5', '--grade-weight', '0.5']).result.lines[2], 'Cost score: 99.5, design warnings: 0');
-    assert.equal(routed(['-g', '6.5', '--grade-weight', '0.25']).result.lines[2], 'Cost score: 105.2, design warnings: 0');
+    assert.equal(routed(['-g', '6.5', '--grade-weight', '0.5']).result.lines[2], 'Cost score: 97.5, design warnings: 0');
+    assert.equal(routed(['-g', '6.5', '--grade-weight', '0.25']).result.lines[2], 'Cost score: 102.7, design warnings: 0');
 });
 
 
@@ -338,7 +339,7 @@ test('route, the design arguments', () => {
     // doesn't run in the stream's channel), so its culvert there is half a meter sooner
     const {result, plan} = runExpected(hillPlan(), 'route-hill-custom');
     const {code, lines, options} = expected.commands['route-hill-custom'];
-    assert.deepEqual(pythonResult(result), {code, 'lines': [...lines.slice(0, 3), 'Cost score: 176.6, design warnings: 0', lines[4]]});
+    assert.deepEqual(pythonResult(result), {code, 'lines': [...lines.slice(0, 3), 'Cost score: 169.1, design warnings: 0', lines[4]]});
     assert.equal(result.lines[1], 'Existing road: stations 0.0 to 30.0 - its grade averages 0.2%, 5.4% over its steepest 12 meters');
     const culverts = ({structures}) => structures.filter(({type}) => type === 'culvert').map(({station}) => station);
     assert.deepEqual([culverts(plan.options[0]), culverts(options[0])], [[46.7, 70.4, 269.3], [46.7, 70.4, 269.8]]);
@@ -689,13 +690,13 @@ test('options, another corridor', () => {
     assert.deepEqual(result, {'code': 0, 'lines': [
         'Option "New Road": 661 feet long, 134 alignment points, max grade 10.0%, max cut 1.9, max fill 0.1',
         'Structures: 1 turnout',
-        'Cost score: 40.8, design warnings: 0',
+        'Cost score: 41.2, design warnings: 0',
         'Option "East Corridor": 645 feet long, 131 alignment points, max grade 5.7%, max cut 2.0, max fill 0.1',
         'Structures: 1 turnout',
-        'Cost score: 43.7, design warnings: 0',
+        'Cost score: 44.2, design warnings: 0',
         'Other corridor: "East Corridor" (through 470,306) - its middle is an average of 220 feet from the standard options',
-        'Option 0: "New Road" - cost score 40.8, design warnings: 0',
-        'Option 1: "East Corridor" - cost score 43.7, design warnings: 0',
+        'Option 0: "New Road" - cost score 41.2, design warnings: 0',
+        'Option 1: "East Corridor" - cost score 44.2, design warnings: 0',
         'Wrote plan.json'
     ], 'names': ['New Road', 'East Corridor'], 'atEdge': false, 'corridorNote': null});
 

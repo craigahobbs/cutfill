@@ -27,6 +27,7 @@ export function createDesign(plan, args) {
         'switchbackGrade': Math.min(args.switchbackGrade / 100, grade),
         'minRadius': criteria.minRadius,
         'rockCutSlope': criteria.rockCutSlope,
+        'maxSlopeHeight': criteria.maxSlopeHeight,
         width,
         'halfWidth': width * 0.5,
         surface,
@@ -92,13 +93,14 @@ export function featureStreams(topo) {
 
 // Compute one side of a road cross section beyond the road edge - "depth" is the ground elevation minus the grade
 // elevation at the road edge (positive is cut), and "rise" is the ground's rise per unit of outward offset. A slope
-// that doesn't daylight (meet the ground) is a retaining wall. The side's cut area, fill area, slope width, and wall
-// height are written to the "out" array from the "offset" index.
-function sideSection(depth, rise, cutSlope, fillSlope, out, offset) {
+// that doesn't daylight (meet the ground) within the maximum slope height is a retaining wall. The side's cut area, fill
+// area, slope width, and wall height are written to the "out" array from the "offset" index.
+function sideSection(depth, rise, cutSlope, fillSlope, maxSlopeHeight, out, offset) {
+    // A slope's height is its width over its ratio - its depth over its approach and its ratio
     const cutApproach = 1 / cutSlope - rise;
     const fillApproach = rise + 1 / fillSlope;
-    const cutDaylight = depth > 0 && cutApproach > 1e-6;
-    const fillDaylight = depth < 0 && fillApproach > 1e-6;
+    const cutDaylight = depth > 0 && cutApproach > 1e-6 && depth <= maxSlopeHeight * cutSlope * cutApproach;
+    const fillDaylight = depth < 0 && fillApproach > 1e-6 && -depth <= maxSlopeHeight * fillSlope * fillApproach;
     const cutOffset = cutDaylight ? depth / cutApproach : 0;
     const fillOffset = fillDaylight ? -depth / fillApproach : 0;
     out[offset] = cutDaylight ? depth * cutOffset * 0.5 : 0;
@@ -124,14 +126,17 @@ const sideWall = 3;
 
 // Compute a road cross section - "depth" is the ground elevation minus the grade elevation at the centerline (positive
 // is cut), and "slope" is the ground's rise per unit of offset to the left. The cross section's cut area, fill area,
-// slope width, wall height, left wall height, and right wall height are written to the "out" array. This is the
-// viewer's cross section, except that a slope that doesn't daylight is a retaining wall.
-export function crossSection(depth, slope, halfWidth, cutSlope, fillSlope, out) {
+// slope width, wall height, left wall height, and right wall height are written to the "out" array. This is the route
+// search's and the profile design's cross section: the ground is a plane (its side slope at the centerline), which is
+// what they can afford - the viewer's cross section is on the terrain (viewer/lib/model.js's "crossSection"), and it's
+// the plan's. Their rules are the same: a slope that doesn't daylight within the maximum slope height is a retaining
+// wall here, and needs one there - the road's walls are where the viewer's cross sections need them (structures.js).
+export function crossSection(depth, slope, halfWidth, cutSlope, fillSlope, maxSlopeHeight, out) {
     const depthLeft = depth + slope * halfWidth;
     const depthRight = depth - slope * halfWidth;
     const roadAreas = linearAreas(depthRight, depthLeft, 2 * halfWidth);
-    sideSection(depthLeft, slope, cutSlope, fillSlope, sides, 0);
-    sideSection(depthRight, -slope, cutSlope, fillSlope, sides, 4);
+    sideSection(depthLeft, slope, cutSlope, fillSlope, maxSlopeHeight, sides, 0);
+    sideSection(depthRight, -slope, cutSlope, fillSlope, maxSlopeHeight, sides, 4);
     out[sectionCut] = roadAreas[0] + sides[0] + sides[4];
     out[sectionFill] = roadAreas[1] + sides[1] + sides[5];
     out[sectionSlopeWidth] = sides[2] + sides[6];

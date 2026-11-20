@@ -311,7 +311,7 @@ test('the report page draws its 3D views without a measured cell cost', async (c
         // cell, smoothed
         const drawing = expectedReport(fixturePlan(), 976).views[0].render({...smoothLimitsCanvas, 'points': 132813});
         assert.equal(drawing.pointLimited, false);
-        assert.equal(canvas.calls.length, 333987);
+        assert.equal(canvas.calls.length, 333977);
         assert.deepEqual(canvas.calls, paintCalls(drawing));
         assert.deepEqual(canvas.calls.slice(0, 4), [
             ['getContext', '2d'], ['setTransform', 1, 0, 0, 1, 0, 0], ['fillStyle', '#f4f1ea'], ['fillRect', 0, 0, 976, 666]

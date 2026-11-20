@@ -16,6 +16,9 @@ function pythonDesign(design) {
         'switchbackGrade': design.switchback_grade,
         'minRadius': design.min_radius,
         'rockCutSlope': design.rock_cut_slope,
+
+        // The maximum slope height - the Python tools' slopes had none
+        'maxSlopeHeight': design.feet ? 60 : 18,
         'width': design.width,
         'halfWidth': design.half_width,
         'surface': design.surface,
@@ -126,7 +129,9 @@ test('featureStreams', () => {
 
 
 test('crossSection', () => {
-    const section = (...args) => Array.from(crossSection(...args, new Float64Array(6)));
+    // The Python planning tools' cross sections - their slopes had no maximum height
+    const sectionHeight = (maxSlopeHeight, ...args) => Array.from(crossSection(...args, maxSlopeHeight, new Float64Array(6)));
+    const section = (...args) => sectionHeight(Infinity, ...args);
     assert.deepEqual(expected.sections.map(({args}) => ({args, 'out': section(...args)})), expected.sections);
 
     // A plane cross slope of 0.1 at grade - half the road is cut and half is fill, each with its slope
@@ -145,4 +150,12 @@ test('crossSection', () => {
 
     // A level cross section at grade has no earthwork
     assert.deepEqual(section(0, 0, 5, 1, 1.5), [0, 0, 0, 0, 0, 0]);
+
+    // A slope that doesn't daylight within the maximum slope height is a wall, too. On a side slope of 0.5, a cut that's
+    // 4 deep at the road's edge has a slope that's 8 high (and 8 wide), and a fill that's 1 deep has a slope that's 4
+    // high (and 6 wide).
+    const rounded = (maxSlopeHeight) => sectionHeight(maxSlopeHeight, 1.5, 0.5, 5, 1, 1.5).map((value) => Math.round(value * 1e9) / 1e9);
+    assert.deepEqual(rounded(8), [32, 4, 14, 0, 0, 0]);
+    assert.deepEqual(rounded(7.9), [16, 4, 6, 4, 4, 0]);
+    assert.deepEqual(rounded(3.9), [16, 1, 0, 5, 4, 1]);
 });
