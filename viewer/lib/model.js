@@ -165,6 +165,12 @@ export const sageRoadTypes = parseSchemaMarkdown([
     '# The road design criteria',
     'struct DesignCriteria',
     '',
+    '    # The road width, including shoulders (default is 14 feet / 4.3 meters)',
+    '    optional float(> 0) width',
+    '',
+    '    # The road surface (default is "gravel")',
+    '    optional Surface surface',
+    '',
     '    # The maximum road grade, in percent (default is 12)',
     '    optional float(> 0) maxGrade',
     '',
@@ -662,6 +668,8 @@ export function validateSite(siteValue) {
 export function planCriteria(plan) {
     const criteria = plan.criteria ?? {};
     return {
+        'width': criteria.width ?? unitLength(plan, 4.3, 14),
+        'surface': criteria.surface ?? 'gravel',
         'maxGrade': criteria.maxGrade ?? 12,
         'minRadius': criteria.minRadius ?? unitLength(plan, 15, 50),
         'rockCutSlope': criteria.rockCutSlope ?? 0.5,

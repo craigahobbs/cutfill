@@ -147,9 +147,10 @@ A plan's config - its **road site model** - is a JSON file:
 ```
 
 The points' latitudes and longitudes are decimal degrees, as a phone or a map application gives them
-(the United States' longitudes are negative). A config may also have design criteria (`criteria`),
-cost rates (`costRates`), the distance its site extends beyond the start and end points (`margin`),
-its terrain grid's spacing (`spacing`), and its **marks** - the areas the road must avoid
+(the United States' longitudes are negative). A config may also have design criteria (`criteria` -
+the road's width and surface, its maximum grade and minimum radius, and more), cost rates
+(`costRates`), the distance its site extends beyond the start and end points (`margin`), its terrain
+grid's spacing (`spacing`), and its **marks** - the areas the road must avoid
 (`exclusions`, polygons of latitudes and longitudes), the existing roads the USGS doesn't map (`roads`
 - a track, a driveway - that a road may follow), and the places a road must pass through
 (`passThrough`) - draw them with **Edit Map**. The model documentation (linked from the viewer's
@@ -217,8 +218,8 @@ The model's questions are small - a paragraph, and a map image - with a JSON ans
 the model doesn't run the plan. Without a model, the notes aren't read, and the plan is the tools'
 alone.
 
-Typical criteria for the notes (from the USFS *Low-Volume Roads Engineering Best Management Practices
-Field Guide*, AASHTO low-volume road guidance, and fire codes):
+Typical criteria, for the config's design criteria or the notes (from the USFS *Low-Volume Roads
+Engineering Best Management Practices Field Guide*, AASHTO low-volume road guidance, and fire codes):
 
 | | Driveway / fire access | Rural access road | Forest / ranch road |
 | --- | --- | --- | --- |

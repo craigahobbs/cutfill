@@ -102,9 +102,10 @@ export function formHtml(types, typeName, value = {}, path = '') {
             controlHtml = `<textarea ${attrs} rows="5">${escapeHtml(text)}</textarea>`;
         } else if (kind === 'enum') {
             const values = [...(optional ? [''] : []), ...types[type.user].enum.values.map((enumValue) => enumValue.name)];
-            const optionsHtml = values.map((enumValue) => (
-                `<option${enumValue === memberValue ? ' selected' : ''}>${escapeHtml(enumValue)}</option>`
-            ));
+            const optionsHtml = values.map((enumValue) => {
+                const optionAttrs = `${enumValue === '' ? ' value=""' : ''}${enumValue === memberValue ? ' selected' : ''}`;
+                return `<option${optionAttrs}>${escapeHtml(enumValue)}</option>`;
+            });
             controlHtml = `<select ${attrs}>${optionsHtml.join('')}</select>`;
             isWide = false;
         } else if (kind !== null) {
@@ -174,12 +175,13 @@ export function formPastePoint(element, event) {
 
 
 // Set a form's controls' placeholders - "placeholders" is a member path's placeholder text (a member's default, say;
-// "" for none)
+// "" for none). An optional enumeration's placeholder is its choice of none's text.
 export function formPlaceholders(element, placeholders) {
     for (const [memberPath, text] of Object.entries(placeholders)) {
         const control = element.querySelector(`[data-member="${memberPath}"]`);
-        if (control !== null) {
-            control.placeholder = text !== '' ? `Default: ${text}` : '';
+        const target = control !== null && control.tagName === 'SELECT' ? control.querySelector('option[value=""]') : control;
+        if (target !== null) {
+            target[target === control ? 'placeholder' : 'textContent'] = text !== '' ? `Default: ${text}` : '';
         }
     }
 }
